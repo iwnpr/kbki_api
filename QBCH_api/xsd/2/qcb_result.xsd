@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="qcb_common.xsd"/>
+	<xs:element name="Результат">
+		<xs:annotation>
+			<xs:documentation>Результат регистрации запроса</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:choice>
+				<xs:element name="ИдентификаторОтвета">
+					<xs:annotation>
+						<xs:documentation>Идентификатор, присвоенный ответу</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:simpleContent>
+							<xs:extension base="ТипИдентификатор">
+								<xs:attribute name="ИдентификаторЗапроса" type="ТипИдентификатор" use="required">
+									<xs:annotation>
+										<xs:documentation>Идентификатор запроса, в ответ на который подготовлена данная квитанция</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="ДатаЗапроса" type="xs:date" use="required">
+									<xs:annotation>
+										<xs:documentation>Дата запроса, в ответ на который подготовлена данная квитанция</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="ВремяГотовности" use="optional">
+									<xs:annotation>
+										<xs:documentation>Прогнозируемое время готовности ответа в миллисекундах</xs:documentation>
+									</xs:annotation>
+									<xs:simpleType>
+										<xs:restriction base="xs:long">
+											<xs:minInclusive value="0"/>
+										</xs:restriction>
+									</xs:simpleType>
+								</xs:attribute>
+							</xs:extension>
+						</xs:simpleContent>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Успешно">
+					<xs:annotation>
+						<xs:documentation>Запрос обработан успешно (в случаях когда не требуется ответ)</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:attribute name="ИдентификаторЗапроса" type="ТипИдентификатор" use="required">
+							<xs:annotation>
+								<xs:documentation>Идентификатор запроса, в ответ на который подготовлена данная квитанция</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="ДатаЗапроса" type="xs:date" use="required">
+							<xs:annotation>
+								<xs:documentation>Дата запроса, в ответ на который подготовлена данная квитанция</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Ошибка">
+					<xs:annotation>
+						<xs:documentation>Описание ошибки</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:simpleContent>
+							<xs:extension base="xs:string">
+								<xs:attribute name="Код" type="xs:integer" use="required">
+									<xs:annotation>
+										<xs:documentation>Код ошибки</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:extension>
+						</xs:simpleContent>
+					</xs:complexType>
+				</xs:element>
+			</xs:choice>
+			<xs:attribute name="Версия" use="required" fixed="2.0">
+				<xs:annotation>
+					<xs:documentation>Версия схемы</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ОГРН" type="ТипОГРН" use="required">
+				<xs:annotation>
+					<xs:documentation>ОГРН КБКИ сформировавшего квитанцию</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>
