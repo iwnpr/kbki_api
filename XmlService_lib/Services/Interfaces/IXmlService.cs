@@ -1,8 +1,8 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using QBCH_lib.CommonTypes.Api;
+using QBCH_lib.core;
+using System.Diagnostics.CodeAnalysis;
 using System.Xml;
 using System.Xml.Linq;
-using QBCH_lib.CommonTypes.Api;
-using QBCH_lib.core;
 
 namespace XmlService_lib.Services.Interfaces
 {

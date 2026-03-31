@@ -1,0 +1,789 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="qcb_common.xsd"/>
+	<xs:element name="ЗапросСведенийОПлатежах">
+		<xs:annotation>
+			<xs:documentation>Запрос сведений о среднемесячных платежах</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="Абонент">
+					<xs:annotation>
+						<xs:documentation>Сведения об абоненте</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:choice>
+							<xs:element name="ЮридическоеЛицо">
+								<xs:annotation>
+									<xs:documentation>Абонент - юридическое лицо</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="ИНН" type="ТипИННЮЛ">
+											<xs:annotation>
+												<xs:documentation>ИНН юридического лица</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:element name="ОГРН" type="ТипОГРН">
+											<xs:annotation>
+												<xs:documentation>ОГРН юридического лица</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="ИндивидуальныйПредприниматель">
+								<xs:annotation>
+									<xs:documentation>Абонент - индивидуальный предприниматель</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="ИННИП" type="ТипИННФЛ">
+											<xs:annotation>
+												<xs:documentation>ИНН индивидуального предпринимателя</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:element name="ОГРНИП" type="ТипОГРНИП">
+											<xs:annotation>
+												<xs:documentation>ОГРН индивидуального предпринимателя</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="ИностранноеЛицо">
+								<xs:annotation>
+									<xs:documentation>Абонент - иностранное юридическое лицо или иностранный предприниматель</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="НомерНП" type="ТипИностранныйНН" minOccurs="0">
+											<xs:annotation>
+												<xs:documentation>Номер налогоплательщика, присвоенный уполномоченным органом иностранного государства, или его аналог</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:element name="РегНомер" type="ТипИностранныйРН">
+											<xs:annotation>
+												<xs:documentation>Регистрационный номер в стране регистрации (инкорпорации) или его аналог</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+						</xs:choice>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Запрос">
+					<xs:annotation>
+						<xs:documentation>Содержание запроса сведений о среднемесячных платежах</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="Источник">
+								<xs:annotation>
+									<xs:documentation>Информация об организации или индивидуальном предпринимателе, запрашивающих сведения</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:choice>
+										<xs:element name="ЮридическоеЛицо">
+											<xs:annotation>
+												<xs:documentation>Источник запроса - юридическое лицо</xs:documentation>
+											</xs:annotation>
+											<xs:complexType>
+												<xs:complexContent>
+													<xs:extension base="ТипЮЛ"/>
+												</xs:complexContent>
+											</xs:complexType>
+										</xs:element>
+										<xs:element name="ИндивидуальныйПредприниматель" type="ТипИП">
+											<xs:annotation>
+												<xs:documentation>Источник запроса - индивидуальный предприниматель</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:element name="ИностранноеЮЛ">
+											<xs:annotation>
+												<xs:documentation>Источник запроса - иностранное юридическое лицо</xs:documentation>
+											</xs:annotation>
+											<xs:complexType>
+												<xs:complexContent>
+													<xs:extension base="ТипИЮ"/>
+												</xs:complexContent>
+											</xs:complexType>
+										</xs:element>
+										<xs:element name="ИностранныйПредприниматель" type="ТипИностранныйПредприниматель">
+											<xs:annotation>
+												<xs:documentation>Источник запроса - иностранный предприниматель</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:choice>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="Субъект" type="ТипСубъектТитул">
+								<xs:annotation>
+									<xs:documentation>Сведения о субъекте кредитной истории</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="Согласие" type="ТипСогласие">
+								<xs:annotation>
+									<xs:documentation>Сведения о согласии субъекта кредитной истории</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="Цель" type="ТипЦель" maxOccurs="unbounded">
+								<xs:annotation>
+									<xs:documentation>Цель запроса</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="СуммаОбязательства" minOccurs="0">
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="xs:double">
+											<xs:attribute name="Валюта" type="ТипВалюта" use="required">
+												<xs:annotation>
+													<xs:documentation>Валюта обязательства</xs:documentation>
+												</xs:annotation>
+											</xs:attribute>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:attribute name="Дата" type="xs:date" use="required">
+							<xs:annotation>
+								<xs:documentation>Дата запроса</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="Версия" use="required" fixed="1.2">
+				<xs:annotation>
+					<xs:documentation>Версия схемы</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторЗапроса" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Уникальный идентификатор запроса присваивается абонентом, формирующим запрос</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ТипЗапроса" use="required">
+				<xs:annotation>
+					<xs:documentation>Тип запроса: 1 - получить сведения одного КБКИ, 2 - получить сведения всех КБКИ ("Одно окно")</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:enumeration value="1">
+							<xs:annotation>
+								<xs:documentation>Абонент запрашивает сведения одного квалифицированного бюро кредитных историй</xs:documentation>
+							</xs:annotation>
+						</xs:enumeration>
+						<xs:enumeration value="2">
+							<xs:annotation>
+								<xs:documentation>Абонент запрашивает сведения из всех квалифицированных бюро кредитных историй путем обращения в одно из них ("Одно окно")</xs:documentation>
+							</xs:annotation>
+						</xs:enumeration>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:simpleType name="КодыСрокаСогласия">
+		<xs:annotation>
+			<xs:documentation>Коды сроков действия согласия</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="1">
+				<xs:annotation>
+					<xs:documentation>Согласие действительно в течение шести месяцев со дня его оформления</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="2">
+				<xs:annotation>
+					<xs:documentation>Согласие действительно в течение года со дня его оформления</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="3">
+				<xs:annotation>
+					<xs:documentation>В течение срока действия согласия с субъектом кредитной истории были заключены договор займа (кредита), договор лизинга, договор залога, договор поручительства, выдана независимая гарантия</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="КодыЦелиСогласия">
+		<xs:annotation>
+			<xs:documentation>Коды целей выдачи согласия</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="1">
+				<xs:annotation>
+					<xs:documentation>Потребительский заем (кредит) на приобретение автомобиля</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="2">
+				<xs:annotation>
+					<xs:documentation>Потребительский микрозаем</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="3">
+				<xs:annotation>
+					<xs:documentation>Потребительский заем (кредит) нецелевой</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="4">
+				<xs:annotation>
+					<xs:documentation>Потребительский заем (кредит) с расходным лимитом (кредитная линия, овердрафт)</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="5">
+				<xs:annotation>
+					<xs:documentation>Иной потребительский заем (кредит)</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="6">
+				<xs:annotation>
+					<xs:documentation>Поручительство гражданина-потребителя</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="7">
+				<xs:annotation>
+					<xs:documentation>Ипотека, предоставленная гражданином-потребителем</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="8">
+				<xs:annotation>
+					<xs:documentation>Иной залог, предоставленный гражданином-потребителем</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="9">
+				<xs:annotation>
+					<xs:documentation>Иной потребительский договор</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="10">
+				<xs:annotation>
+					<xs:documentation>Заем (кредит) на развитие бизнеса</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="11">
+				<xs:annotation>
+					<xs:documentation>Заем (кредит) на пополнение оборотных средств</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="12">
+				<xs:annotation>
+					<xs:documentation>Заем (кредит) на покупку оборудования</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="13">
+				<xs:annotation>
+					<xs:documentation>Заем (кредит) на строительство</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="14">
+				<xs:annotation>
+					<xs:documentation>Заем (кредит) на приобретение ценных бумаг</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="15">
+				<xs:annotation>
+					<xs:documentation>Иной заем (кредит)</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="16">
+				<xs:annotation>
+					<xs:documentation>Лизинг</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="17">
+				<xs:annotation>
+					<xs:documentation>Независимая гарантия</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="18">
+				<xs:annotation>
+					<xs:documentation>Поручительство</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="19">
+				<xs:annotation>
+					<xs:documentation>Страхование</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="20">
+				<xs:annotation>
+					<xs:documentation>Ипотека</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="21">
+				<xs:annotation>
+					<xs:documentation>Иной залог</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="22">
+				<xs:annotation>
+					<xs:documentation>Иной договор</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="23">
+				<xs:annotation>
+					<xs:documentation>Кредитный мониторинг в рамках действующего договора</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="24">
+				<xs:annotation>
+					<xs:documentation>Прием на работу</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="25">
+				<xs:annotation>
+					<xs:documentation>Маркетинговые исследования</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="26">
+				<xs:annotation>
+					<xs:documentation>Научные исследования</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="27">
+				<xs:annotation>
+					<xs:documentation>Контроль данных</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="99">
+				<xs:annotation>
+					<xs:documentation>Иное</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="КодыОснованийПередачиСогласия">
+		<xs:annotation>
+			<xs:documentation>Коды оснований передачи согласия правопреемнику</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="1">
+				<xs:annotation>
+					<xs:documentation>Согласие субъекта кредитной истории передано правопреемнику по заключенному договору займа (кредита) или иному договору, информация об обязательствах по которым передается в бюро кредитных историй</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="2">
+				<xs:annotation>
+					<xs:documentation>Согласие субъекта кредитной истории передано кредитной организации, осуществляющей обслуживание денежных требований по договору займа (кредита), уступленных специализированному финансовому обществу или ипотечному агенту</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="КодыВидаПользователя">
+		<xs:annotation>
+			<xs:documentation>Коды видов пользователей кредитной истории</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="1">
+				<xs:annotation>
+					<xs:documentation>Индивидуальный предприниматель</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="2">
+				<xs:annotation>
+					<xs:documentation>Кредитная организация</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="3">
+				<xs:annotation>
+					<xs:documentation>Микрофинансовая организация</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="4">
+				<xs:annotation>
+					<xs:documentation>Кредитный потребительский кооператив</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="5">
+				<xs:annotation>
+					<xs:documentation>Сельскохозяйственный кредитный потребительский кооператив</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="6">
+				<xs:annotation>
+					<xs:documentation>Ломбард</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="7">
+				<xs:annotation>
+					<xs:documentation>Лизинговая компания</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="8">
+				<xs:annotation>
+					<xs:documentation>Субъект страхового дела</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="9">
+				<xs:annotation>
+					<xs:documentation>Коллекторская организация</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="99">
+				<xs:annotation>
+					<xs:documentation>Иной пользователь</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:complexType name="ТипСогласие">
+		<xs:annotation>
+			<xs:documentation>Сведения о согласии на получение кредитного отчета субъекта</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Выдано">
+				<xs:annotation>
+					<xs:documentation>Информация о лице, которому выдано согласие</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:choice>
+						<xs:element name="ЮридическоеЛицо" type="ТипЮЛБазовый">
+							<xs:annotation>
+								<xs:documentation>Информация о юридическом лице, которому выдано согласие</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="ИндивидуальныйПредприниматель" type="ТипИПБазовый">
+							<xs:annotation>
+								<xs:documentation>Информация об индивидуальном предпринимателе, которому выдано согласие</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="ИностранноеЮЛ" type="ТипИЮБазовый">
+							<xs:annotation>
+								<xs:documentation>Информация об иностранном юридическом лице, которому выдано согласие</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="ИностранныйПредприниматель" type="ТипИностранныйПредпринимательБазовый">
+							<xs:annotation>
+								<xs:documentation>Информация об иностранном предпринимателе, которому выдано согласие</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:choice>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="Цель" type="ТипЦель" maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Цель выдачи согласия субъекта</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="Договор" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Информация о договоре, сведения об обязательствах по которому подлежат передаче в БКИ</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attribute name="Дата" type="xs:date" use="required">
+						<xs:annotation>
+							<xs:documentation>Дата заключения договора</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="ХэшКод" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Хэш-код для согласия субъекта кредитной истории</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:pattern value="[\da-f]{64}"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="ДатаВыдачи" type="xs:date" use="required">
+			<xs:annotation>
+				<xs:documentation>Дата получения согласия от субъекта</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="СрокДействия" type="КодыСрокаСогласия" use="required">
+			<xs:annotation>
+				<xs:documentation>Код срока действия согласия субъекта</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="ОснованиеПередачи" type="КодыОснованийПередачиСогласия">
+			<xs:annotation>
+				<xs:documentation>Основание передачи согласия правопреемнику</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="ОбОтветственностиПредупрежден" use="required" fixed="1">
+			<xs:annotation>
+				<xs:documentation>Об ответственности за совершение административных правонарушений, установленной статьями 5.53 и 14.29 Кодекса Российской Федерации об административных правонарушениях предупрежден</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="ТипИПБазовый">
+		<xs:annotation>
+			<xs:documentation>Индивидуальный предприниматель</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="ИННИП" type="ТипИННФЛ">
+				<xs:annotation>
+					<xs:documentation>ИНН индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ОГРНИП" type="ТипОГРНИП">
+				<xs:annotation>
+					<xs:documentation>ОГРН индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ФИО" type="ТипФИО">
+				<xs:annotation>
+					<xs:documentation>ФИО индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="ТипИП">
+		<xs:annotation>
+			<xs:documentation>Индивидуальный предприниматель</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="ИННИП" type="ТипИННФЛ">
+				<xs:annotation>
+					<xs:documentation>ИНН индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ОГРНИП" type="ТипОГРНИП">
+				<xs:annotation>
+					<xs:documentation>ОГРН индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="СНИЛС" type="ТипСНИЛС">
+				<xs:annotation>
+					<xs:documentation>СНИЛС индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ФИО" type="ТипФИО">
+				<xs:annotation>
+					<xs:documentation>ФИО индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ДокументЛичности" type="ТипДУЛПредпринимателя">
+				<xs:annotation>
+					<xs:documentation>Документ удостоверяющий личность индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ДатаРождения" type="xs:date">
+				<xs:annotation>
+					<xs:documentation>Дата рождения индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="МестоРождения" type="ТипМестоРождения">
+				<xs:annotation>
+					<xs:documentation>Место рождения индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="ТипЮЛБазовый">
+		<xs:annotation>
+			<xs:documentation>Юридическое лицо</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="ИНН" type="ТипИННЮЛ">
+				<xs:annotation>
+					<xs:documentation>ИНН юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ОГРН" type="ТипОГРН">
+				<xs:annotation>
+					<xs:documentation>ОГРН юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ПолноеНаименование" type="ТипНаименованиеЮЛ">
+				<xs:annotation>
+					<xs:documentation>Полное наименование юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="ТипЮЛ">
+		<xs:annotation>
+			<xs:documentation>Юридическое лицо</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="ИНН" type="ТипИННЮЛ">
+				<xs:annotation>
+					<xs:documentation>ИНН юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ОГРН" type="ТипОГРН">
+				<xs:annotation>
+					<xs:documentation>ОГРН юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ПолноеНаименование" type="ТипНаименованиеЮЛ">
+				<xs:annotation>
+					<xs:documentation>Полное наименование юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="СокращенноеНаименование" type="ТипНаименованиеЮЛ" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Сокращенное наименование юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ИноеНаименование" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Иное наименование юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="КодВидаПользователя" type="КодыВидаПользователя" use="required">
+			<xs:annotation>
+				<xs:documentation>Код вида пользователя кредитной истории</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="ПризнакРегистрацииРФ" use="required" fixed="1">
+			<xs:annotation>
+				<xs:documentation>Признак регистрации в Российской Федерации</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="ТипИЮБазовый">
+		<xs:annotation>
+			<xs:documentation>Иностранное юридическое лицо</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="НомерНП" type="ТипИностранныйНН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Номер налогоплательщика, присвоенный уполномоченным органом иностранного государства, или его аналог</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="РегНомер" type="ТипИностранныйРН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Регистрационный номер в стране регистрации (инкорпорации) или его аналог</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ПолноеНаименование" type="ТипНаименованиеИЮ">
+				<xs:annotation>
+					<xs:documentation>Полное наименование иностранного юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="ТипИЮ">
+		<xs:annotation>
+			<xs:documentation>Иностранное юридическое лицо</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="НомерНП" type="ТипИностранныйНН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Номер налогоплательщика, присвоенный уполномоченным органом иностранного государства, или его аналог</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="РегНомер" type="ТипИностранныйРН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Регистрационный номер в стране регистрации (инкорпорации) или его аналог</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="LEI" type="ТипLEI" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Идентификатор LEI</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ПолноеНаименование" type="ТипНаименованиеИЮ">
+				<xs:annotation>
+					<xs:documentation>Полное наименование иностранного юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="СокращенноеНаименование" type="ТипНаименованиеИЮ" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Сокращенное наименование юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ИноеНаименование" type="ТипНаименование" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Иное наименование иностранного юридического лица</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="КодВидаПользователя" type="КодыВидаПользователя" use="required">
+			<xs:annotation>
+				<xs:documentation>Код вида пользователя кредитной истории</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="ПризнакРегистрацииРФ" use="required" fixed="0">
+			<xs:annotation>
+				<xs:documentation>Признак регистрации в Российской Федерации</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="ТипИностранныйПредпринимательБазовый">
+		<xs:annotation>
+			<xs:documentation>Иностранный предприниматель</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="НомерНП" type="ТипИностранныйНН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Номер налогоплательщика, присвоенный уполномоченным органом иностранного государства, или его аналог</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="РегНомер" type="ТипИностранныйРН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Регистрационный номер в стране регистрации (инкорпорации) или его аналог</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ФИО" type="ТипФИО">
+				<xs:annotation>
+					<xs:documentation>ФИО иностранного предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="ТипИностранныйПредприниматель">
+		<xs:annotation>
+			<xs:documentation>Иностранный предприниматель</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="НомерНП" type="ТипИностранныйНН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Номер налогоплательщика, присвоенный уполномоченным органом иностранного государства, или его аналог</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="РегНомер" type="ТипИностранныйРН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Регистрационный номер в стране регистрации (инкорпорации) или его аналог, присвоенный иностранной организации</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ФИО" type="ТипФИО">
+				<xs:annotation>
+					<xs:documentation>ФИО иностранного предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ДокументЛичности" type="ТипДУЛПредпринимателя">
+				<xs:annotation>
+					<xs:documentation>Документ удостоверяющий личность индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ДатаРождения" type="xs:date">
+				<xs:annotation>
+					<xs:documentation>Дата рождения индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="МестоРождения" type="ТипМестоРождения">
+				<xs:annotation>
+					<xs:documentation>Место рождения индивидуального предпринимателя</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="ТипЦель">
+		<xs:annotation>
+			<xs:documentation>Цель запроса/выдачи согласия</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="КодЦели" use="required">
+			<xs:annotation>
+				<xs:documentation>Код цели</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="КодыЦелиСогласия"/>
+			</xs:simpleType>
+		</xs:attribute>
+		<xs:attribute name="Описание">
+			<xs:annotation>
+				<xs:documentation>Описание иной цели</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+</xs:schema>

@@ -1,8 +1,8 @@
-﻿using System;
+﻿using QBCH_lib.qcb_xml.v2_0.Enums;
+using QBCH_lib.qcb_xml.v2_0.qcb_result;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using QBCH_lib.qcb_xml.v2_0.Enums;
-using QBCH_lib.qcb_xml.v2_0.qcb_result;
 
 namespace QBCH_lib.qcb_xml.v2_0.qcb_answer
 {

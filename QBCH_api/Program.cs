@@ -1,31 +1,39 @@
-using System.Reflection;
-using System.Security.Cryptography.X509Certificates;
-using Adapters_lib;
 using Asp.Versioning;
-using Confluent.Kafka;
-using Confluent.Kafka.Extensions.Diagnostics;
-using Elastic.Apm.SerilogEnricher;
+using Cache_lib.Implementations;
+using Cache_lib.Interfaces;
+using CertManagement.Services.Implementations;
+using CertManagement.Services.Interfaces;
+using Crypto_lib.Service;
+using KafkaService_lib.Services.Implementation;
+using KafkaService_lib.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.FeatureManagement;
 using Microsoft.OpenApi.Models;
+using QBCH_api.Services.Implementations;
+using QBCH_api.Services.Interfaces;
+using Qbch_db_lib.Services.Implementations;
+using Qbch_db_lib.Services.Interfaces;
+using QBCH_lib.CommonTypes.Api;
+using QBCH_lib.Services.Implementations;
+using QBCH_lib.Services.Interfaces;
+using QBCHService_lib.Services.Implementations;
+using QBCHService_lib.Services.Interfaces;
 using Serilog;
 using Serilog.Core;
-using Serilog.Enrichers.Span;
-using Services_lib;
+using StackExchange.Redis;
+using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
+using IXmlService = XmlService_lib.Services.Interfaces.IXmlService;
+using XmlService = XmlService_lib.Services.Implementations.XmlService;
 
-ThreadPool.SetMinThreads(200, 200);
+
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
-var serilog = new LoggerConfiguration()
-    .ReadFrom.Configuration(configuration)
-    .Enrich.WithElasticApmCorrelationInfo() //  trace.id  transaction.id
-    .Enrich.WithSpan() //  span.id    
-    .CreateLogger();
+var serilog = new LoggerConfiguration().ReadFrom.Configuration(configuration).CreateLogger();
 
 builder.Host.UseSerilog(serilog);
-builder.Services.AddAllElasticApm();
-
 builder.Services.AddControllers();
+
 builder.Services.AddApiVersioning(options =>
 {
     var isDefaultApiVersionSet = builder.Configuration.GetValue<bool>("Features:SetDefaultApiVersion");
@@ -46,28 +54,30 @@ builder.Services.AddApiVersioning(options =>
         options.GroupNameFormat = "'v'VVV";
         options.SubstituteApiVersionInUrl = true;
     }).AddMvc();
+
 builder.Services.AddAuthentication(
              CertificateAuthenticationDefaults.AuthenticationScheme)
              .AddCertificate(options =>
              options.AllowedCertificateTypes = CertificateTypes.All);
+
 // ƒобавление сервисов в контейнер
 builder.Services.AddFeatureManagement(builder.Configuration.GetSection("FeatureFlags"));
-builder.Services
-    .DIAddAdapters(configuration)
-    .DIAddServices();
-builder.Services.AddMediatR(opt =>
-{
-    opt.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
-    opt.Lifetime = ServiceLifetime.Transient;
-});
-builder.Services.AddMemoryCache();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v2", new OpenApiInfo { Title = "API сервиса QBCH V2", Version = "v2.0" });
-    options.EnableAnnotations();
-    options.UseInlineDefinitionsForEnums();
-});
+builder.Services.AddTransient<ICryptoService, CryptoService>();
+builder.Services.AddTransient<IXmlService, XmlService>();
+builder.Services.AddTransient<IValidationService, ValidationService>();
+builder.Services.AddTransient<IRepository, Repository>();
+builder.Services.AddTransient<IQBCHService, QBCHService>();
+builder.Services.AddTransient<ITransformer, Transformer>();
+builder.Services.AddTransient<ITicketService, TicketService>();
+builder.Services.AddTransient<ICertManagementService, CertManagementService>();
+builder.Services.AddSingleton<ICompressService, CompressService>();
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(configuration.GetConnectionString("Redis")));
+
+ThreadPool.SetMinThreads(200, 200);
+builder.Services.AddTransient<ICacheService, CacheService>();
+builder.Services.AddSingleton<IBKIRequisitsHandler, BKIRequsits>();
+builder.Services.AddSingleton<IKafkaService, KafkaService>();
+
 // ƒобавление http-клиентов в HttpClientFactory
 try
 {
@@ -124,6 +134,22 @@ catch (Exception ex)
     return;
 }
 
+builder.Services.AddMediatR(opt =>
+{
+    opt.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
+    opt.Lifetime = ServiceLifetime.Transient;
+});
+
+// Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddMemoryCache();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v2", new OpenApiInfo { Title = "API сервиса QBCH V2", Version = "v2.0" });
+    options.SwaggerDoc("v1.3", new OpenApiInfo { Title = "API сервиса QBCH V1", Version = "v1.3" });
+    options.EnableAnnotations();
+    options.UseInlineDefinitionsForEnums();
+});
 
 var app = builder.Build();
 app.UseSerilogRequestLogging();
@@ -131,12 +157,13 @@ app.UseRouting();
 app.UseCertificateForwarding();
 app.UseDeveloperExceptionPage();
 
+// Enable middleware to serve generated Swagger as a JSON endpoint.
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
+    c.SwaggerEndpoint("v1.3/swagger.json", "API сервиса QBCH V1");
     c.SwaggerEndpoint("v2/swagger.json", "API сервиса QBCH V2");
 });
-
 app.MapControllers();
 app.Run();
 

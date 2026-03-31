@@ -24,9 +24,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
-		<PackageReference Include="Elastic.Apm" Version="1.34.1" />
-		<PackageReference Include="Elastic.Apm.NetCoreAll" Version="1.34.1" />
-		<PackageReference Include="Elastic.Apm.SerilogEnricher" Version="9.0.0" />
+		<PackageReference Include="Confluent.Kafka" Version="2.6.1" />
 		<PackageReference Include="Elastic.Extensions.Logging" Version="8.12.3" />
 		<PackageReference Include="Elastic.Serilog.Sinks" Version="8.12.3" />
 		<PackageReference Include="MediatR" Version="12.4.1" />
@@ -36,29 +34,32 @@
 		<PackageReference Include="Microsoft.FeatureManagement" Version="4.0.0" />
 		<PackageReference Include="Microsoft.FeatureManagement.AspNetCore" Version="4.0.0" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-		<PackageReference Include="Serilog" Version="4.3.0" />
+		<PackageReference Include="Serilog" Version="4.2.0" />
 		<PackageReference Include="Serilog.AspNetCore" Version="8.0.1" />
-		<PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
-		<PackageReference Include="Serilog.Enrichers.Span" Version="3.1.0" />
 		<PackageReference Include="Serilog.Expressions" Version="5.0.0" />
 		<PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
 		<PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
 		<PackageReference Include="Serilog.Settings.Configuration" Version="8.0.0" />
 		<PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
 		<PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="7.2.0" />
 		<PackageReference Include="Swashbuckle.AspNetCore.Swagger" Version="7.2.0" />
 		<PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="7.2.0" />
 		<PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="7.2.0" />
+		<PackageReference Include="System.Formats.Asn1" Version="8.0.1" />
 		<PackageReference Include="System.Text.Encodings.Web" Version="9.0.0" />
 		<PackageReference Include="System.Text.Json" Version="9.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Adapters_lib\Adapters_lib.csproj" />
-		<ProjectReference Include="..\Application_lib\Application_lib.csproj" />
-		<ProjectReference Include="..\Domain\Domain.csproj" />
-		<ProjectReference Include="..\Services_lib\Services_lib.csproj" />
+		<ProjectReference Include="..\Cache_lib\Cache_lib.csproj" />
+		<ProjectReference Include="..\CertManagement\CertManagement.csproj" />
+		<ProjectReference Include="..\KafkaService_lib\KafkaService_lib.csproj" />
+		<ProjectReference Include="..\qbch_db_lib\Qbch_db_lib.csproj" />
+		<ProjectReference Include="..\qbch_lib\QBCH_lib.csproj" />
+		<ProjectReference Include="..\crypro_lib\Crypto_lib.csproj" />
+		<ProjectReference Include="..\QBCH_service_lib\QBCHService_lib.csproj" />
+		<ProjectReference Include="..\XmlService_lib\XmlService_lib.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -86,6 +87,24 @@
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="xsd\qcb_result.xsd">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="xsd\1.3\qcb_answer.xsd">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="xsd\1.3\qcb_common.xsd">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="xsd\1.3\qcb_put.xsd">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="xsd\1.3\qcb_putanswer.xsd">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="xsd\1.3\qcb_request.xsd">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="xsd\1.3\qcb_result.xsd">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="xsd\2\qcb_answer.xsd">

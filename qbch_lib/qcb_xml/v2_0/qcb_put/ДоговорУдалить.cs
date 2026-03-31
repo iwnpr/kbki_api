@@ -14,7 +14,7 @@
         public string Причина { get; set; }
 
         /// <remarks/>
-        [System.Xml.Serialization.XmlAttribute()]
+        [System.Xml.Serialization.XmlAttribute(DataType = "date")]
         public string? ДатаРасчета { get; set; }
     }
 }

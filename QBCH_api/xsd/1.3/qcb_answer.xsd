@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="qcb_common.xsd"/>
+	<xs:element name="СведенияОПлатежах">
+		<xs:annotation>
+			<xs:documentation>Сведения о среднемесячных платежах</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="ТитульнаяЧасть" type="ТипСубъектТитул">
+					<xs:annotation>
+						<xs:documentation>Титульная часть ответа</xs:documentation>
+					</xs:annotation>
+				</xs:element>
+				<xs:element name="КБКИ" maxOccurs="unbounded">
+					<xs:annotation>
+						<xs:documentation>КБКИ - источник информации.</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:choice>
+							<xs:element name="Ошибка">
+								<xs:annotation>
+									<xs:documentation>Описание ошибки</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="xs:string">
+											<xs:attribute name="Код" type="xs:integer" use="required">
+												<xs:annotation>
+													<xs:documentation>Код ошибки</xs:documentation>
+												</xs:annotation>
+											</xs:attribute>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="СубъектНеНайден">
+								<xs:annotation>
+									<xs:documentation>Субъект в соответствующем КБКИ не найден</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="ОбязательствНет">
+								<xs:annotation>
+									<xs:documentation>В КБКИ отсутсвует информация о действующих обязательствах</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="Обязательства">
+								<xs:annotation>
+									<xs:documentation>Действующие обязательства субъекта</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="БКИ" maxOccurs="unbounded">
+											<xs:annotation>
+												<xs:documentation>БКИ - источник информации</xs:documentation>
+											</xs:annotation>
+											<xs:complexType>
+												<xs:sequence>
+													<xs:element name="Договор" maxOccurs="unbounded">
+														<xs:annotation>
+															<xs:documentation>Сведения о договоре (сделке)</xs:documentation>
+														</xs:annotation>
+														<xs:complexType>
+															<xs:sequence>
+																<xs:element name="СреднемесячныйПлатеж" type="ТипСреднемесячныйПлатеж">
+																	<xs:annotation>
+																		<xs:documentation>Величина среднемесячного платежа</xs:documentation>
+																	</xs:annotation>
+																</xs:element>
+															</xs:sequence>
+															<xs:attribute name="УИД" type="ТипУИД" use="required">
+																<xs:annotation>
+																	<xs:documentation>Универсальный идентификатор договора (сделки)</xs:documentation>
+																</xs:annotation>
+															</xs:attribute>
+														</xs:complexType>
+													</xs:element>
+												</xs:sequence>
+												<xs:attribute name="ОГРН" use="required">
+													<xs:annotation>
+														<xs:documentation>ОГРН БКИ - источника информации</xs:documentation>
+													</xs:annotation>
+												</xs:attribute>
+											</xs:complexType>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+						</xs:choice>
+						<xs:attribute name="ОГРН" use="required">
+							<xs:annotation>
+								<xs:documentation>ОГРН КБКИ - источника информации</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="ПоСостояниюНа" type="xs:dateTime" use="required">
+							<xs:annotation>
+								<xs:documentation>Дата и время по состоянию на которые подготовлен ответ</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="ИдентификаторОтвета" type="ТипИдентификатор">
+							<xs:annotation>
+								<xs:documentation>Идентификатор ответа КБКИ - источника информации</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="Версия" use="required" fixed="1.2">
+				<xs:annotation>
+					<xs:documentation>Версия схемы</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторЗапроса" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Идентификатор запроса, в ответ на который подготовлен данный ответ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторОтвета" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Уникальный идентификатор ответа</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ОГРН" type="ТипОГРН" use="required">
+				<xs:annotation>
+					<xs:documentation>ОГРН КБКИ сформировавшего ответ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ТипОтвета" use="required">
+				<xs:annotation>
+					<xs:documentation>Тип ответа: 1 - сведения одного КБКИ, 2 - сведения всех КБКИ ("Одно окно")</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:enumeration value="1"/>
+						<xs:enumeration value="2"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

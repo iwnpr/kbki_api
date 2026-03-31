@@ -52,13 +52,6 @@ public class Error : BaseError
     /// <summary>
     /// 
     /// </summary>
-    /// <param name="reqOgrn"></param>
-    /// <param name="storeOgrn"></param>
-    /// <returns></returns>
-    public static Error Code10_CertificateAndBKIOGRNNotMach(string? reqOgrn, string? storeOgrn) => new(10, $"Реквизиты запроса не соответствуют реквизитам сертификата: БКИ ОГРН:{reqOgrn}, ОГРН в сертификате:{storeOgrn ?? "{}"}");
-    /// <summary>
-    /// 
-    /// </summary>
     /// <returns></returns>
     public static Error Code11_RequestIdIsNotUnique() => new(11, "Идентификатор запроса не уникален");
     /// <summary>
@@ -87,7 +80,7 @@ public class Error : BaseError
     /// 
     /// </summary>
     /// <returns></returns>
-    public static Error Code23_InvalidRequestDate() => new(23, "Дата запроса указана некорректно");
+    public static Error Code23_InvalidRerquestDate() => new(23, "Дата запроса указана некорректно");
     /// <summary>
     /// 
     /// </summary>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="qcb_common.xsd"/>
+	<xs:element name="ПредставлениеСведенийОПлатежах">
+		<xs:annotation>
+			<xs:documentation>Представление сведений о среднемесячных платежах</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="БКИ">
+					<xs:annotation>
+						<xs:documentation>Полное фирменное наименование БКИ</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:simpleContent>
+							<xs:extension base="ТипНаименование">
+								<xs:attribute name="ОГРН" type="ТипОГРН" use="required">
+									<xs:annotation>
+										<xs:documentation>ОГРН БКИ - источника информации</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:extension>
+						</xs:simpleContent>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Договоры">
+					<xs:annotation>
+						<xs:documentation>Сведения о договорах</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="Договор" maxOccurs="1000">
+								<xs:annotation>
+									<xs:documentation>Сведения о договоре</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:choice>
+										<xs:element name="Добавить">
+											<xs:annotation>
+												<xs:documentation>Добавить сведения о среднемесячной сумме платежа по договору</xs:documentation>
+											</xs:annotation>
+											<xs:complexType>
+												<xs:sequence>
+													<xs:element name="Субъект" type="ТипСубъектТитул">
+														<xs:annotation>
+															<xs:documentation>Сведения о субъекте, с которым заключен договор</xs:documentation>
+														</xs:annotation>
+													</xs:element>
+													<xs:element name="СреднемесячныйПлатеж" type="ТипСреднемесячныйПлатеж">
+														<xs:annotation>
+															<xs:documentation>Среднемесячная сумма платежа</xs:documentation>
+														</xs:annotation>
+													</xs:element>
+												</xs:sequence>
+											</xs:complexType>
+										</xs:element>
+										<xs:element name="Удалить">
+											<xs:annotation>
+												<xs:documentation>Удалить сведения о договоре/о среднемесячной сумме платежа по договору</xs:documentation>
+											</xs:annotation>
+											<xs:complexType>
+												<xs:attribute name="Причина">
+													<xs:annotation>
+														<xs:documentation>Причина удаления данных</xs:documentation>
+													</xs:annotation>
+													<xs:simpleType>
+														<xs:restriction base="xs:string">
+															<xs:maxLength value="2000"/>
+														</xs:restriction>
+													</xs:simpleType>
+												</xs:attribute>
+												<xs:attribute name="ДатаРасчета" type="xs:date">
+													<xs:annotation>
+														<xs:documentation>Дата расчета удаляемой величины среднемесячного платежа</xs:documentation>
+													</xs:annotation>
+												</xs:attribute>
+											</xs:complexType>
+										</xs:element>
+									</xs:choice>
+									<xs:attribute name="УИД" type="ТипУИД" use="required">
+										<xs:annotation>
+											<xs:documentation>Универсальный идентификатор договора (сделки)</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="Версия" use="required" fixed="1.2">
+				<xs:annotation>
+					<xs:documentation>Версия схемы</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторЗапроса" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Идентификатор запроса</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

@@ -21,7 +21,7 @@ namespace QBCH_lib.qcb_xml.v2_0.qcb_result
         public string УИД { get; set; }
 
         /// <remarks/>
-        [System.Xml.Serialization.XmlAttribute()]
+        [System.Xml.Serialization.XmlAttribute(DataType = "date")]
         public string? ДатаРасчета { get; set; }
 
         /// <remarks/>

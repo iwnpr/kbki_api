@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using QBCH_lib.qcb_xml.v2_0.Enums;
+﻿using QBCH_lib.qcb_xml.v2_0.Enums;
+using System.Collections.Generic;
 
 namespace QBCH_lib.qcb_xml.v2_0.qcb_request
 {

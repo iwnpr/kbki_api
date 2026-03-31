@@ -1,6 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using QBCH_lib.core;
+﻿using QBCH_lib.core;
 using StackExchange.Redis;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Cache_lib.Interfaces
 {
@@ -25,7 +25,6 @@ namespace Cache_lib.Interfaces
         /// <param name="pData"></param>
         /// <param name="dbIndex"></param>
         Task AddHash(string methodName, string pKey, string pField, string pData, CancellationToken? ct = null);
-        Task AddHashDlPut(string methodName, string pKey, string pField, string pData, CancellationToken? ct = null);
 
         Task AddHashArray(string methodName, string pKey, Dictionary<string, byte[]> dictionary);
 

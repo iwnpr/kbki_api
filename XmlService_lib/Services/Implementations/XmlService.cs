@@ -1,16 +1,16 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Xml;
-using System.Xml.Linq;
-using System.Xml.Schema;
-using System.Xml.Serialization;
-using Microsoft.Extensions.Caching.Memory;
+﻿using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.core;
 using QBCH_lib.qcb_xml.v1_3.Enums;
 using QBCH_lib.Services.Interfaces;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
+using System.Xml.Schema;
+using System.Xml.Serialization;
 using XmlService_lib.Services.Interfaces;
 
 namespace XmlService_lib.Services.Implementations

@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using QBCH_lib.CommonTypes.Api;
+﻿using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.core;
 using QBCH_lib.domain.DTOs;
 using QBCH_lib.domain.entities;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace QBCH_lib.domain.aggregate;
 
@@ -70,12 +70,12 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     /// <param name="clentRequest"></param>
     /// <param name="attachment"></param>
     /// <param name="requisites"></param>
-    protected QBCHProcessingTransaction(Guid id, string requestType, DateTime requestTime, ClentRequest clentRequest, Attachment attachment, List<QBCHRequisite> requisites) : base(id)
+    protected QBCHProcessingTransaction(Guid id, DateTime requestTime, ClentRequest clentRequest, Attachment attachment, List<QBCHRequisite> requisites) : base(id)
     {
         RequestTime = requestTime.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         ProcessingErrors = [];
         PackageValidationErrors = [];
-        ServiceName = requestType;
+        ServiceName = "dlrequest";
         ClentRequest = clentRequest;
         Attachment = attachment;
         Status = QBCHProcessingStatus.Started;
@@ -92,9 +92,9 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     /// <param name="attachment"></param>
     /// <param name="requisites"></param>
     /// <returns></returns>
-    public static QBCHProcessingTransaction Create(DateTime requestTime, string requestType, ClentRequest clentRequest, Attachment attachment, List<QBCHRequisite> requisites)
+    public static QBCHProcessingTransaction Create(DateTime requestTime, ClentRequest clentRequest, Attachment attachment, List<QBCHRequisite> requisites)
     {
-        return new QBCHProcessingTransaction(Guid.NewGuid(), requestType, requestTime, clentRequest, attachment, requisites);
+        return new QBCHProcessingTransaction(Guid.NewGuid(), requestTime, clentRequest, attachment, requisites);
     }
 
     /// <summary>

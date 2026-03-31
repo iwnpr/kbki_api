@@ -1,5 +1,5 @@
-﻿using System.Text;
-using QBCH_lib.CommonTypes.Api;
+﻿using QBCH_lib.CommonTypes.Api;
+using System.Text;
 
 namespace Crypto_lib.Model
 {

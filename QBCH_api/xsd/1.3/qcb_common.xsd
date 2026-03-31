@@ -1,0 +1,425 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Версия 1.2 -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:complexType name="ТипФИО">
+		<xs:annotation>
+			<xs:documentation>Фамилия, имя и отчество</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Фамилия">
+				<xs:annotation>
+					<xs:documentation>Фамилия</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="255"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="Имя">
+				<xs:annotation>
+					<xs:documentation>Имя</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="255"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="Отчество" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Отчество (обязательно при наличии)</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="255"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:simpleType name="СправочникДУЛ">
+		<xs:annotation>
+			<xs:documentation>Перечень документов, удостоверяющих личность</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="21">
+				<xs:annotation>
+					<xs:documentation>Паспорт гражданина Российской Федерации</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="22.1">
+				<xs:annotation>
+					<xs:documentation>Паспорт гражданина Российской Федерации, удостоверяющий его личность за пределами территории Российской Федерации</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="22.2">
+				<xs:annotation>
+					<xs:documentation>Дипломатический паспорт, удостоверяющий личность гражданина Российской Федерации за пределами территории Российской Федерации</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="22.3">
+				<xs:annotation>
+					<xs:documentation>Служебный паспорт, удостоверяющий личность гражданина Российской Федерации за пределами территории Российской Федерации</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="23">
+				<xs:annotation>
+					<xs:documentation>Удостоверение личности моряка</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="24">
+				<xs:annotation>
+					<xs:documentation>Удостоверение личности военнослужащего</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="25">
+				<xs:annotation>
+					<xs:documentation>Военный билет военнослужащего</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="26">
+				<xs:annotation>
+					<xs:documentation>Временное удостоверение личности гражданина Российской Федерации, выдаваемое на период оформления паспорта гражданина Российской Федерации</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="27">
+				<xs:annotation>
+					<xs:documentation>Свидетельство о рождении гражданина Российской Федерации</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="28">
+				<xs:annotation>
+					<xs:documentation>Иной документ, удостоверяющий личность гражданина Российской Федерации в соответствии с законодательством Российской Федерации</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="31">
+				<xs:annotation>
+					<xs:documentation>Паспорт иностранного гражданина либо иной документ, установленный федеральным законом или признаваемый в соответствии с международным договором Российской Федерации в качестве документа, удостоверяющего личность иностранного гражданина</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="32">
+				<xs:annotation>
+					<xs:documentation>Документ, выданный иностранным государством и признаваемый в соответствии с международным договором Российской Федерации в качестве документа, удостоверяющего личность лица без гражданства</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="35">
+				<xs:annotation>
+					<xs:documentation>Иной документ, признаваемый документом, удостоверяющим личность лица без гражданства в соответствии с законодательством Российской Федерации и международным договором Российской Федерации</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="37">
+				<xs:annotation>
+					<xs:documentation>Удостоверение беженца</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="38">
+				<xs:annotation>
+					<xs:documentation>Удостоверение вынужденного переселенца</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+			<xs:enumeration value="999">
+				<xs:annotation>
+					<xs:documentation>Иной документ</xs:documentation>
+				</xs:annotation>
+			</xs:enumeration>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:complexType name="ТипДУЛ">
+		<xs:annotation>
+			<xs:documentation>Документ, удостоверяющий личность</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Серия" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Серия</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="32"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="Номер">
+				<xs:annotation>
+					<xs:documentation>Номер</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="32"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="ДатаВыдачи" type="xs:date">
+				<xs:annotation>
+					<xs:documentation>Дата выдачи</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="Гражданство" type="ТипСтрана">
+				<xs:annotation>
+					<xs:documentation>Код страны гражданства по ОКСМ</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="КодДУЛ" type="СправочникДУЛ" use="required">
+			<xs:annotation>
+				<xs:documentation>Код ДУЛ</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="ТипДУЛПредпринимателя">
+		<xs:annotation>
+			<xs:documentation>Документ, удостоверяющий личность</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Серия" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Серия</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="32"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="Номер">
+				<xs:annotation>
+					<xs:documentation>Номер</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="32"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="ДатаВыдачи" type="xs:date">
+				<xs:annotation>
+					<xs:documentation>Дата выдачи</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="НаименованиеОргана" type="ТипНаименование">
+				<xs:annotation>
+					<xs:documentation>Наименование органа выдавшего ДУЛ</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="КодПодразделения" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Код подразделения</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="16"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="КодДУЛ" type="СправочникДУЛ" use="required">
+			<xs:annotation>
+				<xs:documentation>Код ДУЛ</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="НаименованиеДУЛ" use="optional">
+			<xs:annotation>
+				<xs:documentation>Наименование иного ДУЛ</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="xs:string">
+					<xs:minLength value="1"/>
+					<xs:maxLength value="2000"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:simpleType name="ТипУИД">
+		<xs:annotation>
+			<xs:documentation>Универсальный идентификатор договора (сделки)</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}-[a-f\d]"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипОГРН">
+		<xs:annotation>
+			<xs:documentation>Основной государственный регистрационный номер юридического лица</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\d{13}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипОГРНИП">
+		<xs:annotation>
+			<xs:documentation>Основной государственный регистрационный номер индивидуального предпринимателя</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\d{15}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипИностранныйРН">
+		<xs:annotation>
+			<xs:documentation>Регистрационный номер присвоенный иностранным государством</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:minLength value="1"/>
+			<xs:maxLength value="255"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипИННФЛ">
+		<xs:annotation>
+			<xs:documentation>Индивидуальный номер налогоплательщика физического лица</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\d{12}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипИННЮЛ">
+		<xs:annotation>
+			<xs:documentation>Индивидуальный номер налогоплательщика юридического лица</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\d{10}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипИностранныйНН">
+		<xs:annotation>
+			<xs:documentation>Номер налогоплательщика присвоенный иностранным государством</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:minLength value="1"/>
+			<xs:maxLength value="255"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипLEI">
+		<xs:annotation>
+			<xs:documentation>Идентификатор LEI</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[A-Z0-9]{20}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипСНИЛС">
+		<xs:annotation>
+			<xs:documentation>Страховой номер индивидуального лицевого счета</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\d\d\d-\d\d\d-\d\d\d \d\d"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипВалюта">
+		<xs:annotation>
+			<xs:documentation>Буквенный код валюты по ОКВ</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="[A-Z]{3}"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипСтрана">
+		<xs:annotation>
+			<xs:documentation>Код страны по ОКСМ</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\d\d\d"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипИдентификатор">
+		<xs:annotation>
+			<xs:documentation>Уникальный идентификатор</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:minLength value="1"/>
+			<xs:maxLength value="255"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипНаименование">
+		<xs:annotation>
+			<xs:documentation>Наименование</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:minLength value="1"/>
+			<xs:maxLength value="2000"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипНаименованиеЮЛ">
+		<xs:annotation>
+			<xs:documentation>Наименование юридического лица</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:minLength value="1"/>
+			<xs:maxLength value="2000"/>
+			<xs:pattern value="([А-ЯЁ0-9:;,/&quot;\.\(\)\\!-])+([ ][А-ЯЁ0-9:;,/&quot;\.\(\)\\!-]+)*"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипНаименованиеИЮ">
+		<xs:annotation>
+			<xs:documentation>Наименование иностранного юридического лица</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:minLength value="1"/>
+			<xs:maxLength value="2000"/>
+			<xs:pattern value="([A-Z0-9:;,/&quot;\.\(\)\\!-])+([ ][A-Z0-9:;,/&quot;\.\(\)\\!-]+)*"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="ТипМестоРождения">
+		<xs:annotation>
+			<xs:documentation>Место рождения</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="([А-ЯЁ]+([ -][А-ЯЁ]+)*)|([A-Z]+([ -][A-Z]+)*)"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:complexType name="ТипСубъектТитул">
+		<xs:annotation>
+			<xs:documentation>Информация о субъекте (титульная часть)</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="ФИО" type="ТипФИО" maxOccurs="unbounded"/>
+			<xs:element name="ДатаРождения" type="xs:date">
+				<xs:annotation>
+					<xs:documentation>Дата рождения</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ДокументЛичности" type="ТипДУЛ" maxOccurs="unbounded"/>
+			<xs:element name="ИНН" type="ТипИННФЛ" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>ИНН (при наличии)</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ИнНомер" type="ТипИностранныйНН" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Номер налогоплательщика, присвоенный иностранным государством</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="СНИЛС" type="ТипСНИЛС" minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>СНИЛС (при наличии)</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="ТипСреднемесячныйПлатеж">
+		<xs:annotation>
+			<xs:documentation>Среднемесячный платеж</xs:documentation>
+		</xs:annotation>
+		<xs:simpleContent>
+			<xs:extension base="xs:double">
+				<xs:attribute name="Валюта" type="ТипВалюта" use="required">
+					<xs:annotation>
+						<xs:documentation>Валюта договора</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
+				<xs:attribute name="ДатаРасчета" type="xs:date" use="required">
+					<xs:annotation>
+						<xs:documentation>Дата расчета величины среднемесячного платежа</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
+			</xs:extension>
+		</xs:simpleContent>
+	</xs:complexType>
+</xs:schema>

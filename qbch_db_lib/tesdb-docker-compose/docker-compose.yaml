@@ -1,0 +1,147 @@
+version: '3.8'
+name: qbch
+
+services:
+# Data base
+  qbch:    
+    image: postgres:latest
+    container_name: qbch_main
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: qbch
+    volumes:
+      - ./init-qbch-main.sql:/docker-entrypoint-initdb.d/init-qbch-main.sql
+    ports:
+      - "32772:5432"
+  searchsubjects:    
+    image: postgres:latest
+    container_name: qbch_search_subjects
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: qbch
+    volumes:
+      - ./init-search-subjects.sql:/docker-entrypoint-initdb.d/init-search-subjects.sql
+    ports:
+      - "32771:5432"
+  amp:    
+    image: postgres:latest
+    container_name: qbch_amp
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: qbch
+    volumes:
+      - ./init-amp.sql:/docker-entrypoint-initdb.d/init-amp.sql
+    ports:
+      - "32770:5432"
+
+# KAFKA
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.2.1
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    # networks:
+    #   - kafka-network
+
+  kafka:
+    image: confluentinc/cp-server:7.2.1
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9997:9997"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_JMX_PORT: 9997
+      KAFKA_JMX_HOSTNAME: kafka
+    # networks:
+    #   - kafka-network
+    
+  init-kafka:
+      image: confluentinc/cp-kafka:6.1.1
+      depends_on:
+        - kafka
+      entrypoint: [ '/bin/sh', '-c' ]
+      command: |
+        "
+        # blocks until kafka is reachable
+          kafka-topics --bootstrap-server kafka:29092 --list
+
+        echo -e 'Creating kafka topics'
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic RedisMessagesTopic --replication-factor 1 --partitions 10
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic ErrorTopic --replication-factor 1 --partitions 10
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic EventTopic --replication-factor 1 --partitions 10
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic UploadTopic --replication-factor 1 --partitions 10
+
+        echo -e 'Successfully created the following topics:'
+        kafka-topics --bootstrap-server kafka:29092 --list
+        "
+
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 8082:8080
+    environment:
+      DYNAMIC_CONFIG_ENABLED: true
+      KAFKA_CLUSTERS_0_NAME: kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      
+# Redis
+  redis:
+      image: redis:latest
+      container_name: redis_container
+      environment:
+        - REDIS_PASSWORD=${REDIS_PASSWORD}
+        - REDIS_USER=${REDIS_USER}
+        - REDIS_USER_PASSWORD=${REDIS_USER_PASSWORD}
+      ports:
+        - "6379:6379"
+      volumes:
+        - ./redisdata:/data
+      deploy:
+        resources:
+          limits:
+            cpus: '0.50'
+            memory: 512M
+          reservations:
+            cpus: '0.25'
+            memory: 256M
+      command: >
+        sh -c '
+          mkdir -p /usr/local/etc/redis &&
+          echo "bind 0.0.0.0" > /usr/local/etc/redis/redis.conf &&
+          echo "requirepass $REDIS_PASSWORD" >> /usr/local/etc/redis/redis.conf &&
+          echo "appendonly yes" >> /usr/local/etc/redis/redis.conf &&
+          echo "appendfsync everysec" >> /usr/local/etc/redis/redis.conf &&
+          echo "user default on nopass ~* +@all" > /usr/local/etc/redis/users.acl &&
+          echo "user $REDIS_USER on >$REDIS_USER_PASSWORD ~* +@all" >> /usr/local/etc/redis/users.acl &&
+          redis-server /usr/local/etc/redis/redis.conf --aclfile /usr/local/etc/redis/users.acl
+        '
+      healthcheck:
+        test: ["CMD", "redis-cli", "-a", "$REDIS_PASSWORD", "ping"]
+        interval: 30s
+        timeout: 10s
+        retries: 5
+      restart: unless-stopped
+      tty: true
+      stdin_open: true

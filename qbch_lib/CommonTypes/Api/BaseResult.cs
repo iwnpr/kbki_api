@@ -1,7 +1,7 @@
-﻿using System;
+﻿using QBCH_lib.qcb_xml.v2_0.qcb_request;
+using System;
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
-using QBCH_lib.qcb_xml.v2_0.qcb_request;
 
 namespace QBCH_lib.CommonTypes.Api
 {

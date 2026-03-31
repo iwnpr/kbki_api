@@ -1,5 +1,5 @@
-﻿using System.Xml.Serialization;
-using QBCH_lib.CommonTypes.Api;
+﻿using QBCH_lib.CommonTypes.Api;
+using System.Xml.Serialization;
 
 namespace QBCH_lib.qcb_xml.v2_0.qcb_request
 {

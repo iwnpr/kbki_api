@@ -1,10 +1,10 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using Cache_lib.Interfaces;
+﻿using Cache_lib.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using QBCH_lib.core;
 using StackExchange.Redis;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
 
 namespace Cache_lib.Implementations
 {
@@ -47,12 +47,6 @@ namespace Cache_lib.Implementations
         public async Task AddHash(string methodName, string pKey, string pField, string pStrData, CancellationToken? ct = null)
         {
             await AddHash(methodName, pKey, pField, Encoding.UTF8.GetBytes(pStrData), ct: ct);
-        }
-
-        public async Task AddHashDlPut(string methodName, string pKey, string pField, string pData, CancellationToken? ct = null)
-        {
-            var key = KeyFormatter([methodName, pKey]);
-            await _redisDb.HashSetAsync(key, [new(pField, pData)]);
         }
 
         /// <summary>

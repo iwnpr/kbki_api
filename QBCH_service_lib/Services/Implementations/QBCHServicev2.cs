@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-using System.Net;
-using System.Text.Json;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.domain.aggregate;
@@ -10,6 +8,9 @@ using QBCH_lib.qcb_xml.v2_0.qcb_answer;
 using QBCH_lib.qcb_xml.v2_0.qcb_request;
 using QBCH_lib.qcb_xml.v2_0.qcb_result;
 using QBCHService_lib.Models;
+using System.Diagnostics;
+using System.Net;
+using System.Text.Json;
 
 namespace QBCHService_lib.Services.Implementations
 {
@@ -94,7 +95,7 @@ namespace QBCHService_lib.Services.Implementations
 
                 // Получаем список SubjectId по титульной части xml
                 List<long> subjectKeys = await _qbchDb.GetSearchAllSubjects(xml, timeLeft);
-
+                
                 timer.Stop();
                 timeLeft -= timer.ElapsedMilliseconds;
                 _logger.LogDebug("{guid} {Bureau}: Search all subjects time {elapsed}", processing.Id, _OurBureauPSRN, timer.Elapsed);
@@ -379,7 +380,7 @@ namespace QBCHService_lib.Services.Implementations
 
             _logger.LogDebug("{guid} {Bureau}: Таймаут для запросов {TimeLeft} ms", guid, bureau.ogrn!, timeLeftMs);
 
-            DlAnswerRedisMessage DLAnswerRedisMessage = DlAnswerRedisMessage.Create();
+             DlAnswerRedisMessage DLAnswerRedisMessage = DlAnswerRedisMessage.Create();
 
             // Ответ на запрос метода dlanswer
             ОтветНаЗапросСведений? dlanswerResult = null;
@@ -413,7 +414,7 @@ namespace QBCHService_lib.Services.Implementations
                 DLAnswerRedisMessage = DlAnswerRedisMessage.Create();
                 DLAnswerRedisMessage.SetError("18", "Время ожидания ответа истекло.").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
                 dlanswerResult = ОтветНаЗапросСведений.CreateError(bureau.ogrn!, "18", "Время ожидания ответа истекло.", ПорядковыеНомера);
-                await _redisCache.ListSet(key: ["dlrequest", guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
+                await _redisCache.ListSet(key: [DLAnswerRedisMessage.Name, guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
             }
 
             _logger.LogDebug("{guid} {Bureau}: dlanswer response {dt}", guid, bureau.ogrn!, DateTime.Now);
@@ -520,7 +521,7 @@ namespace QBCHService_lib.Services.Implementations
                 {
                     _logger.LogError(ex, "Не удалось установить соединение. КБКИ: {bureau}  address: {address}", bureau.Name, $"/dlanswer?id={responseId}");
                     DLAnswerRedisMessage.SetError("17", "Не удалось установить соединение.").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
-                    await _redisCache.ListSet(key: ["dlrequest", guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
+                    await _redisCache.ListSet(key: [DLAnswerRedisMessage.Name, guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
                     //dlanswerResult = ОтветНаЗапросСведений.CreateError(bureau.ogrn!, "17", "Не удалось установить соединение.", ПорядковыеНомера);
                 }
                 catch (TaskCanceledException)
@@ -531,7 +532,7 @@ namespace QBCHService_lib.Services.Implementations
                 {
                     _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ: {bureau}  address: {address}", bureau.Name, $"/dlanswer?id={responseId}");
                     DLAnswerRedisMessage.SetError("99", $"Код ответа: {responseMessage?.StatusCode} Message:{(responseMessage is not null ? await responseMessage.Content.ReadAsStringAsync() : string.Empty)}").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
-                    await _redisCache.ListSet(key: ["dlrequest", guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
+                    await _redisCache.ListSet(key: [DLAnswerRedisMessage.Name, guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
                 }
             }
         }

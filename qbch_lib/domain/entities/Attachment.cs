@@ -1,5 +1,5 @@
-﻿using System;
-using QBCH_lib.core;
+﻿using QBCH_lib.core;
+using System;
 
 namespace QBCH_lib.domain.entities;
 

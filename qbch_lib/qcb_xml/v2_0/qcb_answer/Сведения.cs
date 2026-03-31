@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using QBCH_lib.qcb_xml.v2_0.CommonTypes;
+﻿using QBCH_lib.qcb_xml.v2_0.CommonTypes;
+using System.Collections.Generic;
 
 namespace QBCH_lib.qcb_xml.v2_0.qcb_answer
 {

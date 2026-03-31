@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  db1:    
+    image: postgres:latest
+    container_name: QBCH_MainDB
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: qbch
+    volumes:
+      - ./init-qbch-main.sql:/docker-entrypoint-initdb.d/init-qbch-main.sql
+    ports:
+      - "32772:5432"
+  db2:    
+    image: postgres:latest
+    container_name: QBCH_Search_SubjectsDB
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: qbch
+    volumes:
+      - ./init-search-subjects.sql:/docker-entrypoint-initdb.d/init-search-subjects.sql
+    ports:
+      - "32771:5432"
+  db3:    
+    image: postgres:latest
+    container_name: QBCH_AMPDB
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: qbch
+    volumes:
+      - ./init-amp.sql:/docker-entrypoint-initdb.d/init-amp.sql
+    ports:
+      - "32770:5432"

@@ -1,8 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography.Pkcs;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using Crypto_lib.Model;
+﻿using Crypto_lib.Model;
 using CryptoPro.Security.Cryptography.Pkcs;
 using CryptoPro.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +8,10 @@ using Org.BouncyCastle.X509;
 using QBCH_lib.core;
 using QBCH_lib.qcb_xml.v1_3.Enums;
 using QBCH_lib.Services.Interfaces;
+using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace Crypto_lib.Service
 {
