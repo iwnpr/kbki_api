@@ -17,6 +17,17 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="backup\**" />
+	  <Compile Remove="logs\**" />
+	  <Content Remove="backup\**" />
+	  <Content Remove="logs\**" />
+	  <EmbeddedResource Remove="backup\**" />
+	  <EmbeddedResource Remove="logs\**" />
+	  <None Remove="backup\**" />
+	  <None Remove="logs\**" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<None Remove="xsd\qcb_common.xsd" />
 		<None Remove="xsd\qcb_put.xsd" />
 		<None Remove="xsd\qcb_request.xsd" />
@@ -63,11 +74,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Folder Include="backup\" />
-		<Folder Include="logs\" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Content Update="appsettings.Development.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
@@ -87,42 +93,6 @@
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="xsd\qcb_result.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\1.3\qcb_answer.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\1.3\qcb_common.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\1.3\qcb_put.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\1.3\qcb_putanswer.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\1.3\qcb_request.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\1.3\qcb_result.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\2\qcb_answer.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\2\qcb_common.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\2\qcb_put.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\2\qcb_putanswer.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\2\qcb_request.xsd">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </None>
-	  <None Update="xsd\2\qcb_result.xsd">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	</ItemGroup>
