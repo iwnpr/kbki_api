@@ -42,7 +42,7 @@ namespace QBCH_api.Controllers
     /// <param name="ticketService"></param>
     /// <param name="repository"></param>
     /// <param name="certManagement"></param>
-    [ApiVersion("2.0")]
+    [ApiVersion("3.0")]
     [Route("v{version:apiVersion}")]
     [ApiController]
     public class QBCHIIController(IMediator mediator,
@@ -80,7 +80,7 @@ namespace QBCH_api.Controllers
         private readonly string? _kakfaTopic = config.GetValue<string>("KafkaService:Topic");
 
         /// <summary>
-        /// Запрос сведений о среднемесячных платежах Субъекта.
+        /// Запрос сведений о CCП/самозапрет/антифрод
         /// </summary>
         /// <remarks>
         /// 
@@ -92,8 +92,8 @@ namespace QBCH_api.Controllers
         /// <response code="202">Результат запроса содержит квитанцию с идентификатором ответа.</response>
         /// <response code="400">Результат запроса содержит квитанцию с информацией об ошибке.</response>
         [HttpPost("dlrequest")]
-        [MapToApiVersion("2.0")]
-        public async Task<IActionResult> DlRequest_v_2(ApiVersion apiVersion)
+        [MapToApiVersion("3.0")]
+        public async Task<IActionResult> DlRequest(ApiVersion apiVersion)
         {
             // Считем время затраченное на проверки.        
             var RequestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
@@ -192,7 +192,7 @@ namespace QBCH_api.Controllers
         }
 
         /// <summary>
-        /// получение сведений о среднемесячных платежах Субъекта по идентификатору ответа
+        /// получение сведений Субъекта по идентификатору ответа по идентификатору ответа
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
@@ -203,8 +203,8 @@ namespace QBCH_api.Controllers
         /// <response code="202">результат запроса содержит квитанцию с информацией об ошибке «Ответ не готов».</response>
         /// <response code="400">результат запроса содержит квитанцию с информацией об ошибке, кроме ошибки «Ответ не готов»</response>
         [HttpGet("dlanswer")]
-        [MapToApiVersion("2.0")]
-        public async Task<IActionResult> DlAnswer_v_2(string? id = null)
+        [MapToApiVersion("3.0")]
+        public async Task<IActionResult> DlAnswer(string? id = null)
         {
             var RequestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
             var guid = Guid.NewGuid().ToString();
@@ -366,7 +366,7 @@ namespace QBCH_api.Controllers
         /// <response code="200">Результат запроса содержит информацию о результатах загрузки данных в базу данных КБКИ</response>
         /// <response code="202">Результат запроса содержит квитанцию с идентификатором ответа</response>
         /// <response code="400">Результат запроса содержит квитанцию с информацией об ошибке</response>
-        [MapToApiVersion("2.0")]
+        [MapToApiVersion("3.0")]
         [HttpPost("dlput")]
         public async Task<IActionResult> DlPut_v_2(ApiVersion apiVersion)
         {
@@ -386,7 +386,7 @@ namespace QBCH_api.Controllers
         /// В случае получения ошибки «Ответ не готов» абонент должен повторить запрос не ранее, чем через 1 секунду.
         /// </remarks>
         [HttpGet("dlputanswer")]
-        [MapToApiVersion("2.0")]
+        [MapToApiVersion("3.0")]
         public async Task<IActionResult> DlPutAnswer(ApiVersion version, string? id = null)
         {
             var RequestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
@@ -548,7 +548,7 @@ namespace QBCH_api.Controllers
         /// <response code="200">Квитанция содержит информацию об успешной обработке запроса</response>
         /// <response code="400">Квитанция содержит информацию об ошибке</response>
         [HttpPost("certadd")]
-        [MapToApiVersion("2.0")]
+        [MapToApiVersion("3.0")]
         public async Task<IActionResult> CertAdd([FromForm] CertForm form)
         {
             throw new NotImplementedException();
@@ -746,7 +746,7 @@ namespace QBCH_api.Controllers
         /// <response code="200">Квитанция содержит информацию об успешной обработке запроса</response>
         /// <response code="400">Квитанция содержит информацию об ошибке</response>
         [HttpPost("certrevoke")]
-        [MapToApiVersion("2.0")]
+        [MapToApiVersion("3.0")]
         public async Task<IActionResult> CertRevoke([FromForm] CertForm form)
         {
             throw new NotImplementedException();

@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="qcb_common.xsd"/>
+	<xs:element name="РезультатПредставленияСведений">
+		<xs:annotation>
+			<xs:documentation>Результаты представления сведений о среднемесячных платежах и/или сведений для предупреждения возможного мошенничества</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="БКИ">
+					<xs:annotation>
+						<xs:documentation>Полное фирменное наименование БКИ</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:simpleContent>
+							<xs:extension base="ТипНаименование">
+								<xs:attribute name="ОГРН" type="ТипОГРН" use="required">
+									<xs:annotation>
+										<xs:documentation>ОГРН БКИ - источника информации</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:extension>
+						</xs:simpleContent>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Результат" maxOccurs="unbounded">
+					<xs:complexType>
+						<xs:choice>
+							<xs:element name="Договор">
+								<xs:annotation>
+									<xs:documentation>Результат выполнения операции по сведениям о среднемесячных платежах</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:choice>
+										<xs:element name="Успешно" fixed="">
+											<xs:annotation>
+												<xs:documentation>Операция выполнена успешно</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:element name="Ошибка" type="ТипОшибка">
+											<xs:annotation>
+												<xs:documentation>Описание ошибки</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:choice>
+									<xs:attribute name="УИД" type="ТипУИД" use="required">
+										<xs:annotation>
+											<xs:documentation>УИД договора</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+									<xs:attribute name="ДатаРасчета" type="xs:date" use="optional">
+										<xs:annotation>
+											<xs:documentation>Дата расчета величины среднемесячного платежа</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+									<xs:attribute name="Операция" type="СправочникОперации" use="required">
+										<xs:annotation>
+											<xs:documentation>Выполненная операция</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="ОбращениеОбязательство">
+								<xs:annotation>
+									<xs:documentation>Результат выполнения операции по сведениям для предупреждения возможного мошенничества</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:choice>
+										<xs:element name="Успешно" fixed="">
+											<xs:annotation>
+												<xs:documentation>Операция выполнена успешно</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:element name="Ошибка" type="ТипОшибка">
+											<xs:annotation>
+												<xs:documentation>Описание ошибки</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:choice>
+									<xs:attribute name="УИД" type="ТипУИД" use="required">
+										<xs:annotation>
+											<xs:documentation>УИД договора (сделка) /обращения</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+									<xs:attribute name="СтадияРассмотрения" type="СправочникСтадииРассмотрения">
+										<xs:annotation>
+											<xs:documentation>Код стадии рассмотрения обращения субъекта кредитной истории к источнику с предложением совершить сделку (статуса обязательства)</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+									<xs:attribute name="Операция" type="СправочникОперации" use="required">
+										<xs:annotation>
+											<xs:documentation>Выполненная операция</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+								</xs:complexType>
+							</xs:element>
+						</xs:choice>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="Версия" use="required" fixed="3.0">
+				<xs:annotation>
+					<xs:documentation>Версия схемы</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторЗапроса" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Идентификатор запроса, в ответ на который подготовлен данный ответ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ДатаЗапроса" type="xs:date" use="required">
+				<xs:annotation>
+					<xs:documentation>Дата запроса</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторОтвета" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Уникальный идентификатор ответа</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ОГРН" type="ТипОГРН" use="required">
+				<xs:annotation>
+					<xs:documentation>ОГРН КБКИ сформировавшего ответ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:simpleType name="СправочникОперации">
+		<xs:annotation>
+			<xs:documentation>Справочник выполняемых операций</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="Добавить"/>
+			<xs:enumeration value="Удалить"/>
+		</xs:restriction>
+	</xs:simpleType>
+</xs:schema>

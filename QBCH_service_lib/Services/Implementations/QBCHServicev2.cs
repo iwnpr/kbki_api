@@ -17,7 +17,7 @@ namespace QBCHService_lib.Services.Implementations
     public partial class QBCHService
     {
         /// <summary>
-        /// Сведения о платежах из нашей БД
+        /// Агрегация сведений из нашей БД по доменным осям ссп / замозапрет / антифрод
         /// </summary>
         /// <param name="processing"></param>
         /// <returns></returns>
@@ -102,7 +102,7 @@ namespace QBCHService_lib.Services.Implementations
 
                 bool subjectFound = subjectKeys.Count != 0;
                 bool isITNChecked = запрос.Субъект.ИНН?.ПризнакПроверки is not null && запрос.Субъект.ИНН.ПризнакПроверки == ТипИННФЛсПризнакомПризнакПроверки.Item1;
-                bool isAPMrequest = package.КодСведений == СправочникВидыСведений.AmpSP3;
+                bool isPaymentsRequested = package.КодСведений == СправочникВидыСведений.AmpSP3;
 
                 // Заполняем данными по условию
                 if (subjectFound)
@@ -110,7 +110,7 @@ namespace QBCHService_lib.Services.Implementations
                     var SPTask = _qbchDb.GetSelfProhibition(subjectKeys, timeLeft);
                     var AMPTask = _qbchDb.GetCalculationOfAmp(subjectKeys, timeLeft);
 
-                    if (isAPMrequest)
+                    if (isPaymentsRequested)
                         await Task.WhenAll([SPTask, AMPTask]);
                     else
                         await SPTask;
@@ -135,7 +135,7 @@ namespace QBCHService_lib.Services.Implementations
                     }
 
                     // Если тип запроса ССП + СЗ запрашиваем ССП
-                    if (isAPMrequest)
+                    if (isPaymentsRequested)
                     {
                         var xAmpDB = AMPTask.Result;
                         ampFromDB = _xmlService.Deserialize<Обязательства>(xAmpDB);

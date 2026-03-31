@@ -145,6 +145,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddMemoryCache();
 builder.Services.AddSwaggerGen(options =>
 {
+    options.SwaggerDoc("v3", new OpenApiInfo { Title = "API сервиса QBCH V3", Version = "v3.0" });
     options.SwaggerDoc("v2", new OpenApiInfo { Title = "API сервиса QBCH V2", Version = "v2.0" });
     options.SwaggerDoc("v1.3", new OpenApiInfo { Title = "API сервиса QBCH V1", Version = "v1.3" });
     options.EnableAnnotations();
@@ -163,6 +164,7 @@ app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("v1.3/swagger.json", "API сервиса QBCH V1");
     c.SwaggerEndpoint("v2/swagger.json", "API сервиса QBCH V2");
+    c.SwaggerEndpoint("v3/swagger.json", "API сервиса QBCH V3");
 });
 app.MapControllers();
 app.Run();
@@ -190,7 +192,7 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
     // ѕровер€ем, что значение указано
     if (string.IsNullOrEmpty(urlv2))
     {
-        serilog.Fatal("ќтсутствует BaseAddress дл€ http-клиента v2: {clientName}.", clientName);
+        serilog.Fatal("ќтсутствует BaseAddress дл€ http-клиента v3: {clientName}.", clientName);
         throw new NullReferenceException();
     }
 
@@ -211,7 +213,7 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
             };
         });
 
-    builder.Services.AddHttpClient($"{clientName}v2", client =>
+    builder.Services.AddHttpClient($"{clientName}v3", client =>
     {
         client.BaseAddress = new(urlv2);
         client.Timeout = TimeSpan.FromSeconds(4);

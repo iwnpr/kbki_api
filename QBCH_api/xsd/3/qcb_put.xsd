@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="qcb_common.xsd"/>
+	<xs:element name="ПредставлениеСведений">
+		<xs:annotation>
+			<xs:documentation>Представление сведений о среднемесячных платежах и сведений для предупреждения возможного мошенничества</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="БКИ">
+					<xs:annotation>
+						<xs:documentation>Полное фирменное наименование БКИ</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:simpleContent>
+							<xs:extension base="ТипНаименование">
+								<xs:attribute name="ОГРН" type="ТипОГРН" use="required">
+									<xs:annotation>
+										<xs:documentation>ОГРН БКИ - источника информации</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:extension>
+						</xs:simpleContent>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="Сведения" maxOccurs="1000">
+					<xs:complexType>
+						<xs:choice>
+							<xs:element name="Договор">
+								<xs:annotation>
+									<xs:documentation>Сведения о среднемесячном платеже по договору</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="Субъект" type="ТипСубъектТитул">
+											<xs:annotation>
+												<xs:documentation>Сведения о субъекте, с которым заключен договор</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:choice>
+											<xs:element name="Добавить" type="ТипДоговор">
+												<xs:annotation>
+													<xs:documentation>Добавить сведения о среднемесячном платеже по договору</xs:documentation>
+												</xs:annotation>
+											</xs:element>
+											<xs:element name="Удалить">
+												<xs:annotation>
+													<xs:documentation>Удалить сведения о среднемесячном платеже по договору</xs:documentation>
+												</xs:annotation>
+												<xs:complexType>
+													<xs:attribute name="УИД" type="ТипУИД" use="required">
+														<xs:annotation>
+															<xs:documentation>Универсальный идентификатор договора (сделки)</xs:documentation>
+														</xs:annotation>
+													</xs:attribute>
+													<xs:attribute name="Причина">
+														<xs:annotation>
+															<xs:documentation>Причина удаления данных</xs:documentation>
+														</xs:annotation>
+														<xs:simpleType>
+															<xs:restriction base="xs:string">
+																<xs:maxLength value="2000"/>
+															</xs:restriction>
+														</xs:simpleType>
+													</xs:attribute>
+													<xs:attribute name="ДатаРасчета" type="xs:date">
+														<xs:annotation>
+															<xs:documentation>Дата расчета удаляемой величины среднемесячного платежа</xs:documentation>
+														</xs:annotation>
+													</xs:attribute>
+												</xs:complexType>
+											</xs:element>
+										</xs:choice>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="ОбращениеОбязательство">
+								<xs:annotation>
+									<xs:documentation>Сведения об обращении / обязательстве для предупреждения мошенничества</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="Субъект" type="ТипСубъектТитулАФ">
+											<xs:annotation>
+												<xs:documentation>Сведения о субъекте, с которым заключен договор или который направил обращение</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:choice>
+											<xs:element name="Добавить" type="ТипОбращениеОбязательство">
+												<xs:annotation>
+													<xs:documentation>Добавить сведения об обращении /обязательстве</xs:documentation>
+												</xs:annotation>
+											</xs:element>
+											<xs:element name="Удалить">
+												<xs:annotation>
+													<xs:documentation>Удалить сведения об обращении / обязательстве</xs:documentation>
+												</xs:annotation>
+												<xs:complexType>
+													<xs:attribute name="УИД" type="ТипУИД" use="required">
+														<xs:annotation>
+															<xs:documentation>Уникальный идентификатор договора (сделки) / обращения</xs:documentation>
+														</xs:annotation>
+													</xs:attribute>
+													<xs:attribute name="СтадияРассмотрения" type="СправочникСтадииРассмотрения">
+														<xs:annotation>
+															<xs:documentation>Код стадии рассмотрения обращения субъекта кредитной истории к источнику с предложением совершить сделку (статуса обязательства)</xs:documentation>
+														</xs:annotation>
+													</xs:attribute>
+													<xs:attribute name="Причина">
+														<xs:annotation>
+															<xs:documentation>Причина удаления данных</xs:documentation>
+														</xs:annotation>
+														<xs:simpleType>
+															<xs:restriction base="xs:string">
+																<xs:maxLength value="2000"/>
+															</xs:restriction>
+														</xs:simpleType>
+													</xs:attribute>
+												</xs:complexType>
+											</xs:element>
+										</xs:choice>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+						</xs:choice>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="Версия" use="required" fixed="3.0">
+				<xs:annotation>
+					<xs:documentation>Версия схемы</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторЗапроса" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Идентификатор запроса</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ДатаЗапроса" type="xs:date" use="required">
+				<xs:annotation>
+					<xs:documentation>Дата запроса</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

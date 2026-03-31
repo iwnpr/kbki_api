@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="qcb_common.xsd"/>
+	<xs:element name="ОтветНаЗапросСведений">
+		<xs:annotation>
+			<xs:documentation>Сведения о среднемесячных платежах, сведения о запрете (снятии запрета), сведения для предупреждения возможного мошенничества</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="Сведения" maxOccurs="unbounded">
+					<xs:annotation>
+						<xs:documentation>Содержание ответа</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="ТитульнаяЧасть" type="ТипСубъектТитул">
+								<xs:annotation>
+									<xs:documentation>Титульная часть ответа</xs:documentation>
+								</xs:annotation>
+							</xs:element>
+							<xs:element name="КБКИ" maxOccurs="unbounded">
+								<xs:annotation>
+									<xs:documentation>КБКИ - источник информации</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:choice>
+										<xs:element name="Ошибка" type="ТипОшибка">
+											<xs:annotation>
+												<xs:documentation>Описание ошибки</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:element name="СубъектНеНайден">
+											<xs:annotation>
+												<xs:documentation>Субъект в соответствующем КБКИ не найден</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+										<xs:sequence>
+											<xs:choice minOccurs="0">
+												<xs:annotation>
+													<xs:documentation>Сведения о среднемесячных платежах</xs:documentation>
+												</xs:annotation>
+												<xs:element name="ОбязательствНет">
+													<xs:annotation>
+														<xs:documentation>В КБКИ отсутствует информация об обязательствах субъекта</xs:documentation>
+													</xs:annotation>
+												</xs:element>
+												<xs:element name="Обязательства">
+													<xs:annotation>
+														<xs:documentation>Обязательства субъекта</xs:documentation>
+													</xs:annotation>
+													<xs:complexType>
+														<xs:sequence>
+															<xs:element name="БКИ" maxOccurs="unbounded">
+																<xs:annotation>
+																	<xs:documentation>БКИ - источник информации</xs:documentation>
+																</xs:annotation>
+																<xs:complexType>
+																	<xs:sequence>
+																		<xs:element name="Договор" type="ТипДоговор" maxOccurs="unbounded">
+																			<xs:annotation>
+																				<xs:documentation>Сведения о договоре денежного займа (кредита) или поручительстве по денежному займу (кредиту)</xs:documentation>
+																			</xs:annotation>
+																		</xs:element>
+																	</xs:sequence>
+																	<xs:attribute name="ОГРН" use="required">
+																		<xs:annotation>
+																			<xs:documentation>ОГРН БКИ - источника информации</xs:documentation>
+																		</xs:annotation>
+																	</xs:attribute>
+																</xs:complexType>
+															</xs:element>
+														</xs:sequence>
+													</xs:complexType>
+												</xs:element>
+											</xs:choice>
+											<xs:choice>
+												<xs:annotation>
+													<xs:documentation>Сведения о запрете (снятии запрета)</xs:documentation>
+												</xs:annotation>
+												<xs:element name="СведенияОЗапретеНеПредоставляются">
+													<xs:annotation>
+														<xs:documentation>Сведения о запрете (снятии запрета) не предоставляются в связи с отсутствием ИНН или признак проверки содержит код "0"</xs:documentation>
+													</xs:annotation>
+												</xs:element>
+												<xs:element name="СведенийОЗапретеНет">
+													<xs:annotation>
+														<xs:documentation>Сведения о запрете (снятии запрета) субъекта отсутствуют</xs:documentation>
+													</xs:annotation>
+												</xs:element>
+												<xs:element name="УсловияЗапрета">
+													<xs:annotation>
+														<xs:documentation>Сведения о запрете (снятии запрета) субъекта кредитной истории</xs:documentation>
+													</xs:annotation>
+													<xs:complexType>
+														<xs:sequence>
+															<xs:element name="Условие" type="ТипУсловиеЗапрета" maxOccurs="unbounded">
+																<xs:annotation>
+																	<xs:documentation>Условие запрета/снятие запрета</xs:documentation>
+																</xs:annotation>
+															</xs:element>
+														</xs:sequence>
+													</xs:complexType>
+												</xs:element>
+											</xs:choice>
+											<xs:choice minOccurs="0">
+												<xs:annotation>
+													<xs:documentation>Сведения для предупреждения возможного мошенничества</xs:documentation>
+												</xs:annotation>
+												<xs:element name="СведенияДляПредупрежденияНеПредоставляются">
+													<xs:annotation>
+														<xs:documentation>Сведения для предупреждения возможного мошенничества не предоставляются в связи с отсутствием ИНН или признак проверки содержит код "0"</xs:documentation>
+													</xs:annotation>
+												</xs:element>
+												<xs:element name="СведенийДляПредупрежденияНет">
+													<xs:annotation>
+														<xs:documentation>Сведения для предупреждения возможного мошенничества отсутствуют</xs:documentation>
+													</xs:annotation>
+												</xs:element>
+												<xs:element name="СведенияДляПредупреждения">
+													<xs:annotation>
+														<xs:documentation>Сведения для предупреждения возможного мошенничества</xs:documentation>
+													</xs:annotation>
+													<xs:complexType>
+														<xs:sequence>
+															<xs:element name="БКИ" maxOccurs="unbounded">
+																<xs:annotation>
+																	<xs:documentation>БКИ - источник информации</xs:documentation>
+																</xs:annotation>
+																<xs:complexType>
+																	<xs:sequence>
+																		<xs:element name="ОбращениеОбязательство" type="ТипОбращениеОбязательство" maxOccurs="unbounded">
+																			<xs:annotation>
+																				<xs:documentation>Сведения об обращении / обязательстве</xs:documentation>
+																			</xs:annotation>
+																		</xs:element>
+																	</xs:sequence>
+																	<xs:attribute name="ОГРН" use="required">
+																		<xs:annotation>
+																			<xs:documentation>ОГРН БКИ - источника информации</xs:documentation>
+																		</xs:annotation>
+																	</xs:attribute>
+																</xs:complexType>
+															</xs:element>
+														</xs:sequence>
+													</xs:complexType>
+												</xs:element>
+											</xs:choice>
+										</xs:sequence>
+									</xs:choice>
+									<xs:attribute name="ОГРН" use="required">
+										<xs:annotation>
+											<xs:documentation>ОГРН КБКИ - источника информации</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+									<xs:attribute name="ПоСостояниюНа" type="xs:dateTime" use="required">
+										<xs:annotation>
+											<xs:documentation>Дата и время, по состоянию на которые подготовлен ответ</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+									<xs:attribute name="ИдентификаторОтвета" type="ТипИдентификатор">
+										<xs:annotation>
+											<xs:documentation>Идентификатор ответа КБКИ - источника информации</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+									<xs:attribute name="ПризнакНаличияКИ" use="optional">
+										<xs:annotation>
+											<xs:documentation>Признак наличия в кредитной истории субъекта, хранящейся в КБКИ, сведений, не ограниченных ТЧ и сведениями о запрете (снятии запрета)</xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:restriction base="xs:string">
+												<xs:enumeration value="0">
+													<xs:annotation>
+														<xs:documentation>Кредитная история субъекта в КБКИ отсутствует или в ней имеются только сведения о запрете (снятии запрета)</xs:documentation>
+													</xs:annotation>
+												</xs:enumeration>
+												<xs:enumeration value="1">
+													<xs:annotation>
+														<xs:documentation>В кредитной истории субъекта, хранящейся в КБКИ, имеются сведения помимо титульной части и сведений о запрете (снятии запрета)</xs:documentation>
+													</xs:annotation>
+												</xs:enumeration>
+											</xs:restriction>
+										</xs:simpleType>
+									</xs:attribute>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:attribute name="ПорядковыйНомер" use="required">
+							<xs:annotation>
+								<xs:documentation>Порядковый номер запроса в пакете запроса</xs:documentation>
+							</xs:annotation>
+							<xs:simpleType>
+								<xs:restriction base="xs:integer">
+									<xs:minInclusive value="1"/>
+								</xs:restriction>
+							</xs:simpleType>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="Версия" use="required" fixed="3.0">
+				<xs:annotation>
+					<xs:documentation>Версия схемы</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторЗапроса" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Идентификатор запроса, в ответ на который подготовлен данный ответ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ДатаЗапроса" use="required">
+				<xs:annotation>
+					<xs:documentation>Дата запроса, на который подготовлен настоящий ответ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ИдентификаторОтвета" type="ТипИдентификатор" use="required">
+				<xs:annotation>
+					<xs:documentation>Уникальный идентификатор ответа</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ОГРН" type="ТипОГРН" use="required">
+				<xs:annotation>
+					<xs:documentation>ОГРН КБКИ сформировавшего ответ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ТипОтвета" type="СправочникСпособыЗапроса" use="required">
+				<xs:annotation>
+					<xs:documentation>Тип ответа: 1 - сведения одного КБКИ, 2 - сведения всех КБКИ ("Одно окно")</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="РежимЗапроса" type="СправочникРежимыЗапроса" use="required">
+				<xs:annotation>
+					<xs:documentation>Режим запроса (одиночный/пакетный), на который подготовлен настоящий ответ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>
