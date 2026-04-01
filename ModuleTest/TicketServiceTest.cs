@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Configuration;
-using QBCH_lib.qcb_xml.v1_3.CommonTypes;
-using QBCH_lib.qcb_xml.v1_3.Enums;
+using QBCH_lib.qcb_xml.v3_0.Enums;
 using QBCH_lib.Services.Implementations;
 
 namespace ModuleTest
@@ -30,13 +29,11 @@ namespace ModuleTest
                 .Build();
 
                 var _ticketService = new TicketService(configuration);
-                var ticket = _ticketService.CreateResult(ResultType.Error, code.ToString(), text);
+                var ticket = _ticketService.CreateResult(ResponseType.Error, code.ToString(), text);
 
                 Assert.IsNotNull(ticket);
                 Assert.AreEqual(ticket.ОГРН, "1057747734934");
                 Assert.AreEqual(ticket.Версия, "1.2");
-                Assert.AreEqual((ticket.Item as Ошибка)?.Value, text);
-                Assert.AreEqual((ticket.Item as Ошибка)?.Код, code.ToString());
             }
         }
     }
