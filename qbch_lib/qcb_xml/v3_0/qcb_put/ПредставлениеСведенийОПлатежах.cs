@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Xml.Serialization;
 
 namespace QBCH_lib.qcb_xml.v3_0.qcb_put
 {
@@ -7,28 +9,26 @@ namespace QBCH_lib.qcb_xml.v3_0.qcb_put
     [System.Serializable()]
     [System.Diagnostics.DebuggerStepThrough()]
     [System.ComponentModel.DesignerCategory("code")]
-    [System.Xml.Serialization.XmlType(AnonymousType = true)]
-    [System.Xml.Serialization.XmlRoot(Namespace = "", IsNullable = false)]
+    [XmlType(AnonymousType = true)]
+    [XmlRoot("ПредставлениеСведений", Namespace = "", IsNullable = false)]
     public class ПредставлениеСведенийОПлатежах
     {
-
         /// <remarks/>
         public ПредставлениеСведенийОПлатежахБКИ БКИ { get; set; }
 
         /// <remarks/>
-        [System.Xml.Serialization.XmlArrayItem("Договор", IsNullable = false)]
-        public List<ПредставлениеСведенийОПлатежахДоговор> Договоры { get; set; } = new();
-
+        [XmlElement("Сведения")]
+        public List<ПредставлениеСведенийОПлатежахСведения> Сведения { get; set; } = new();
         /// <remarks/>
-        [System.Xml.Serialization.XmlAttribute()]
+        [XmlAttribute()]
         public string Версия { get; set; } = "3.0";
 
         /// <remarks/>
-        [System.Xml.Serialization.XmlAttribute()]
+        [XmlAttribute()]
         public string ИдентификаторЗапроса { get; set; }
 
         /// <remarks/>
-        [System.Xml.Serialization.XmlAttribute(DataType = "date")]
-        public System.DateTime ДатаЗапроса { get; set; }
+        [XmlAttribute(DataType = "date")]
+        public DateTime ДатаЗапроса { get; set; }
     }
 }

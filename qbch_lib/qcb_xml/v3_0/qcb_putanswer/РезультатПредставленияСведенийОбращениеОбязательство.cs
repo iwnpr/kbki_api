@@ -10,20 +10,24 @@ namespace QBCH_lib.qcb_xml.v3_0.qcb_putanswer
     [System.Diagnostics.DebuggerStepThrough()]
     [System.ComponentModel.DesignerCategory("code")]
     [XmlType(AnonymousType = true)]
-    public partial class РезультатПредставленияСведенийДоговор
+    public partial class РезультатПредставленияСведенийОбращениеОбязательство
     {
         /// <remarks/>
         [XmlElement("Ошибка", typeof(Ошибка))]
         [XmlElement("Успешно", typeof(object))]
-        public object? Item { get; set; }
+        public object Item { get; set; }
 
         /// <remarks/>
         [XmlAttribute()]
-        public string? УИД { get; set; }
+        public string УИД { get; set; }
 
         /// <remarks/>
-        [XmlAttribute(DataType = "date")]
-        public string? ДатаРасчета { get; set; }
+        [XmlAttribute()]
+        public СправочникСтадииРассмотрения СтадияРассмотрения { get; set; }
+
+        /// <remarks/>
+        [XmlIgnore()]
+        public bool СтадияРассмотренияSpecified { get; set; }
 
         /// <remarks/>
         [XmlAttribute()]

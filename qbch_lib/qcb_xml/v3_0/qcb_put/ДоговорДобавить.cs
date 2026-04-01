@@ -1,4 +1,6 @@
 ﻿using QBCH_lib.qcb_xml.v3_0.CommonTypes;
+using System;
+using System.Xml.Serialization;
 
 namespace QBCH_lib.qcb_xml.v3_0.qcb_put
 {
@@ -10,11 +12,22 @@ namespace QBCH_lib.qcb_xml.v3_0.qcb_put
     [System.Xml.Serialization.XmlType(AnonymousType = true)]
     public class ДоговорДобавить
     {
-
-        /// <remarks/>
-        public ТипСубъектТитул Субъект { get; set; }
-
         /// <remarks/>
         public ТипСреднемесячныйПлатеж СреднемесячныйПлатеж { get; set; }
+
+        /// <remarks/>
+        public string ПСК { get; set; }
+
+        /// <remarks/>
+        [XmlElement(DataType = "date")]
+        public string? ДатаПрекращения { get; set; }
+
+        /// <remarks/>
+        [XmlAttribute()]
+        public string УИД { get; set; }
+
+        /// <remarks/>
+        [XmlAttribute(DataType = "date")]
+        public DateTime Представлено { get; set; }
     }
 }

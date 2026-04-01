@@ -1,6 +1,6 @@
 ﻿using System.Xml.Serialization;
 
-namespace QBCH_lib.qcb_xml.v3_0.qcb_putanswer
+namespace QBCH_lib.qcb_xml.v3_0.CommonTypes
 {
     /// <remarks/>
     [System.CodeDom.Compiler.GeneratedCode("xsd", "4.8.9037.0")]
@@ -8,15 +8,14 @@ namespace QBCH_lib.qcb_xml.v3_0.qcb_putanswer
     [System.Diagnostics.DebuggerStepThrough()]
     [System.ComponentModel.DesignerCategory("code")]
     [XmlType(AnonymousType = true)]
-    public partial class РезультатПредставленияСведенийБКИ
+    public class ТипСумма
     {
-
         /// <remarks/>
         [XmlAttribute()]
-        public string ОГРН { get; set; }
+        public string Валюта { get; set; }
 
         /// <remarks/>
         [XmlText()]
-        public string Value { get; set; }
+        public double Value { get; set; }
     }
 }
