@@ -42,7 +42,12 @@ public class ClentRequest : Entity
     /// <summary>
     /// xml запроса
     /// </summary>
-    public ЗапросСведений? Request { get; private set; }
+    public object? RequestPayload { get; private set; }
+
+    /// <summary>
+    /// xml запроса v3.0
+    /// </summary>
+    public ЗапросСведений? Request => RequestPayload as ЗапросСведений;
 
     /// <summary>
     /// Конструктор
@@ -87,7 +92,16 @@ public class ClentRequest : Entity
     /// <param name="request">Запрос</param>
     public void SetRequest(ЗапросСведений request)
     {
-        Request ??= request;
+        RequestPayload ??= request;
+    }
+
+    /// <summary>
+    /// Установить десериализованную модель запроса без привязки к версии.
+    /// </summary>
+    /// <param name="request">Запрос</param>
+    public void SetRequest(object request)
+    {
+        RequestPayload ??= request;
     }
 
     /// <summary>

@@ -116,8 +116,17 @@ namespace QBCH_lib.CommonTypes.Api
         public string? IpAddress { get; set; }
 
         /// <summary>
-        ///  
+        ///  Десериализованная модель входного запроса
         /// </summary>
-        public ЗапросСведений? Request { get; set; } = null;
+        public object? RequestPayload { get; set; } = null;
+
+        /// <summary>
+        /// Десериализованная модель запроса версии 3.0.
+        /// </summary>
+        public ЗапросСведений? Request
+        {
+            get => RequestPayload as ЗапросСведений;
+            set => RequestPayload = value;
+        }
     }
 }

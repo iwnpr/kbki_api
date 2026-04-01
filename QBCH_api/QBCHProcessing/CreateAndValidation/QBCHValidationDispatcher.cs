@@ -4,6 +4,7 @@ using QBCH_api.QBCHProcessing.CreateAndValidation.ValidationStep;
 using QBCH_api.QBCHProcessing.ProcessingStep;
 using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
+using QBCH_lib.qcb_xml.v3_0.qcb_request;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 
@@ -48,6 +49,11 @@ public static class QBCHValidationDispatcher
                 .AdditionalValidation() //15 - Запрос содержит некорректные данные
                 .ValidateAgreement() //13 - Отсутствует действующее согласие Субъекта 27 - Отсутствует согласие субъекта
                 .SelfLockedUpValidate(); //25 - Сведения о запрете (снятии запрета) не могут быть предоставлены в связи с отсутствием информации об ИНН и (или) результатах проверки ИНН
+
+        if (!result.Status.Equals(QBCHProcessingStatus.Failure) && result.GetRequest<ЗапросСведений>() is null)
+        {
+            result.RiseCriticalError(Error.Code9_InvalidRequestByScheme());
+        }
 
         result.ValidationComplete(); //Смена статуса транзакции на провадилировано
         return result;

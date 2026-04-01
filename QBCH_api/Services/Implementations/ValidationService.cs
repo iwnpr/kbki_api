@@ -484,7 +484,7 @@ namespace QBCH_api.Services.Implementations
         /// <param name="request">Запрос</param>
         /// <param name="result"></param>
         /// <returns>Результат проверки</returns>
-        public bool ValidateAgreement(ЗапросСведенийЗапрос request, [NotNullWhen(false)] out BaseResult? result) //2.0
+        public bool ValidateAgreement(ЗапросСведенийЗапрос request, [NotNullWhen(false)] out BaseResult? result) //3.0
         {
             string? error = null;
 
@@ -908,7 +908,7 @@ namespace QBCH_api.Services.Implementations
         /// <param name="request">Запрос</param>
         /// <param name="result">Ответ</param>
         /// <returns>Результат проверки</returns>
-        public bool AdditionalValidation(ЗапросСведенийЗапрос request, [NotNullWhen(false)] out BaseResult? result) //2.0
+        public bool AdditionalValidation(ЗапросСведенийЗапрос request, [NotNullWhen(false)] out BaseResult? result) //3.0
         {
             string? error = null;
 

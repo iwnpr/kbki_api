@@ -188,7 +188,16 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
 
         return this;
     }
+
+    /// <summary>
+    /// Получить десериализованный запрос в нужной модели.
+    /// </summary>
+    public TRequest? GetRequest<TRequest>() where TRequest : class
+    {
+        return ClentRequest.RequestPayload as TRequest;
+    }
 }
+
 
 /// <summary>
 /// Статус процессинга
