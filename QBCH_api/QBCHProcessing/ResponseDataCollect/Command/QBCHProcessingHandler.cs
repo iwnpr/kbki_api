@@ -3,8 +3,8 @@ using Crypto_lib.Service;
 using MediatR;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.domain.aggregate;
-using QBCH_lib.qcb_xml.v2_0.Enums;
-using QBCH_lib.qcb_xml.v2_0.qcb_answer;
+using QBCH_lib.qcb_xml.v3_0.Enums;
+using QBCH_lib.qcb_xml.v3_0.qcb_answer;
 using QBCH_lib.Services.Interfaces;
 using QBCHService_lib.Models;
 using QBCHService_lib.Services.Interfaces;
@@ -105,7 +105,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
                     };
 
                     var tasksResult = (await Task.WhenAll(_tasksList)).ToArray();
-                    QBCH_lib.qcb_xml.v2_0.qcb_result.Ошибка? ошибка = null;
+                    QBCH_lib.qcb_xml.v3_0.CommonTypes.ТипОшибка? ошибка = null;
 
                     for (int i = 0; i < response.Сведения.Count; i++)
                     {

@@ -2,11 +2,11 @@
 using Microsoft.Extensions.Logging;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.domain.aggregate;
-using QBCH_lib.qcb_xml.v2_0.CommonTypes;
-using QBCH_lib.qcb_xml.v2_0.Enums;
-using QBCH_lib.qcb_xml.v2_0.qcb_answer;
-using QBCH_lib.qcb_xml.v2_0.qcb_request;
-using QBCH_lib.qcb_xml.v2_0.qcb_result;
+using QBCH_lib.qcb_xml.v3_0.CommonTypes;
+using QBCH_lib.qcb_xml.v3_0.Enums;
+using QBCH_lib.qcb_xml.v3_0.qcb_answer;
+using QBCH_lib.qcb_xml.v3_0.qcb_request;
+using QBCH_lib.qcb_xml.v3_0.qcb_result;
 using QBCHService_lib.Models;
 using System.Diagnostics;
 using System.Net;
@@ -17,7 +17,7 @@ namespace QBCHService_lib.Services.Implementations
     public partial class QBCHService
     {
         /// <summary>
-        /// Агрегация сведений из нашей БД по доменным осям ссп / замозапрет / антифрод
+        /// Агрегация сведений из нашей БД по ссп / замозапрет / антифрод
         /// </summary>
         /// <param name="processing"></param>
         /// <returns></returns>
@@ -30,7 +30,7 @@ namespace QBCHService_lib.Services.Implementations
             // Готовим шаблон ответа
             ОтветНаЗапросСведений answer = new()
             {
-                Версия = "2.0",
+                Версия = "3.0",
                 ИдентификаторЗапроса = package!.ИдентификаторЗапроса,
                 ИдентификаторОтвета = processing.Id.ToString(),
                 ОГРН = _OurBureauPSRN,
@@ -166,8 +166,6 @@ namespace QBCHService_lib.Services.Implementations
                 answer.Сведения.Add(response);
             }
 
-
-            //await _redisCache.AddHash("dlrequest", $"{processing.Id}:{_OurBureauPSRN}", "ResponseTime", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
             return new(_OurBureauPSRN, answer2: answer);
         }
 
@@ -246,7 +244,7 @@ namespace QBCHService_lib.Services.Implementations
                             {
                                 // Ответ вернулся => завершаем метод, возвращаем овтет, всем спасибо всем пока
                                 case HttpStatusCode.OK:
-                                    validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\2\qcb_answer.xsd", guid, ticketCPCts.Token, DLRequestRedisMessage);
+                                    validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_answer.xsd", guid, ticketCPCts.Token, DLRequestRedisMessage);
                                     if (validationresult.IsError)
                                     {
                                         _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, validationresult.Error);
@@ -265,7 +263,7 @@ namespace QBCHService_lib.Services.Implementations
 
                                 // Вернулась ошибка => завершаем метод, возвращаем овтет, всем спасибо всем пока
                                 case HttpStatusCode.BadRequest:
-                                    validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\2\qcb_result.xsd", guid, ticketCPCts.Token, DLRequestRedisMessage);
+                                    validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", guid, ticketCPCts.Token, DLRequestRedisMessage);
                                     if (validationresult.IsError)
                                     {
                                         _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, validationresult.Error);
@@ -293,7 +291,7 @@ namespace QBCHService_lib.Services.Implementations
 
                                 // Вернулся тикет => выходим из цикла, идем стучаться в dlanswer с идентификатором, который вернулся в ответе
                                 case HttpStatusCode.Accepted:
-                                    validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\2\qcb_result.xsd", guid, ticketCPCts.Token, DLRequestRedisMessage);
+                                    validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", guid, ticketCPCts.Token, DLRequestRedisMessage);
                                     if (validationresult.IsError)
                                     {
                                         _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, validationresult.Error);
@@ -456,7 +454,7 @@ namespace QBCHService_lib.Services.Implementations
                     switch (responseMessage.StatusCode)
                     {
                         case HttpStatusCode.OK:
-                            validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\2\qcb_answer.xsd", guid, ct, DLAnswerRedisMessage);
+                            validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_answer.xsd", guid, ct, DLAnswerRedisMessage);
                             if (validationresult.IsError)
                             {
                                 _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, validationresult.Error);
@@ -471,7 +469,7 @@ namespace QBCHService_lib.Services.Implementations
                         // Такого быть не должно - это ошибка!
                         case HttpStatusCode.Accepted:
                         case HttpStatusCode.BadRequest:
-                            validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\2\qcb_result.xsd", guid, ct, DLAnswerRedisMessage);
+                            validationresult = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", guid, ct, DLAnswerRedisMessage);
                             if (validationresult.IsError)
                             {
                                 _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, validationresult.Error);
@@ -597,7 +595,7 @@ namespace QBCHService_lib.Services.Implementations
                 redisMessage?.SetResponseXml(cryptoResult.Body);
             }
 
-            var xsdValidation = _xmlService.ValidateXml(new MemoryStream(cryptoResult.Body), [schemaName, @"xsd\2\qcb_common.xsd"]);
+            var xsdValidation = _xmlService.ValidateXml(new MemoryStream(cryptoResult.Body), [schemaName, @"xsd\3\qcb_common.xsd"]);
 
             if (xsdValidation != null && !string.IsNullOrWhiteSpace(xsdValidation.Error))
             {

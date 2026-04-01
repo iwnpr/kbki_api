@@ -1,4 +1,4 @@
-﻿using QBCH_lib.qcb_xml.v2_0.qcb_request;
+﻿using QBCH_lib.qcb_xml.v3_0.qcb_request;
 using System;
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
@@ -28,12 +28,7 @@ namespace QBCH_lib.CommonTypes.Api
         /// <summary>
         /// Тикет
         /// </summary>
-        public qcb_xml.v1_3.qcb_result.Результат? Ticket { get; set; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public qcb_xml.v2_0.qcb_result.Результат? Ticket_v2 { get; set; }
+        public qcb_xml.v3_0.qcb_result.Результат? Ticket { get; set; }
 
         /// <summary>
         /// 

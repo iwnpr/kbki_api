@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
-using QBCH_lib.qcb_xml.v1_3.Enums;
-using QBCH_lib.qcb_xml.v2_0.Enums;
-using QBCH_lib.qcb_xml.v2_0.qcb_result;
+using QBCH_lib.qcb_xml.v3_0.Enums;
+using QBCH_lib.qcb_xml.v3_0.qcb_result;
 using QBCH_lib.Services.Interfaces;
 using System;
 
@@ -28,64 +27,14 @@ namespace QBCH_lib.Services.Implementations
         /// <param name="guid"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public qcb_xml.v1_3.qcb_result.Результат CreateResult(ResultType type, string? code = null, string? text = null, string? requestId = null, string? guid = null)
-        {
-            return type switch
-            {
-                ResultType.Ticket => new qcb_xml.v1_3.qcb_result.Результат()
-                {
-                    ОГРН = _BureauPSRN,
-                    Версия = "1.2",
-                    Item = new qcb_xml.v1_3.qcb_result.РезультатИдентификаторОтвета()
-                    {
-                        ИдентификаторЗапроса = requestId,
-                        Value = guid
-                    }
-
-                },
-                ResultType.Error => new qcb_xml.v1_3.qcb_result.Результат()
-                {
-                    ОГРН = _BureauPSRN,
-                    Версия = "1.2",
-                    Item = new qcb_xml.v1_3.CommonTypes.Ошибка()
-                    {
-                        Код = code,
-                        Value = text
-                    }
-
-                },
-                ResultType.Success => new qcb_xml.v1_3.qcb_result.Результат()
-                {
-                    ОГРН = _BureauPSRN,
-                    Версия = "1.2",
-                    Item = new qcb_xml.v1_3.qcb_result.РезультатУспешно()
-                    {
-                        ИдентификаторЗапроса = requestId
-                    }
-
-                },
-                _ => throw new Exception("type не определен"),
-            };
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="type"></param>
-        /// <param name="code"></param>
-        /// <param name="text"></param>
-        /// <param name="requestId"></param>
-        /// <param name="guid"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
-        public Результат CreateResultv2(ResponseType type, string? code = null, string? text = null, string? requestId = null, string? guid = null)
+        public Результат CreateResult(ResponseType type, string? code = null, string? text = null, string? requestId = null, string? guid = null)
         {
             return type switch
             {
                 ResponseType.Ticket => new Результат()
                 {
                     ОГРН = _BureauPSRN,
-                    Версия = "2.0",
+                    Версия = "3.0",
                     РезультатДанные = new РезультатИдентификаторОтвета()
                     {
                         ИдентификаторЗапроса = requestId,
@@ -96,7 +45,7 @@ namespace QBCH_lib.Services.Implementations
                 ResponseType.Error => new Результат()
                 {
                     ОГРН = _BureauPSRN,
-                    Версия = "2.0",
+                    Версия = "3.0",
                     РезультатДанные = new РезультатОшибка()
                     {
                         Код = code,
@@ -107,7 +56,7 @@ namespace QBCH_lib.Services.Implementations
                 ResponseType.Success => new Результат()
                 {
                     ОГРН = _BureauPSRN,
-                    Версия = "2.0",
+                    Версия = "3.0",
                     РезультатДанные = new РезультатУспешно()
                     {
                         ИдентификаторЗапроса = requestId
@@ -129,7 +78,7 @@ namespace QBCH_lib.Services.Implementations
             return new Результат
             {
                 ОГРН = _BureauPSRN,
-                Версия = "2.0",
+                Версия = "3.0",
                 РезультатДанные = new РезультатИдентификаторОтвета
                 {
                     ИдентификаторЗапроса = requestId,
@@ -150,7 +99,7 @@ namespace QBCH_lib.Services.Implementations
             return new Результат
             {
                 ОГРН = _BureauPSRN,
-                Версия = "2.0",
+                Версия = "3.0",
                 РезультатДанные = new РезультатИдентификаторОтвета
                 {
                     ИдентификаторЗапроса = requestId,
@@ -169,7 +118,7 @@ namespace QBCH_lib.Services.Implementations
             return new Результат
             {
                 ОГРН = _BureauPSRN,
-                Версия = "2.0",
+                Версия = "3.0",
                 РезультатДанные = new РезультатОшибка()
                 {
                     Код = error.Code.ToString(),
@@ -188,7 +137,7 @@ namespace QBCH_lib.Services.Implementations
             return new Результат
             {
                 ОГРН = _BureauPSRN,
-                Версия = "2.0",
+                Версия = "3.0",
                 РезультатДанные = new РезультатУспешно()
                 {
                     ИдентификаторЗапроса = requestId

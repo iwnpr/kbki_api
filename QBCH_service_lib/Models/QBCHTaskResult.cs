@@ -1,5 +1,5 @@
 ﻿using QBCH_lib.qcb_xml.v1_3.qcb_answer;
-using QBCH_lib.qcb_xml.v2_0.qcb_answer;
+using QBCH_lib.qcb_xml.v3_0.qcb_answer;
 
 namespace QBCHService_lib.Models
 {

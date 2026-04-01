@@ -1,4 +1,5 @@
-﻿using QBCH_lib.qcb_xml.v3_0.Enums;
+﻿using QBCH_lib.qcb_xml.v3_0.CommonTypes;
+using QBCH_lib.qcb_xml.v3_0.Enums;
 using QBCH_lib.qcb_xml.v3_0.qcb_result;
 using System;
 using System.Collections.Generic;
@@ -89,7 +90,7 @@ namespace QBCH_lib.qcb_xml.v3_0.qcb_answer
         /// <param name="psrn">ОГРН</param>
         /// <param name="error">Ошибка</param>
         /// <returns>Сведения о платежах с ошибкой КБКИ</returns>
-        public static ОтветНаЗапросСведений CreateError(string psrn, Ошибка error)
+         public static ОтветНаЗапросСведений CreateError(string psrn, ТипОшибка error)
         {
             return new()
             {

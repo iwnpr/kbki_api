@@ -1,5 +1,5 @@
 ﻿using QBCH_lib.core;
-using QBCH_lib.qcb_xml.v2_0.qcb_request;
+using QBCH_lib.qcb_xml.v3_0.qcb_request;
 using System;
 using System.Security.Cryptography.X509Certificates;
 

@@ -1,6 +1,6 @@
 ﻿using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
-using QBCH_lib.qcb_xml.v2_0.Enums;
+using QBCH_lib.qcb_xml.v3_0.Enums;
 namespace QBCH_api.QBCHProcessing.CreateAndValidation.ValidationStep;
 
 /// <summary>

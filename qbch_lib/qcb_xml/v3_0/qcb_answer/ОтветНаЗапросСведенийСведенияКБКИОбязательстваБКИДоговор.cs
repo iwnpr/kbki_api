@@ -7,18 +7,8 @@ namespace QBCH_lib.qcb_xml.v3_0.qcb_answer
     [System.Diagnostics.DebuggerStepThrough()]
     [System.ComponentModel.DesignerCategory("code")]
     [System.Xml.Serialization.XmlType(AnonymousType = true)]
-    public class ОтветНаЗапросСведенийСведенияКБКИОбязательстваБКИДоговор
+    public class ОтветНаЗапросСведенийСведенияКБКИОбязательстваБКИДоговор : ТипДоговор
     {
 
-        /// <remarks/>
-        public ТипСреднемесячныйПлатеж СреднемесячныйПлатеж { get; set; }
-
-        /// <remarks/>
-        [System.Xml.Serialization.XmlAttribute()]
-        public string УИД { get; set; }
-
-        /// <remarks/>
-        [System.Xml.Serialization.XmlAttribute(DataType = "date")]
-        public System.DateTime Представлено { get; set; }
     }
 }
