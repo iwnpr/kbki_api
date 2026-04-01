@@ -15,6 +15,7 @@ using Qbch_db_lib.Services.Interfaces;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.qcb_xml.v3_0.Enums;
+using QBCH_lib.qcb_xml.v3_0.qcb_put;
 using QBCH_lib.Services.Interfaces;
 using QBCHService_lib.Services.Interfaces;
 using System.Security.Cryptography.X509Certificates;
@@ -369,7 +370,58 @@ namespace QBCH_api.Controllers
         [HttpPost("dlput")]
         public async Task<IActionResult> DlPut_v_2(ApiVersion apiVersion)
         {
-            throw new NotImplementedException();
+            byte[]? signedResponse = null;
+            byte[]? responseXml = null;
+            var serviceName = "dlput";
+            var guid = Guid.NewGuid().ToString();
+            var certificate = Request.HttpContext.Connection.ClientCertificate;
+
+            try
+            {
+                using var ms = new MemoryStream();
+                await Request.Body.CopyToAsync(ms);
+
+                if (ms.Length == 0)
+                {
+                    responseXml = _xmlService.SerializeAsByte(_ticketService.CreateResult(ResponseType.Error, "2", "Запрос не содержит данных"));
+                    signedResponse = _cryptoService.SignMsg(responseXml);
+                    return BadRequest(new MemoryStream(signedResponse));
+                }
+
+                if (!_validationService.ValidateMsg(ms.ToArray(), certificate, out var cryptoServiceResult))
+                {
+                    responseXml = _xmlService.SerializeAsByte(cryptoServiceResult.Ticket);
+                    signedResponse = _cryptoService.SignMsg(responseXml);
+                    return BadRequest(new MemoryStream(signedResponse));
+                }
+
+                if (!_validationService.ValidateXml(new MemoryStream(cryptoServiceResult.Body), serviceName, apiVersion, out var xsdValidation))
+                {
+                    responseXml = _xmlService.SerializeAsByte(xsdValidation.Ticket);
+                    signedResponse = _cryptoService.SignMsg(responseXml);
+                    return BadRequest(new MemoryStream(signedResponse));
+                }
+
+                var request = _xmlService.Deserialize<ПредставлениеСведений>(cryptoServiceResult.Body);
+                if (request is null)
+                {
+                    responseXml = _xmlService.SerializeAsByte(_ticketService.CreateResult(ResponseType.Error, "9", "Запрос не соответствует схеме"));
+                    signedResponse = _cryptoService.SignMsg(responseXml);
+                    return BadRequest(new MemoryStream(signedResponse));
+                }
+
+                await _redisCache.AddHash(serviceName, guid, "request", cryptoServiceResult.Body);
+                await _redisCache.AddHash(serviceName, guid, "RequestId", request.ИдентификаторЗапроса ?? string.Empty);
+
+                responseXml = _xmlService.SerializeAsByte(_ticketService.CreateResult(ResponseType.Ticket, requestId: request.ИдентификаторЗапроса, guid: guid));
+                signedResponse = _cryptoService.SignMsg(responseXml);
+                return Accepted(new MemoryStream(signedResponse));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogCritical(ex, "Возникла критическая ошибка");
+                return StatusCode(500);
+            }
         }
 
         /// <summary>

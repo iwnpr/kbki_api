@@ -11,14 +11,14 @@ namespace QBCH_lib.qcb_xml.v3_0.qcb_put
     [System.ComponentModel.DesignerCategory("code")]
     [XmlType(AnonymousType = true)]
     [XmlRoot("ПредставлениеСведений", Namespace = "", IsNullable = false)]
-    public class ПредставлениеСведенийОПлатежах
+    public class ПредставлениеСведений
     {
         /// <remarks/>
-        public ПредставлениеСведенийОПлатежахБКИ БКИ { get; set; }
+        public ПредставлениеСведенийБКИ БКИ { get; set; }
 
         /// <remarks/>
         [XmlElement("Сведения")]
-        public List<ПредставлениеСведенийОПлатежахСведения> Сведения { get; set; } = new();
+        public List<ПредставлениеСведенийСведения> Сведения { get; set; } = new();
         /// <remarks/>
         [XmlAttribute()]
         public string Версия { get; set; } = "3.0";

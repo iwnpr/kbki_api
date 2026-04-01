@@ -6,7 +6,7 @@
     [System.Diagnostics.DebuggerStepThrough()]
     [System.ComponentModel.DesignerCategory("code")]
     [System.Xml.Serialization.XmlType(AnonymousType = true)]
-    public class ПредставлениеСведенийОПлатежахБКИ
+    public class ПредставлениеСведенийБКИ
     {
 
         /// <remarks/>
