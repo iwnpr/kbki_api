@@ -6,142 +6,79 @@ using System;
 
 namespace QBCH_lib.Services.Implementations
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <remarks>
-    /// 
-    /// </remarks>
-    /// <param name="config"></param>
     public class TicketService(IConfiguration config) : ITicketService
     {
-        private readonly string _BureauPSRN = config.GetValue<string>("Bureau:PSRN");
+        private readonly string _bureauPsrn = config.GetValue<string>("Bureau:PSRN") ?? string.Empty;
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="type"></param>
-        /// <param name="code"></param>
-        /// <param name="text"></param>
-        /// <param name="requestId"></param>
-        /// <param name="guid"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        public Результат CreateReceiptWithAnswerId(string requestId, string answerId, DateTime requestDate, long? readyInMs = null)
+        {
+            var receipt = new РезультатИдентификаторОтвета
+            {
+                ИдентификаторЗапроса = requestId,
+                ДатаЗапроса = requestDate.Date,
+                Value = answerId
+            };
+
+            if (readyInMs.HasValue)
+            {
+                receipt.ВремяГотовности = readyInMs.Value;
+                receipt.ВремяГотовностиSpecified = true;
+            }
+            return BuildResult(receipt);
+        }
+
+        public Результат CreateSuccessReceipt(string requestId, DateTime requestDate)
+        {
+            return BuildResult(new РезультатУспешно
+            {
+                ИдентификаторЗапроса = requestId,
+                ДатаЗапроса = requestDate.Date
+            });
+        }
+
+        public Результат CreateErrorReceipt(string code, string message)
+        {
+            return BuildResult(new РезультатОшибка
+            {
+                Код = code,
+                Value = message
+            });
+        }
+
+        public Результат CreateErrorReceipt(core.Error error)
+        {
+            return CreateErrorReceipt(error.Code.ToString(), error.Message);
+        }
+
         public Результат CreateResult(ResponseType type, string? code = null, string? text = null, string? requestId = null, string? guid = null)
         {
             return type switch
             {
-                ResponseType.Ticket => new Результат()
-                {
-                    ОГРН = _BureauPSRN,
-                    Версия = "3.0",
-                    РезультатДанные = new РезультатИдентификаторОтвета()
-                    {
-                        ИдентификаторЗапроса = requestId,
-                        Value = guid
-                    }
-
-                },
-                ResponseType.Error => new Результат()
-                {
-                    ОГРН = _BureauPSRN,
-                    Версия = "3.0",
-                    РезультатДанные = new РезультатОшибка()
-                    {
-                        Код = code,
-                        Value = text
-                    }
-
-                },
-                ResponseType.Success => new Результат()
-                {
-                    ОГРН = _BureauPSRN,
-                    Версия = "3.0",
-                    РезультатДанные = new РезультатУспешно()
-                    {
-                        ИдентификаторЗапроса = requestId
-                    }
-
-                },
-                _ => throw new Exception("type не определен"),
+                ResponseType.Ticket => CreateReceiptWithAnswerId(requestId ?? string.Empty, guid ?? string.Empty, DateTime.Today),
+                ResponseType.Success => CreateSuccessReceipt(requestId ?? string.Empty, DateTime.Today),
+                ResponseType.Error => CreateErrorReceipt(code ?? string.Empty, text ?? string.Empty),
+                _ => throw new Exception("type не определен")
             };
         }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="requestId"></param>
-        /// <param name="guid"></param>
-        /// <returns></returns>
         public Результат CreateResultV2Common(string requestId, string guid)
-        {
-            return new Результат
-            {
-                ОГРН = _BureauPSRN,
-                Версия = "3.0",
-                РезультатДанные = new РезультатИдентификаторОтвета
-                {
-                    ИдентификаторЗапроса = requestId,
-                    Value = guid,
-                }
-            };
-        }
+            => CreateReceiptWithAnswerId(requestId, guid, DateTime.Today);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="requestId"></param>
-        /// <param name="guid"></param>
-        /// <param name="dateTime"></param>
-        /// <returns></returns>
         public Результат CreateResultV2Common(string requestId, string guid, DateTime dateTime)
-        {
-            return new Результат
-            {
-                ОГРН = _BureauPSRN,
-                Версия = "3.0",
-                РезультатДанные = new РезультатИдентификаторОтвета
-                {
-                    ИдентификаторЗапроса = requestId,
-                    Value = guid,
-                    ДатаЗапроса = dateTime
-                }
-            };
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="error"></param>
-        /// <returns></returns>
-        public Результат CreateResultV2Error(core.Error error)
-        {
-            return new Результат
-            {
-                ОГРН = _BureauPSRN,
-                Версия = "3.0",
-                РезультатДанные = new РезультатОшибка()
-                {
-                    Код = error.Code.ToString(),
-                    Value = error.Message,
-                }
-            };
-        }
+            => CreateReceiptWithAnswerId(requestId, guid, dateTime);
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="requestId"></param>
-        /// <returns></returns>
+        public Результат CreateResultV2Error(core.Error error)
+            => CreateErrorReceipt(error);
+
         public Результат CreateResultV2Success(string requestId)
+            => CreateSuccessReceipt(requestId, DateTime.Today);
+
+        private Результат BuildResult(object payload)
         {
             return new Результат
             {
-                ОГРН = _BureauPSRN,
+                ОГРН = _bureauPsrn,
                 Версия = "3.0",
-                РезультатДанные = new РезультатУспешно()
-                {
-                    ИдентификаторЗапроса = requestId
-                }
+                РезультатДанные = payload
             };
         }
     }

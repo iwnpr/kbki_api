@@ -176,8 +176,14 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
             _logger.LogError(ex, "Ошибка времени ожидания выполнения запроса. Время проверки превысило {TicketTimeout} миллисекунд.", request.TicketTimeout);
         }
 
-        var commonTicket = _ticketService.CreateResultV2Common(requestId: transaction.ClentRequest.RequestId!, guid: transaction.Id.ToString(), dateTime: transaction.ClentRequest.Request!.ДатаЗапроса);
+        var commonTicket = _ticketService.CreateReceiptWithAnswerId(
+            requestId: transaction.ClentRequest.RequestId!,
+            answerId: transaction.Id.ToString(),
+            requestDate: transaction.ClentRequest.Request!.ДатаЗапроса,
+            readyInMs: request.ResponseTimeout);
+
         var commonTicketBytes = _xmlService.SerializeAsByte(commonTicket);
+
         transaction.Accepted();
         transaction.Complete(commonTicketBytes, _cryptoService.SignMsg(commonTicketBytes));
 
