@@ -1,5 +1,5 @@
 ﻿namespace QBCH_api.Services.Interfaces.V3;
 
-public interface IValidationServiceV3 : IValidationService
+public interface IValidationServiceV3
 {
 }

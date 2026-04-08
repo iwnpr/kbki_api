@@ -6,7 +6,7 @@ using System.Xml.Linq;
 
 namespace XmlService_lib.Services.Interfaces.V3;
 
-public interface IXmlServiceV3 : IXmlService
+public interface IXmlServiceV3
 {
     /// <summary>
     /// Десериализация из xDocument

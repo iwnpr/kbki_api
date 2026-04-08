@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.core;
-using QBCH_lib.Services.Interfaces;
 using System.Diagnostics.CodeAnalysis;
+using System.Xml.Schema;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -17,10 +17,14 @@ namespace XmlService_lib.Services.Implementations.V3;
 public class XmlServiceV3(
     IMemoryCache memoryCache,
     IConfiguration config,
-    ILogger<XmlService> logger,
-    ITicketService ticketService)
-    : XmlService(memoryCache, config, logger, ticketService), IXmlServiceV3
+    ILogger<XmlServiceV3> logger)
+    : IXmlServiceV3
 {
+    private const int SchemaValidationErrorCode = 9;
+    private readonly IMemoryCache _cache = memoryCache;
+    private readonly IConfiguration _config = config;
+    private readonly ILogger<XmlServiceV3> _logger = logger;
+
     private static readonly Type[] V3KnownTypes =
     [
         typeof(ЗапросСведений),
@@ -29,6 +33,15 @@ public class XmlServiceV3(
         typeof(РезультатПредставленияСведений),
         typeof(Результат)
     ];
+
+    private static readonly IReadOnlyDictionary<string, string[]> V3Schemas = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["dlrequest"] = ["qcb_request.xsd", "qcb_common.xsd"],
+        ["dlput"] = ["qcb_put.xsd", "qcb_common.xsd"],
+        ["qcb_result"] = ["qcb_result.xsd", "qcb_common.xsd"],
+        ["qcb_answer"] = ["qcb_answer.xsd", "qcb_common.xsd"],
+        ["qcb_putanswer"] = ["qcb_putanswer.xsd", "qcb_common.xsd"]
+    };
 
     public T? DeserializeV3<T>(XDocument? xml) where T : class
     {
@@ -95,13 +108,98 @@ public class XmlServiceV3(
     }
 
     public BaseResult? ValidateXmlV3(MemoryStream memStream, string[] schemasFullPaths)
-        => ValidateXml(memStream, schemasFullPaths);
+    {
+        var schemaSet = new XmlSchemaSet
+        {
+            XmlResolver = new XmlUrlResolver()
+        };
+
+        foreach (var schemaPath in schemasFullPaths)
+            schemaSet.Add(null, schemaPath);
+
+        return ValidateAgainstSchemaSet(memStream, schemaSet);
+    }
 
     public bool ValidateXmlV3(MemoryStream memStream, string nameOfController, [NotNullWhen(false)] out BaseResult? result)
-        => ValidateXml(memStream, nameOfController, "3", out result);
+    {
+        var schemaSet = GetXmlSchemaSetV3(nameOfController);
+        result = ValidateAgainstSchemaSet(memStream, schemaSet);
+        return result is null;
+    }
 
     public Result ValidateXmlV3(MemoryStream memStream, string nameOfController)
-        => ValidateXml(memStream, nameOfController, "3");
+    {
+        var schemaSet = GetXmlSchemaSetV3(nameOfController);
+        var validationError = ValidateAgainstSchemaSet(memStream, schemaSet);
+        return validationError is null
+            ? Result.Success()
+            : Result.Failure(new QBCH_lib.core.Error(SchemaValidationErrorCode, $"Запрос не соответствует схеме: {validationError.Error}"));
+    }
+
+    private XmlSchemaSet GetXmlSchemaSetV3(string nameOfController)
+    {
+        if (!V3Schemas.TryGetValue(nameOfController, out var schemaFiles))
+            throw new InvalidOperationException($"Не найден набор схем для '{nameOfController}' в API 3.0.");
+
+        var cacheKey = $"3.0:{nameOfController}";
+        if (_cache.TryGetValue(cacheKey, out XmlSchemaSet? schemaSet) && schemaSet is not null)
+            return schemaSet;
+
+        var xsdFolder = _config.GetValue<string>("Paths:Xsd") ?? "xsd";
+        var schemaSearchRoots = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, xsdFolder, "3.0"),
+            Path.Combine(AppContext.BaseDirectory, xsdFolder, "3"),
+            Path.Combine(Directory.GetCurrentDirectory(), "qbch_lib", "qcb_xml", "v3_0")
+        };
+
+        schemaSet = new XmlSchemaSet { XmlResolver = new XmlUrlResolver() };
+        foreach (var schemaFile in schemaFiles)
+        {
+            var resolvedPath = schemaSearchRoots
+                .Select(root => Path.Combine(root, schemaFile))
+                .FirstOrDefault(File.Exists);
+
+            if (resolvedPath is null)
+                throw new FileNotFoundException($"Не найдена XSD-схема API 3.0: {schemaFile}");
+
+            schemaSet.Add(null, resolvedPath);
+        }
+
+        _cache.Set(cacheKey, schemaSet, new MemoryCacheEntryOptions().SetPriority(CacheItemPriority.NeverRemove));
+        return schemaSet;
+    }
+
+    private BaseResult? ValidateAgainstSchemaSet(MemoryStream memStream, XmlSchemaSet schemaSet)
+    {
+        try
+        {
+            memStream.Position = 0;
+            var xDoc = XDocument.Load(memStream);
+            BaseResult? xsdError = null;
+
+            xDoc.Validate(schemaSet, (_, e) =>
+            {
+                var reason = string.Concat(e.Severity, ": ", e.Message);
+                _logger.LogError("Запрос не соответствует схеме:\r\n{error}", reason);
+                xsdError = CreateSchemaError(reason);
+            });
+
+            return xsdError;
+        }
+        catch (Exception ex)
+        {
+            return CreateSchemaError(ex.Message);
+        }
+    }
+
+    private BaseResult CreateSchemaError(string reason) =>
+        new()
+        {
+            ErrorCode = SchemaValidationErrorCode,
+            Error = reason,
+            ErrorMessage = reason
+        };
 
     private static XmlSerializer CreateSerializerV3<T>() where T : class
         => new(typeof(T), V3KnownTypes);
