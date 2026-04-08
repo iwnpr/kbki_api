@@ -29,7 +29,12 @@ namespace QBCH_lib.CommonTypes.Api
         /// <summary>
         /// Тикет
         /// </summary>
-        public Результат? Ticket { get; set; }
+        public qcb_xml.v1_3.qcb_result.Результат? Ticket { get; set; }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public qcb_xml.v2_0.qcb_result.Результат? Ticket_v2 { get; set; }
 
         /// <summary>
         /// 
@@ -117,17 +122,9 @@ namespace QBCH_lib.CommonTypes.Api
         public string? IpAddress { get; set; }
 
         /// <summary>
-        ///  Десериализованная модель входного запроса
+        ///  
         /// </summary>
-        public object? RequestPayload { get; set; } = null;
-
-        /// <summary>
-        /// Десериализованная модель запроса версии 3.0.
-        /// </summary>
-        public ЗапросСведений? Request
-        {
-            get => RequestPayload as ЗапросСведений;
-            set => RequestPayload = value;
-        }
+        public ЗапросСведений? Request { get; set; } = null;
     }
+
 }
