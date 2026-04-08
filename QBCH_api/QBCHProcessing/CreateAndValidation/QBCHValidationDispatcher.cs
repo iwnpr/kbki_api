@@ -4,7 +4,7 @@ using QBCH_api.QBCHProcessing.CreateAndValidation.ValidationStep;
 using QBCH_api.QBCHProcessing.ProcessingStep;
 using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
-using QBCH_lib.qcb_xml.v3_0.qcb_request;
+using QBCH_lib.qcb_xml.v2_0.qcb_request;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 

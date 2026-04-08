@@ -3,8 +3,8 @@ using Crypto_lib.Service;
 using MediatR;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.domain.aggregate;
-using QBCH_lib.qcb_xml.v3_0.Enums;
-using QBCH_lib.qcb_xml.v3_0.qcb_answer;
+using QBCH_lib.qcb_xml.v2_0.Enums;
+using QBCH_lib.qcb_xml.v2_0.qcb_answer;
 using QBCH_lib.Services.Interfaces;
 using QBCHService_lib.Models;
 using QBCHService_lib.Services.Interfaces;
@@ -85,7 +85,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
                         // Запросы в КБКИ
                         QBCHList.ForEach(qbch =>
                         {
-                            _tasksList.Add(_qBCHService.AmpRequestv2(transaction, _httpClientFactory.CreateClient($"{qbch.Name!}v2"),qbch));
+                            _tasksList.Add(_qBCHService.AmpRequestv2(transaction, _httpClientFactory.CreateClient($"{qbch.Name!}v2"), qbch));
                         });
                     }
 
@@ -105,7 +105,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
                     };
 
                     var tasksResult = (await Task.WhenAll(_tasksList)).ToArray();
-                    QBCH_lib.qcb_xml.v3_0.CommonTypes.ТипОшибка? ошибка = null;
+                    QBCH_lib.qcb_xml.v2_0.qcb_result.Ошибка? ошибка = null;
 
                     for (int i = 0; i < response.Сведения.Count; i++)
                     {
@@ -176,18 +176,11 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
             _logger.LogError(ex, "Ошибка времени ожидания выполнения запроса. Время проверки превысило {TicketTimeout} миллисекунд.", request.TicketTimeout);
         }
 
-        var commonTicket = _ticketService.CreateReceiptWithAnswerId(
-            requestId: transaction.ClentRequest.RequestId!,
-            answerId: transaction.Id.ToString(),
-            requestDate: transaction.ClentRequest.Request!.ДатаЗапроса,
-            readyInMs: request.ResponseTimeout);
-
+        var commonTicket = _ticketService.CreateResultV2Common(requestId: transaction.ClentRequest.RequestId!, guid: transaction.Id.ToString(), dateTime: transaction.ClentRequest.Request!.ДатаЗапроса);
         var commonTicketBytes = _xmlService.SerializeAsByte(commonTicket);
-
         transaction.Accepted();
         transaction.Complete(commonTicketBytes, _cryptoService.SignMsg(commonTicketBytes));
 
         return transaction;
     }
 }
-

@@ -7,6 +7,7 @@ using Crypto_lib.Service;
 using KafkaService_lib.Services.Implementation;
 using KafkaService_lib.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Certificate;
+using QBCH_api.Configuration;
 using Microsoft.FeatureManagement;
 using Microsoft.OpenApi.Models;
 using QBCH_api.Services.Implementations;
@@ -31,6 +32,12 @@ var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
 var serilog = new LoggerConfiguration().ReadFrom.Configuration(configuration).CreateLogger();
 
+builder.Services.Configure<ApiV3ContractOptions>(configuration.GetSection(ApiV3ContractOptions.SectionName));
+var contractOptions = configuration.GetSection(ApiV3ContractOptions.SectionName).Get<ApiV3ContractOptions>() ?? new ApiV3ContractOptions();
+var contractRules = new ApiV3ContractRules(contractOptions);
+
+builder.Services.AddSingleton(contractOptions);
+builder.Services.AddSingleton(contractRules);
 builder.Host.UseSerilog(serilog);
 builder.Services.AddControllers();
 
@@ -125,7 +132,7 @@ try
     // Добавление именованных http-клиентов в фабрику клиентов
     foreach (var item in builder.Configuration.GetSection("QBCH").GetChildren())
     {
-        AddHttpClientToFactory(builder, serilog, foundCertColl, item);
+        AddHttpClientToFactory(builder, serilog, foundCertColl, item, contractOptions.HttpClientTimeoutSeconds);
     }
 }
 catch (Exception ex)
@@ -170,7 +177,7 @@ app.MapControllers();
 app.Run();
 
 // Метод добавляющий http-client в фабрику клиентов
-static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog, X509Certificate2 certificate, IConfigurationSection section)
+static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog, X509Certificate2 certificate, IConfigurationSection section, int httpClientTimeoutSeconds)
 {
     var clientName = section.GetValue<string>("Name");
     var url = section.GetValue<string>("Url");
@@ -201,6 +208,7 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
     {
         client.BaseAddress = new(url);
         client.Timeout = TimeSpan.FromSeconds(4);
+        client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
     })
         // Добавляем сертификат в запрос
         .ConfigurePrimaryHttpMessageHandler(() =>
@@ -217,6 +225,7 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
     {
         client.BaseAddress = new(urlv2);
         client.Timeout = TimeSpan.FromSeconds(4);
+        client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
     })
         // Добавляем сертификат в запрос
         .ConfigurePrimaryHttpMessageHandler(() =>

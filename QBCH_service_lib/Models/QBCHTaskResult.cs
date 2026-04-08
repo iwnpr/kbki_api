@@ -1,10 +1,12 @@
 ﻿using QBCH_lib.qcb_xml.v1_3.qcb_answer;
-using QBCH_lib.qcb_xml.v3_0.qcb_answer;
+using QBCH_lib.qcb_xml.v2_0.qcb_answer;
 
 namespace QBCHService_lib.Models
 {
     /// <summary>
-    /// Результат обработки КБКИ
+    /// Результат обработки ответа КБКИ.
+    /// Legacy-свойство Answer сохранено для обратной совместимости,
+    /// а основным контрактом для API 3.0 является AnswerV3.
     /// </summary>
     /// <remarks>
     /// Конструктор

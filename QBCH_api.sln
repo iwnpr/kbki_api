@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.8.34511.84
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11520.95 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QBCH_api", "QBCH_api\QBCH_api.csproj", "{FD512446-D48E-4C31-92A8-424C588DE316}"
 EndProject
@@ -18,8 +18,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QBCHService_lib", "QBCH_service_lib\QBCHService_lib.csproj", "{661F3806-5053-4F3B-9978-094A09C2EFED}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cache_lib", "Cache_lib\Cache_lib.csproj", "{25EF8295-CA10-428C-AA0F-4B44DCEDEDDE}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ModuleTest", "ModuleTest\ModuleTest.csproj", "{8A640A8C-2EC3-48C4-959C-FA209A4D0189}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CertManagement", "CertManagement\CertManagement.csproj", "{17ED9F39-E1E5-499D-AABE-C1765ADE3C69}"
 EndProject
@@ -61,10 +59,6 @@ Global
 		{25EF8295-CA10-428C-AA0F-4B44DCEDEDDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{25EF8295-CA10-428C-AA0F-4B44DCEDEDDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{25EF8295-CA10-428C-AA0F-4B44DCEDEDDE}.Release|Any CPU.Build.0 = Release|Any CPU
-		{8A640A8C-2EC3-48C4-959C-FA209A4D0189}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8A640A8C-2EC3-48C4-959C-FA209A4D0189}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8A640A8C-2EC3-48C4-959C-FA209A4D0189}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8A640A8C-2EC3-48C4-959C-FA209A4D0189}.Release|Any CPU.Build.0 = Release|Any CPU
 		{17ED9F39-E1E5-499D-AABE-C1765ADE3C69}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{17ED9F39-E1E5-499D-AABE-C1765ADE3C69}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{17ED9F39-E1E5-499D-AABE-C1765ADE3C69}.Release|Any CPU.ActiveCfg = Release|Any CPU

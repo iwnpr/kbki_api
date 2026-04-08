@@ -7,7 +7,6 @@ using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.X509;
 using QBCH_lib.core;
 using QBCH_lib.qcb_xml.v1_3.Enums;
-using QBCH_lib.qcb_xml.v3_0.Enums;
 using QBCH_lib.Services.Interfaces;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.Pkcs;
@@ -50,7 +49,7 @@ namespace Crypto_lib.Service
                 var processingError = Error.Code99_CertificateIsNotFound();
                 result.Error = processingError.Message;
                 result.ErrorCode = processingError.Code;
-                result.Ticket = _ticketService.CreateResult(ResponseType.Error, "99", "Сертификат не найден");
+                result.Ticket = _ticketService.CreateResult(ResultType.Error, "99", "Сертификат не найден");
                 return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingError);
             }
 
@@ -79,7 +78,7 @@ namespace Crypto_lib.Service
                     var processingError = Error.Code5_TheCertificateIsExpired();
                     _logger.LogError(processingError.Message);
                     result.ErrorCode = processingError.Code;
-                    result.Ticket = _ticketService.CreateResult(ResponseType.Error, "5", "Истек срок сертификата УЭП");
+                    result.Ticket = _ticketService.CreateResult(ResultType.Error, "5", "Истек срок сертификата УЭП");
                     return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingError);
                 }
             }
@@ -112,7 +111,7 @@ namespace Crypto_lib.Service
                 var processingMessage = new Error(7, ex.Message);
                 result.Error = processingMessage.Message;
                 result.ErrorCode = processingMessage.Code;
-                result.Ticket = _ticketService.CreateResult(ResponseType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
+                result.Ticket = _ticketService.CreateResult(ResultType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
                 return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingMessage);
             }
 
@@ -137,7 +136,7 @@ namespace Crypto_lib.Service
                         {
                             ErrorCode = processingError.Code,
                             Error = processingError.Message,
-                            Ticket = _ticketService.CreateResult(ResponseType.Error, "6", $"УЭП не соответствует абоненту:  {result.CertCompareResult}")
+                            Ticket = _ticketService.CreateResult(ResultType.Error, "6", $"УЭП не соответствует абоненту:  {result.CertCompareResult}")
                         };
                         errors.Add(processingError);
                         continue;
@@ -154,7 +153,7 @@ namespace Crypto_lib.Service
                         _logger.LogError("УЭП некорректна {Error}", ex.Message); // TODO странно 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
-                        result.Ticket = _ticketService.CreateResult(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");
+                        result.Ticket = _ticketService.CreateResult(ResultType.Error, "4", $"УЭП некорректна: {ex.Message}");
                         continue;
                     }
                 }
@@ -183,7 +182,7 @@ namespace Crypto_lib.Service
                 _logger.LogError("Сертификат запроса не найден");
                 result.Error = "УЭП некорректна";
                 result.ErrorCode = 5;
-                result.Ticket = _ticketService.CreateResult(ResponseType.Error, "4", "УЭП некорректна");
+                result.Ticket = _ticketService.CreateResult(ResultType.Error, "4", "УЭП некорректна");
                 return false;
             }
 
@@ -210,7 +209,7 @@ namespace Crypto_lib.Service
                     _logger.LogError("Истек срок сертификата УЭП");
                     result.Error = "Истек срок сертификата УЭП";
                     result.ErrorCode = 5;
-                    result.Ticket = _ticketService.CreateResult(ResponseType.Error, "5", "Истек срок сертификата УЭП");
+                    result.Ticket = _ticketService.CreateResult(ResultType.Error, "5", "Истек срок сертификата УЭП");
                     return false;
                 }
             }
@@ -242,7 +241,7 @@ namespace Crypto_lib.Service
                 _logger.LogError("Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
                 result.Error = ex.Message;
                 result.ErrorCode = 7;
-                result.Ticket = _ticketService.CreateResult(ResponseType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
+                result.Ticket = _ticketService.CreateResult(ResultType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
                 return false;
             }
 
@@ -263,7 +262,7 @@ namespace Crypto_lib.Service
                         {
                             ErrorCode = 6,
                             Error = "Реквизиты абонента не совпадают",
-                            Ticket = _ticketService.CreateResult(ResponseType.Error, "6", $"УЭП не соответствует абоненту:  {result.CertCompareResult}")
+                            Ticket = _ticketService.CreateResult(ResultType.Error, "6", $"УЭП не соответствует абоненту:  {result.CertCompareResult}")
                         };
                         continue;
                     }
@@ -278,7 +277,7 @@ namespace Crypto_lib.Service
                         _logger.LogError("УЭП некорректна {Error}", ex.Message);
                         result.Error = ex.Message;
                         result.ErrorCode = 4;
-                        result.Ticket = _ticketService.CreateResult(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");
+                        result.Ticket = _ticketService.CreateResult(ResultType.Error, "4", $"УЭП некорректна: {ex.Message}");
                         continue;
                     }
                 }
@@ -345,7 +344,7 @@ namespace Crypto_lib.Service
                             {
                                 Error = "Истек срок сертификата УЭП",
                                 ErrorCode = 5,
-                                Ticket = _ticketService.CreateResult(ResponseType.Error, "5", "Истек срок сертификата УЭП")
+                                Ticket = _ticketService.CreateResult(ResultType.Error, "5", "Истек срок сертификата УЭП")
                             };
                             return false;
                         }
@@ -365,7 +364,7 @@ namespace Crypto_lib.Service
                         _logger.LogError("УЭП некорректна {Error}", ex.Message);
                         result.Error = ex.Message;
                         result.ErrorCode = 4;
-                        result.Ticket = _ticketService.CreateResult(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");
+                        result.Ticket = _ticketService.CreateResult(ResultType.Error, "4", $"УЭП некорректна: {ex.Message}");
                         continue;
                     }
                 }
@@ -404,7 +403,7 @@ namespace Crypto_lib.Service
                     {
                         ErrorCode = 5,
                         Error = "Истек срок сертификата УЭП",
-                        Ticket = _ticketService.CreateResult(ResponseType.Error, "5", "Истек срок сертификата УЭП")
+                        Ticket = _ticketService.CreateResult(ResultType.Error, "5", "Истек срок сертификата УЭП")
                     };
                     return false;
                 }
@@ -422,7 +421,7 @@ namespace Crypto_lib.Service
                 {
                     ErrorCode = 4,
                     Error = "УЭП некорректна: УЭП отсутствует.",
-                    Ticket = _ticketService.CreateResult(ResponseType.Error, "4", "УЭП некорректна: УЭП отсутствует.")
+                    Ticket = _ticketService.CreateResult(ResultType.Error, "4", "УЭП некорректна: УЭП отсутствует.")
                 };
                 return false;
             }

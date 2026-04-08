@@ -1,84 +1,198 @@
 ﻿using Microsoft.Extensions.Configuration;
-using QBCH_lib.qcb_xml.v3_0.Enums;
-using QBCH_lib.qcb_xml.v3_0.qcb_result;
+using QBCH_lib.qcb_xml.v1_3.Enums;
+using QBCH_lib.qcb_xml.v2_0.Enums;
+using QBCH_lib.qcb_xml.v2_0.qcb_result;
 using QBCH_lib.Services.Interfaces;
 using System;
 
 namespace QBCH_lib.Services.Implementations
 {
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <remarks>
+    /// 
+    /// </remarks>
+    /// <param name="config"></param>
     public class TicketService(IConfiguration config) : ITicketService
     {
-        private readonly string _bureauPsrn = config.GetValue<string>("Bureau:PSRN") ?? string.Empty;
+        private readonly string _BureauPSRN = config.GetValue<string>("Bureau:PSRN");
 
-        public Результат CreateReceiptWithAnswerId(string requestId, string answerId, DateTime requestDate, long? readyInMs = null)
-        {
-            var receipt = new РезультатИдентификаторОтвета
-            {
-                ИдентификаторЗапроса = requestId,
-                ДатаЗапроса = requestDate.Date,
-                Value = answerId
-            };
-
-            if (readyInMs.HasValue)
-            {
-                receipt.ВремяГотовности = readyInMs.Value;
-                receipt.ВремяГотовностиSpecified = true;
-            }
-            return BuildResult(receipt);
-        }
-
-        public Результат CreateSuccessReceipt(string requestId, DateTime requestDate)
-        {
-            return BuildResult(new РезультатУспешно
-            {
-                ИдентификаторЗапроса = requestId,
-                ДатаЗапроса = requestDate.Date
-            });
-        }
-
-        public Результат CreateErrorReceipt(string code, string message)
-        {
-            return BuildResult(new РезультатОшибка
-            {
-                Код = code,
-                Value = message
-            });
-        }
-
-        public Результат CreateErrorReceipt(core.Error error)
-        {
-            return CreateErrorReceipt(error.Code.ToString(), error.Message);
-        }
-
-        public Результат CreateResult(ResponseType type, string? code = null, string? text = null, string? requestId = null, string? guid = null)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="code"></param>
+        /// <param name="text"></param>
+        /// <param name="requestId"></param>
+        /// <param name="guid"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        public qcb_xml.v1_3.qcb_result.Результат CreateResult(ResultType type, string? code = null, string? text = null, string? requestId = null, string? guid = null)
         {
             return type switch
             {
-                ResponseType.Ticket => CreateReceiptWithAnswerId(requestId ?? string.Empty, guid ?? string.Empty, DateTime.Today),
-                ResponseType.Success => CreateSuccessReceipt(requestId ?? string.Empty, DateTime.Today),
-                ResponseType.Error => CreateErrorReceipt(code ?? string.Empty, text ?? string.Empty),
-                _ => throw new Exception("type не определен")
+                ResultType.Ticket => new qcb_xml.v1_3.qcb_result.Результат()
+                {
+                    ОГРН = _BureauPSRN,
+                    Версия = "1.2",
+                    Item = new qcb_xml.v1_3.qcb_result.РезультатИдентификаторОтвета()
+                    {
+                        ИдентификаторЗапроса = requestId,
+                        Value = guid
+                    }
+
+                },
+                ResultType.Error => new qcb_xml.v1_3.qcb_result.Результат()
+                {
+                    ОГРН = _BureauPSRN,
+                    Версия = "1.2",
+                    Item = new qcb_xml.v1_3.CommonTypes.Ошибка()
+                    {
+                        Код = code,
+                        Value = text
+                    }
+
+                },
+                ResultType.Success => new qcb_xml.v1_3.qcb_result.Результат()
+                {
+                    ОГРН = _BureauPSRN,
+                    Версия = "1.2",
+                    Item = new qcb_xml.v1_3.qcb_result.РезультатУспешно()
+                    {
+                        ИдентификаторЗапроса = requestId
+                    }
+
+                },
+                _ => throw new Exception("type не определен"),
             };
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="code"></param>
+        /// <param name="text"></param>
+        /// <param name="requestId"></param>
+        /// <param name="guid"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        public Результат CreateResultv2(ResponseType type, string? code = null, string? text = null, string? requestId = null, string? guid = null)
+        {
+            return type switch
+            {
+                ResponseType.Ticket => new Результат()
+                {
+                    ОГРН = _BureauPSRN,
+                    Версия = "2.0",
+                    РезультатДанные = new РезультатИдентификаторОтвета()
+                    {
+                        ИдентификаторЗапроса = requestId,
+                        Value = guid
+                    }
+
+                },
+                ResponseType.Error => new Результат()
+                {
+                    ОГРН = _BureauPSRN,
+                    Версия = "2.0",
+                    РезультатДанные = new РезультатОшибка()
+                    {
+                        Код = code,
+                        Value = text
+                    }
+
+                },
+                ResponseType.Success => new Результат()
+                {
+                    ОГРН = _BureauPSRN,
+                    Версия = "2.0",
+                    РезультатДанные = new РезультатУспешно()
+                    {
+                        ИдентификаторЗапроса = requestId
+                    }
+
+                },
+                _ => throw new Exception("type не определен"),
+            };
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="requestId"></param>
+        /// <param name="guid"></param>
+        /// <returns></returns>
         public Результат CreateResultV2Common(string requestId, string guid)
-            => CreateReceiptWithAnswerId(requestId, guid, DateTime.Today);
-
-        public Результат CreateResultV2Common(string requestId, string guid, DateTime dateTime)
-            => CreateReceiptWithAnswerId(requestId, guid, dateTime);
-
-        public Результат CreateResultV2Error(core.Error error)
-            => CreateErrorReceipt(error);
-
-        public Результат CreateResultV2Success(string requestId)
-            => CreateSuccessReceipt(requestId, DateTime.Today);
-
-        private Результат BuildResult(object payload)
         {
             return new Результат
             {
-                ОГРН = _bureauPsrn,
-                Версия = "3.0",
-                РезультатДанные = payload
+                ОГРН = _BureauPSRN,
+                Версия = "2.0",
+                РезультатДанные = new РезультатИдентификаторОтвета
+                {
+                    ИдентификаторЗапроса = requestId,
+                    Value = guid,
+                }
+            };
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="requestId"></param>
+        /// <param name="guid"></param>
+        /// <param name="dateTime"></param>
+        /// <returns></returns>
+        public Результат CreateResultV2Common(string requestId, string guid, DateTime dateTime)
+        {
+            return new Результат
+            {
+                ОГРН = _BureauPSRN,
+                Версия = "2.0",
+                РезультатДанные = new РезультатИдентификаторОтвета
+                {
+                    ИдентификаторЗапроса = requestId,
+                    Value = guid,
+                    ДатаЗапроса = dateTime
+                }
+            };
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="error"></param>
+        /// <returns></returns>
+        public Результат CreateResultV2Error(core.Error error)
+        {
+            return new Результат
+            {
+                ОГРН = _BureauPSRN,
+                Версия = "2.0",
+                РезультатДанные = new РезультатОшибка()
+                {
+                    Код = error.Code.ToString(),
+                    Value = error.Message,
+                }
+            };
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="requestId"></param>
+        /// <returns></returns>
+        public Результат CreateResultV2Success(string requestId)
+        {
+            return new Результат
+            {
+                ОГРН = _BureauPSRN,
+                Версия = "2.0",
+                РезультатДанные = new РезультатУспешно()
+                {
+                    ИдентификаторЗапроса = requestId
+                }
             };
         }
     }

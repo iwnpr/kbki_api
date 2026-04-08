@@ -14,16 +14,35 @@ using QBCH_api.Services.Interfaces;
 using Qbch_db_lib.Services.Interfaces;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.domain.aggregate;
-using QBCH_lib.qcb_xml.v3_0.qcb_put;
+using QBCH_lib.qcb_xml.v2_0.Enums;
 using QBCH_lib.Services.Interfaces;
 using QBCHService_lib.Services.Interfaces;
+using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using XmlService_lib.Services.Interfaces;
 
 namespace QBCH_api.Controllers
 {
-    [ApiVersion("3.0")]
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="mediator"></param>
+    /// <param name="cryptoService"></param>
+    /// <param name="logger"></param>
+    /// <param name="xmlService"></param>
+    /// <param name="validationService"></param>
+    /// <param name="qBCHService"></param>
+    /// <param name="config"></param>
+    /// <param name="httpClientFactory"></param>
+    /// <param name="bKIRequisits"></param>
+    /// <param name="redisСache"></param>
+    /// <param name="transformer"></param>
+    /// <param name="kafka"></param>
+    /// <param name="ticketService"></param>
+    /// <param name="repository"></param>
+    /// <param name="certManagement"></param>
+    [ApiVersion("2.0")]
     [Route("v{version:apiVersion}")]
     [ApiController]
     public class QBCHIIController(IMediator mediator,
@@ -42,11 +61,6 @@ namespace QBCH_api.Controllers
                                   IRepository repository,
                                   ICertManagementService certManagement) : ControllerBase
     {
-        private const string DlRequestService = "dlrequest";
-        private const string DlAnswerService = "dlanswer";
-        private const string DlPutService = "dlput";
-        private const string DlPutAnswerService = "dlputanswer";
-
         private readonly IMediator _mediator = mediator;
         private readonly ICryptoService _cryptoService = cryptoService;
         private readonly ILogger<QBCHIIController> _logger = logger;
@@ -66,7 +80,7 @@ namespace QBCH_api.Controllers
         private readonly string? _kakfaTopic = config.GetValue<string>("KafkaService:Topic");
 
         /// <summary>
-        /// Запрос сведений о CCП/самозапрет/антифрод
+        /// Запрос сведений о среднемесячных платежах Субъекта.
         /// </summary>
         /// <remarks>
         /// 
@@ -78,20 +92,18 @@ namespace QBCH_api.Controllers
         /// <response code="202">Результат запроса содержит квитанцию с идентификатором ответа.</response>
         /// <response code="400">Результат запроса содержит квитанцию с информацией об ошибке.</response>
         [HttpPost("dlrequest")]
-        [MapToApiVersion("3.0")]
-        public async Task<IActionResult> DlRequest(ApiVersion apiVersion)
+        [MapToApiVersion("2.0")]
+        public async Task<IActionResult> DlRequest_v_2(ApiVersion apiVersion)
         {
             // Считем время затраченное на проверки.        
             var RequestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
 
             // Создание и валидация объекта transaction
             var transaction = await _mediator.Send(new CreateToValidateCommand(apiVersion, Request));
-
             _logger.LogDebug("{guid} Request: {dt}", transaction.Id, RequestTime);
-
             if (transaction.ProcessingErrors.Count != 0)
             {
-                var errorTicket = _ticketService.CreateErrorReceipt(transaction.ProcessingErrors.First());
+                var errorTicket = _ticketService.CreateResultV2Error(transaction.ProcessingErrors.First());
                 var errorResult = _xmlService.SerializeAsByte(errorTicket);
                 var signedResp = _cryptoService.SignMsg(errorResult);
 
@@ -119,7 +131,8 @@ namespace QBCH_api.Controllers
             catch (Exception ex)
             {
                 _logger.LogCritical(ex, "Ошибка записи уникальнго requestId в redis");
-            };
+            }
+            ;
 
             transaction.TimeElapsedForValidation.Stop();
             _logger.LogDebug("{guid} Validation time elapsed: {elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
@@ -180,7 +193,7 @@ namespace QBCH_api.Controllers
         }
 
         /// <summary>
-        /// получение сведений Субъекта по идентификатору ответа по идентификатору ответа
+        /// получение сведений о среднемесячных платежах Субъекта по идентификатору ответа
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
@@ -191,14 +204,14 @@ namespace QBCH_api.Controllers
         /// <response code="202">результат запроса содержит квитанцию с информацией об ошибке «Ответ не готов».</response>
         /// <response code="400">результат запроса содержит квитанцию с информацией об ошибке, кроме ошибки «Ответ не готов»</response>
         [HttpGet("dlanswer")]
-        [MapToApiVersion("3.0")]
-        public async Task<IActionResult> DlAnswer(string? id = null)
+        [MapToApiVersion("2.0")]
+        public async Task<IActionResult> DlAnswer_v_2(string? id = null)
         {
             var RequestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
             var guid = Guid.NewGuid().ToString();
             byte[]? signedResponse = null;
             byte[]? responseXml = null;
-            var serviceName = DlAnswerService;
+            var serviceName = "dlanswer";
             var certificate = Request.HttpContext.Connection.ClientCertificate;
             var IpAddress = Request.HttpContext.Connection.RemoteIpAddress;
 
@@ -223,21 +236,23 @@ namespace QBCH_api.Controllers
                         _logger.LogError("Запрос не содержит обязательных параметров: id");
                         await _redisCache.AddHash(serviceName, guid, "error_code", "3");
                         await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не содержит обязательных параметров: id");
-
-                        return BuildSignedErrorResult("3", "Запрос не содержит обязательных параметров: id", out responseXml, out signedResponse);
+                        responseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "3", "Запрос не содержит обязательных параметров: id"));
+                        signedResponse = _cryptoService.SignMsg(responseXml);
+                        return BadRequest(new MemoryStream(signedResponse));
                     }
 
                     await _redisCache.AddHash(serviceName, guid, "response_guid", id);
 
                     /* Проверка прав доступа 
                      */
-                    if (!await _validationService.ValidateRules(certificate?.Thumbprint, DlRequestService))
+                    if (!await _validationService.ValidateRules(certificate?.Thumbprint, "dlrequest"))
                     {
                         _logger.LogError("Запрос не доступен для абонента");
                         await _redisCache.AddHash(serviceName, guid, "error_code", "22");
                         await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не доступен для абонента");
-
-                        return BuildSignedErrorResult("22", "Запрос не доступен для абонента", out responseXml, out signedResponse);
+                        responseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "22", "Запрос не доступен для абонента"));
+                        signedResponse = _cryptoService.SignMsg(responseXml);
+                        return BadRequest(new MemoryStream(signedResponse));
                     }
 
                     /*  1. Метод передачи запроса  не соответствует требуемому.
@@ -248,8 +263,9 @@ namespace QBCH_api.Controllers
                         _logger.LogError("Метод передачи запроса не соответствует ожидаемому");
                         await _redisCache.AddHash(serviceName, guid, "error_code", "1");
                         await _redisCache.AddHash(serviceName, guid, "error_message", "Метод передачи запроса не соответствует ожидаемому");
-
-                        return BuildSignedErrorResult("1", "Метод передачи запроса не соответствует ожидаемому", out responseXml, out signedResponse);
+                        responseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "1", "Метод передачи запроса не соответствует ожидаемому"));
+                        signedResponse = _cryptoService.SignMsg(responseXml);
+                        return BadRequest(new MemoryStream(signedResponse));
                     }
 
                     /* Проверка сертификата в запросе */
@@ -266,20 +282,21 @@ namespace QBCH_api.Controllers
                      * /dlanswer или /dlputanswer указан
                      * идентификатор, который не выдавался абоненту
                      */
-                    if (!await _redisCache.KeyExists([DlRequestService, id]))
+                    if (!await _redisCache.KeyExists(["dlrequest", id]))
                     {
                         _logger.LogError("Указан некорректный идентификатор ответа");
                         await _redisCache.AddHash(serviceName, guid, "error_code", "16");
                         await _redisCache.AddHash(serviceName, guid, "error_message", "Указан некорректный идентификатор ответа");
-
-                        return BuildSignedErrorResult("16", "Указан некорректный идентификатор ответа", out responseXml, out signedResponse);
+                        responseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "16", $"Указан некорректный идентификатор ответа"));
+                        signedResponse = _cryptoService.SignMsg(responseXml);
+                        return BadRequest(new MemoryStream(signedResponse));
                     }
 
                     // Время окончания валидации
                     await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
                     // Пока задача не готова возвращаем статус 12 - Ответ не готов.
-                    if (_redisCache.TryGetHash(DlRequestService, id, "qbch_tasks_aggregate_xml", out responseXml))
+                    if (_redisCache.TryGetHash("dlrequest", id, "qbch_tasks_aggregate_xml", out responseXml))
                     {
                         signedResponse = _cryptoService.SignMsg(responseXml);
                         return File(signedResponse, "application/octet-stream");
@@ -288,8 +305,9 @@ namespace QBCH_api.Controllers
                     {
                         await _redisCache.AddHash(serviceName, guid, "error_code", "12");
                         await _redisCache.AddHash(serviceName, guid, "error_message", "Ответ не готов");
-
-                        return BuildSignedErrorResult("12", "Ответ не готов", out responseXml, out signedResponse);
+                        responseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "12", "Ответ не готов"));
+                        signedResponse = _cryptoService.SignMsg(responseXml);
+                        return Accepted(new MemoryStream(signedResponse));
                     }
                 }
                 catch (Exception ex)
@@ -349,62 +367,11 @@ namespace QBCH_api.Controllers
         /// <response code="200">Результат запроса содержит информацию о результатах загрузки данных в базу данных КБКИ</response>
         /// <response code="202">Результат запроса содержит квитанцию с идентификатором ответа</response>
         /// <response code="400">Результат запроса содержит квитанцию с информацией об ошибке</response>
-        [MapToApiVersion("3.0")]
+        [MapToApiVersion("2.0")]
         [HttpPost("dlput")]
         public async Task<IActionResult> DlPut_v_2(ApiVersion apiVersion)
         {
-            byte[]? signedResponse = null;
-            byte[]? responseXml = null;
-            var serviceName = DlPutService;
-            var guid = Guid.NewGuid().ToString();
-            var certificate = Request.HttpContext.Connection.ClientCertificate;
-
-            try
-            {
-                using var ms = new MemoryStream();
-                await Request.Body.CopyToAsync(ms);
-
-                if (ms.Length == 0)
-                {
-                    responseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("2", "Запрос не содержит данных"));
-                    signedResponse = _cryptoService.SignMsg(responseXml);
-                    return BadRequest(new MemoryStream(signedResponse));
-                }
-
-                if (!_validationService.ValidateMsg(ms.ToArray(), certificate, out var cryptoServiceResult))
-                {
-                    responseXml = _xmlService.SerializeAsByte(cryptoServiceResult.Ticket);
-                    signedResponse = _cryptoService.SignMsg(responseXml);
-                    return BadRequest(new MemoryStream(signedResponse));
-                }
-
-                if (!_validationService.ValidateXml(new MemoryStream(cryptoServiceResult.Body), serviceName, apiVersion, out var xsdValidation))
-                {
-                    responseXml = _xmlService.SerializeAsByte(xsdValidation.Ticket);
-                    signedResponse = _cryptoService.SignMsg(responseXml);
-                    return BadRequest(new MemoryStream(signedResponse));
-                }
-
-                var request = _xmlService.Deserialize<ПредставлениеСведений>(cryptoServiceResult.Body);
-                if (request is null)
-                {
-                    responseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("9", "Запрос не соответствует схеме"));
-                    signedResponse = _cryptoService.SignMsg(responseXml);
-                    return BadRequest(new MemoryStream(signedResponse));
-                }
-
-                await _redisCache.AddHash(serviceName, guid, "request", cryptoServiceResult.Body);
-                await _redisCache.AddHash(serviceName, guid, "RequestId", request.ИдентификаторЗапроса ?? string.Empty);
-
-                responseXml = _xmlService.SerializeAsByte(_ticketService.CreateReceiptWithAnswerId(request.ИдентификаторЗапроса, guid, request.ДатаЗапроса));
-                signedResponse = _cryptoService.SignMsg(responseXml);
-                return Accepted(new MemoryStream(signedResponse));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogCritical(ex, "Возникла критическая ошибка");
-                return StatusCode(500);
-            }
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -420,13 +387,13 @@ namespace QBCH_api.Controllers
         /// В случае получения ошибки «Ответ не готов» абонент должен повторить запрос не ранее, чем через 1 секунду.
         /// </remarks>
         [HttpGet("dlputanswer")]
-        [MapToApiVersion("3.0")]
+        [MapToApiVersion("2.0")]
         public async Task<IActionResult> DlPutAnswer(ApiVersion version, string? id = null)
         {
             var RequestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
             byte[]? signedResponse = null;
             byte[]? ResponseXml = null;
-            var serviceName = DlPutAnswerService;
+            var serviceName = "dlputanswer";
             var guid = Guid.NewGuid().ToString();
             var IpAddress = Request.HttpContext.Connection.RemoteIpAddress;
             var certificate = Request.HttpContext.Connection.ClientCertificate;
@@ -449,21 +416,23 @@ namespace QBCH_api.Controllers
                     if (string.IsNullOrWhiteSpace(id))
                     {
                         _logger.LogError("Запрос не содержит обязательных параметров: id");
-
-                        return BuildSignedErrorResult("3", "Запрос не содержит обязательных параметров: id", out ResponseXml, out signedResponse);
+                        ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "3", "Запрос не содержит обязательных параметров: id"));
+                        signedResponse = _cryptoService.SignMsg(ResponseXml);
+                        return BadRequest(new MemoryStream(signedResponse));
                     }
 
                     await _redisCache.AddHash(serviceName, guid, "guid", id);
 
                     /* Проверка прав доступа */
-                    if (!(await _validationService.ValidateRules(certificate?.Thumbprint, DlPutService)))
+                    if (!(await _validationService.ValidateRules(certificate?.Thumbprint, "dlput")))
                     {
                         _logger.LogError("Запрос не доступен для абонента");
                         await _redisCache.AddHash(serviceName, guid, "error_code", "22");
                         await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не доступен для абонента");
                         await _redisCache.AddHash(serviceName, guid, "Thumbprint", certificate?.Thumbprint ?? "-");
-
-                        return BuildSignedErrorResult("22", "Запрос не доступен для абонента", out ResponseXml, out signedResponse);
+                        ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "22", "Запрос не доступен для абонента"));
+                        signedResponse = _cryptoService.SignMsg(ResponseXml);
+                        return BadRequest(new MemoryStream(signedResponse));
                     }
 
                     /*  1. Метод передачи запроса  не соответствует требуемому.
@@ -475,8 +444,9 @@ namespace QBCH_api.Controllers
                         await _redisCache.AddHash(serviceName, guid, "error_code", "1");
                         await _redisCache.AddHash(serviceName, guid, "error_message", "Метод передачи запроса не соответствует ожидаемому");
                         await _redisCache.AddHash(serviceName, guid, "Thumbprint", certificate?.Thumbprint ?? "-");
-
-                        return BuildSignedErrorResult("1", "Метод передачи запроса не соответствует ожидаемому", out ResponseXml, out signedResponse);
+                        ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "1", "Метод передачи запроса не соответствует ожидаемому"));
+                        signedResponse = _cryptoService.SignMsg(ResponseXml);
+                        return BadRequest(new MemoryStream(signedResponse));
                     }
 
                     /* Проверка сертификата в запросе
@@ -495,19 +465,19 @@ namespace QBCH_api.Controllers
                      * /dlanswer или /dlputanswer указан
                      * идентификатор, который не выдавался абоненту
                      */
-                    if (!await _redisCache.KeyExists([DlPutService, id]))
+                    if (!await _redisCache.KeyExists(["dlput", id]))
                     {
                         _logger.LogError("Указан некорректный идентификатор ответа");
                         await _redisCache.AddHash(serviceName, guid, "error_code", "16");
                         await _redisCache.AddHash(serviceName, guid, "error_message", "Указан некорректный идентификатор ответа");
                         await _redisCache.AddHash(serviceName, guid, "Thumbprint", certificate?.Thumbprint ?? "-");
-                        ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("16", "Указан некорректный идентификатор ответа"));
+                        ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "16", $"Указан некорректный идентификатор ответа"));
                         signedResponse = _cryptoService.SignMsg(ResponseXml);
                         return BadRequest(new MemoryStream(signedResponse));
                     }
 
                     // Пока задача не готова возвращаем статус 12 - Ответ не готов.
-                    if (_redisCache.TryGetHash(DlPutService, id, "response", out ResponseXml))
+                    if (_redisCache.TryGetHash("dlput", id, "response", out ResponseXml))
                     {
                         await _redisCache.AddHash(serviceName, guid, "Thumbprint", certificate?.Thumbprint ?? "-");
                         signedResponse = _cryptoService.SignMsg(ResponseXml);
@@ -517,8 +487,9 @@ namespace QBCH_api.Controllers
                     {
                         await _redisCache.AddHash(serviceName, guid, "Thumbprint", certificate?.Thumbprint ?? "-");
                         await _redisCache.AddHash(serviceName, guid, "error_code", "12");
-
-                        return BuildSignedErrorResult("12", "Ответ не готов", out ResponseXml, out signedResponse);
+                        ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "12", "Ответ не готов"));
+                        signedResponse = _cryptoService.SignMsg(ResponseXml);
+                        return Accepted(new MemoryStream(signedResponse));
                     }
                 }
                 catch (Exception ex)
@@ -578,7 +549,7 @@ namespace QBCH_api.Controllers
         /// <response code="200">Квитанция содержит информацию об успешной обработке запроса</response>
         /// <response code="400">Квитанция содержит информацию об ошибке</response>
         [HttpPost("certadd")]
-        [MapToApiVersion("3.0")]
+        [MapToApiVersion("2.0")]
         public async Task<IActionResult> CertAdd([FromForm] CertForm form)
         {
             throw new NotImplementedException();
@@ -606,7 +577,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "22");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не доступен для абонента");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("22", "Запрос не доступен для абонента"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "22", "Запрос не доступен для абонента"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -618,7 +589,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "3");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не содержит обязательных параметров: id");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("3", "Запрос не содержит обязательных параметров: id"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "3", "Запрос не содержит обязательных параметров: id"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -632,7 +603,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "3");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не содержит обязательных параметров: sign");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                     ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("3", "Запрос не содержит обязательных параметров: sign"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "3", "Запрос не содержит обязательных параметров: sign"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -644,7 +615,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "3");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не содержит обязательных параметров: cert");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("3", "Запрос не содержит обязательных параметров: cert"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "3", "Запрос не содержит обязательных параметров: cert"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -658,7 +629,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "1");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Метод передачи запроса не соответствует ожидаемому");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("1", "Метод передачи запроса не соответствует ожидаемому"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "1", "Метод передачи запроса не соответствует ожидаемому"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -717,7 +688,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "99");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Такой сертификат уже существует.");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("99", "Такой сертификат уже существует."));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "99", "Такой сертификат уже существует."));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(_cryptoService.SignMsg(ResponseXml)));
                 }
@@ -727,7 +698,7 @@ namespace QBCH_api.Controllers
                 if (await _certManagement.AddCertificate(cert.ToArray(), CryptoServiceResult?.RequestOGRN, guid))
                 {
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateSuccessReceipt(form.id, DateTime.Today));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Success, requestId: form.id));
                     await _redisCache.AddHash(serviceName, guid, "response", _xmlService.SerializeAsByte(ResponseXml));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return File(signedResponse, "application/octet-stream");
@@ -737,7 +708,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "99");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Не удалось добавить сертификат.");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("99", "Не удалось добавить сертификат."));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "99", "Не удалось добавить сертификат."));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(_cryptoService.SignMsg(ResponseXml)));
                 }
@@ -768,16 +739,6 @@ namespace QBCH_api.Controllers
             }
         }
 
-        private IActionResult BuildSignedErrorResult(string errorCode, string message, out byte[] responseXml, out byte[] signedResponse)
-        {
-            responseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt(errorCode, message));
-            signedResponse = _cryptoService.SignMsg(responseXml);
-
-            return errorCode == "12"
-                ? Accepted(new MemoryStream(signedResponse))
-                : BadRequest(new MemoryStream(signedResponse));
-        }
-
         /// <summary>
         /// Отзыв сертификата абонента
         /// </summary>
@@ -786,7 +747,7 @@ namespace QBCH_api.Controllers
         /// <response code="200">Квитанция содержит информацию об успешной обработке запроса</response>
         /// <response code="400">Квитанция содержит информацию об ошибке</response>
         [HttpPost("certrevoke")]
-        [MapToApiVersion("3.0")]
+        [MapToApiVersion("2.0")]
         public async Task<IActionResult> CertRevoke([FromForm] CertForm form)
         {
             throw new NotImplementedException();
@@ -813,7 +774,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "22");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не доступен для абонента");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("22", "Запрос не доступен для абонента"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "22", "Запрос не доступен для абонента"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -825,7 +786,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "3");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не содержит обязательных параметров: id");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("3", "Запрос не содержит обязательных параметров: id"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "3", "Запрос не содержит обязательных параметров: id"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -838,7 +799,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "3");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не содержит обязательных параметров: sign");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("3", "Запрос не содержит обязательных параметров: sign"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "3", "Запрос не содержит обязательных параметров: sign"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -850,7 +811,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "3");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Запрос не содержит обязательных параметров: cert");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("3", "Запрос не содержит обязательных параметров: cert"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "3", "Запрос не содержит обязательных параметров: cert"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -864,7 +825,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "1");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Метод передачи запроса не соответствует ожидаемому");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("1", "Метод передачи запроса не соответствует ожидаемому"));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "1", "Метод передачи запроса не соответствует ожидаемому"));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(signedResponse));
                 }
@@ -923,7 +884,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "99");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Сертификат не найден.");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("99", "Сертификат не найден."));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "99", "Сертификат не найден."));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(_cryptoService.SignMsg(ResponseXml)));
                 }
@@ -933,7 +894,7 @@ namespace QBCH_api.Controllers
                 if (await _certManagement.SetCertificateInactive(cert.ToArray(), guid))
                 {
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateSuccessReceipt(form.id, DateTime.Today));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Success, requestId: form.id));
                     await _redisCache.AddHash(serviceName, guid, "response", _xmlService.SerializeAsByte(ResponseXml));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return File(signedResponse, "application/octet-stream");
@@ -943,7 +904,7 @@ namespace QBCH_api.Controllers
                     await _redisCache.AddHash(serviceName, guid, "error_code", "99");
                     await _redisCache.AddHash(serviceName, guid, "error_message", "Не удалось удалить сертификат.");
                     await _redisCache.AddHash(serviceName, guid, "Thumbprint", requestCertificate?.Thumbprint ?? "-");
-                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateErrorReceipt("99", "Не удалось удалить сертификат."));
+                    ResponseXml = _xmlService.SerializeAsByte(_ticketService.CreateResultv2(ResponseType.Error, "99", "Не удалось удалить сертификат."));
                     signedResponse = _cryptoService.SignMsg(ResponseXml);
                     return BadRequest(new MemoryStream(_cryptoService.SignMsg(ResponseXml)));
                 }

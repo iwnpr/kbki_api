@@ -2,6 +2,8 @@
 using Confluent.Kafka;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
+using Microsoft.Extensions.Options;
+using QBCH_api.Configuration;
 using QBCH_lib.domain.aggregate;
 using System.Text;
 using System.Text.Json;
@@ -13,11 +15,14 @@ public class QBCHProcessingCompleteHandler : INotificationHandler<QBCHProcessing
     private readonly ILogger<QBCHProcessingCompleteHandler> _logger;
     private readonly ICacheService _redisCache;
     private readonly IKafkaService _kafka;
-    public QBCHProcessingCompleteHandler(ILogger<QBCHProcessingCompleteHandler> logger, ICacheService redisCache, IKafkaService kafka)
+    private readonly ApiV3ContractOptions _contractOptions;
+
+    public QBCHProcessingCompleteHandler(ILogger<QBCHProcessingCompleteHandler> logger, ICacheService redisCache, IKafkaService kafka, IOptions<ApiV3ContractOptions> contractOptions)
     {
         _logger = logger;
         _redisCache = redisCache;
         _kafka = kafka;
+        _contractOptions = contractOptions.Value;
     }
     public async Task Handle(QBCHProcessingComplete notification, CancellationToken cancellationToken)
     {
@@ -27,14 +32,7 @@ public class QBCHProcessingCompleteHandler : INotificationHandler<QBCHProcessing
             var key = $"QBCH:{transaction.ServiceName}:{transaction.Id}";
             var processigResultData = await ConstractResultData(transaction);
             await _redisCache.AddHashArray(transaction.ServiceName, transaction.Id.ToString(), processigResultData);
-
-            //if (transaction.PackageValidationErrors.Count != 0)
-            //{
-
-            //    //
-            //    var errors = ConstractResultPackageErrorsData(transaction);
-            //    await _redisCache.AddHashArray(transaction.ServiceName, $"{transaction.Id}:package_error", errors);
-            //}
+            await _redisCache.TrySetKeyExpiration(transaction.ServiceName, transaction.Id.ToString(), _contractOptions.ResponseRetentionHours * 60L, cancellationToken);
 
             // Попытка отправки в кафку                    
             if (!await _kafka.Produce(new Message<Null, string> { Value = key })) // 1.3 - 2.0 разделить
@@ -42,16 +40,6 @@ public class QBCHProcessingCompleteHandler : INotificationHandler<QBCHProcessing
         }
         catch (Exception ex)
         {
-            //var message = JsonSerializer.Serialize(new
-            //{
-            //    ServiceName = transaction.ServiceName,
-            //    transaction.Id,
-            //    IpAddress = transaction.ClentRequest.IpAddress?.ToString(),
-            //    transaction.ClentRequest.Certificate?.Thumbprint,
-            //    transaction.RequestTime,
-            //    ResponseTime = transaction.ResponseTime ?? DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"),  
-            //    ex.Message
-            //});
             _logger.LogCritical(ex, "Критическая ошибка при сохранении в redis");
 
             try
@@ -149,16 +137,4 @@ public class QBCHProcessingCompleteHandler : INotificationHandler<QBCHProcessing
 
         return dict;
     }
-
-    //public Dictionary<string, byte[]> ConstractResultPackageErrorsData(QBCHProcessingTransaction transaction)
-    //{
-    //    var dict = new Dictionary<string, byte[]>();
-
-    //    if (transaction.PackageValidationErrors.Count > 0)
-    //    {
-    //        transaction.PackageValidationErrors.ToList().ForEach(e => dict.Add(e.Key.ToString(), Encoding.UTF8.GetBytes(e.Value.Message)));
-    //    }
-
-    //    return dict;
-    //}
 }

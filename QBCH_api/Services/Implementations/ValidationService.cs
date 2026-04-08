@@ -7,8 +7,8 @@ using Qbch_db_lib.Services.Interfaces;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.qcb_xml.v1_3.Enums;
 using QBCH_lib.qcb_xml.v1_3.qcb_request;
-using QBCH_lib.qcb_xml.v3_0.Enums;
-using QBCH_lib.qcb_xml.v3_0.qcb_request;
+using QBCH_lib.qcb_xml.v2_0.Enums;
+using QBCH_lib.qcb_xml.v2_0.qcb_request;
 using QBCH_lib.Services.Interfaces;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
@@ -68,7 +68,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = "Неподдерживаемая кодировка, файл не в кодировке Utf-8",
                     ErrorCode = 8,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "8", "Неподдерживаемая кодировка, файл не в кодировке Utf-8")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "8", "Неподдерживаемая кодировка, файл не в кодировке Utf-8")
                 };
                 return false;
             }
@@ -92,7 +92,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = "Дата запроса указана некорректно",
                     ErrorCode = 23,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "23", "Дата запроса указана некорректно")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "23", "Дата запроса указана некорректно")
                 };
                 return false;
             }
@@ -146,7 +146,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = "Реквизиты запроса не соответствуют абоненту",
                     ErrorCode = 10,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "10", $"Реквизиты запроса не соответствуют абоненту: Абонент ИНН:{inn}, ожидаемый ИНН:{dbinn}. Абонент ОГРН:{ogrn}, ожидаемый ОГРН:{dbogrn}")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "10", $"Реквизиты запроса не соответствуют абоненту: Абонент ИНН:{inn}, ожидаемый ИНН:{dbinn}. Абонент ОГРН:{ogrn}, ожидаемый ОГРН:{dbogrn}")
                 };
                 return false;
             }
@@ -174,7 +174,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = "Реквизиты запроса не соответствуют абоненту",
                     ErrorCode = 10,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "10", $"Реквизиты запроса не соответствуют абоненту: Абонент ОГРН:{ogrn}, ожидаемый ОГРН:{dbogrn}")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "10", $"Реквизиты запроса не соответствуют абоненту: Абонент ОГРН:{ogrn}, ожидаемый ОГРН:{dbogrn}")
                 };
                 return false;
             }
@@ -212,7 +212,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     ErrorCode = 13,
                     Error = "Отсутствует дата согласия.",
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Отсутствует дата согласия.")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "13", "Отсутствует дата согласия.")
                 };
 
                 return false;
@@ -227,7 +227,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = error,
                     ErrorCode = 15,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                 };
                 return false;
             }
@@ -242,7 +242,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             ErrorCode = 13,
                             Error = "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты",
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "13", "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты")
                         };
 
                         return false;
@@ -256,7 +256,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             ErrorCode = 13,
                             Error = "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты",
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "13", "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты")
                         };
 
                         return false;
@@ -274,7 +274,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             ErrorCode = 15,
                             Error = "Элемент \"Договор\" обязателен т.к. значение атрибута \"СрокДействия\"=\"3\"",
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", "Элемент \"Договор\" обязателен т.к. значение атрибута \"СрокДействия\"=\"3\"")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", "Элемент \"Договор\" обязателен т.к. значение атрибута \"СрокДействия\"=\"3\"")
                         };
                         return false;
                     }
@@ -290,7 +290,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             Error = error,
                             ErrorCode = 15,
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                         };
                         return false;
                     }
@@ -303,7 +303,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             Error = error,
                             ErrorCode = 15,
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                         };
                         return false;
                     }
@@ -314,7 +314,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 13,
                         Error = $"Значение \"Срок действия\" блока \"Согласие\" {request?.Запрос?.Согласие?.СрокДействия}, не найдено в справочнике.",
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "13", $"Значение \"Срок действия\" блока \"Согласие\" {request?.Запрос?.Согласие?.СрокДействия}, не найдено в справочнике.")
+                        Ticket = ticketService.CreateResult(ResultType.Error, "13", $"Значение \"Срок действия\" блока \"Согласие\" {request?.Запрос?.Согласие?.СрокДействия}, не найдено в справочнике.")
                     };
 
                     return false;
@@ -343,7 +343,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     ErrorCode = 13,
                     Error = "В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие.",
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "13", "В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие.")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "13", "В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие.")
                 };
                 return false;
             }
@@ -353,7 +353,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     ErrorCode = 13,
                     Error = "Отсутствуют реквизиты лица, которому было выдано согласие.",
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Отсутствуют реквизиты лица, которому было выдано согласие.")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "13", "Отсутствуют реквизиты лица, которому было выдано согласие.")
                 };
                 return false;
             }
@@ -386,7 +386,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 15,
                         Error = error,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                     };
                     return false;
                 }
@@ -398,7 +398,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 15,
                         Error = error,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                     };
                     return false;
                 }
@@ -413,7 +413,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 15,
                         Error = error,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                     };
                     return false;
                 }
@@ -425,7 +425,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 15,
                         Error = error,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                     };
                     return false;
                 }
@@ -439,7 +439,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     ErrorCode = 15,
                     Error = error,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                 };
                 return false;
             }
@@ -452,7 +452,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     ErrorCode = 15,
                     Error = error,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                 };
                 return false;
             }
@@ -467,7 +467,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 13,
                         Error = "Одна или несколько целей, указанных в блоке «Запрос» отсутствует.",
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Одна или несколько целей, указанных в блоке «Запрос» отсутствует.")
+                        Ticket = ticketService.CreateResult(ResultType.Error, "13", "Одна или несколько целей, указанных в блоке «Запрос» отсутствует.")
                     };
 
                     return false;
@@ -484,7 +484,7 @@ namespace QBCH_api.Services.Implementations
         /// <param name="request">Запрос</param>
         /// <param name="result"></param>
         /// <returns>Результат проверки</returns>
-        public bool ValidateAgreement(ЗапросСведенийЗапрос request, [NotNullWhen(false)] out BaseResult? result) //3.0
+        public bool ValidateAgreement(ЗапросСведенийЗапрос request, [NotNullWhen(false)] out BaseResult? result) //2.0
         {
             string? error = null;
 
@@ -507,7 +507,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     ErrorCode = 13,
                     Error = "Отсутствует дата согласия.",
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Отсутствует дата согласия.")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "13", "Отсутствует дата согласия.")
                 };
 
                 return false;
@@ -522,7 +522,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = error,
                     ErrorCode = 15,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                 };
                 return false;
             }
@@ -537,7 +537,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             ErrorCode = 13,
                             Error = "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты",
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "13", "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты")
                         };
 
                         return false;
@@ -551,7 +551,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             ErrorCode = 13,
                             Error = "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты",
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "13", "Дата окончания действия согласия (дата выдачи + срок действия) меньше текущей даты")
                         };
 
                         return false;
@@ -569,7 +569,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             ErrorCode = 15,
                             Error = "Элемент \"Договор\" обязателен т.к. значение атрибута \"СрокДействия\"=\"3\"",
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", "Элемент \"Договор\" обязателен т.к. значение атрибута \"СрокДействия\"=\"3\"")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", "Элемент \"Договор\" обязателен т.к. значение атрибута \"СрокДействия\"=\"3\"")
                         };
                         return false;
                     }
@@ -585,7 +585,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             Error = error,
                             ErrorCode = 15,
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                         };
                         return false;
                     }
@@ -598,7 +598,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             Error = error,
                             ErrorCode = 15,
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                         };
                         return false;
                     }
@@ -609,7 +609,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 13,
                         Error = $"Значение \"Срок действия\" блока \"Согласие\" {request?.Согласие?.СрокДействия}, не найдено в справочнике.",
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "13", $"Значение \"Срок действия\" блока \"Согласие\" {request?.Согласие?.СрокДействия}, не найдено в справочнике.")
+                        Ticket = ticketService.CreateResult(ResultType.Error, "13", $"Значение \"Срок действия\" блока \"Согласие\" {request?.Согласие?.СрокДействия}, не найдено в справочнике.")
                     };
 
                     return false;
@@ -638,7 +638,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     ErrorCode = 13,
                     Error = "В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие.",
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "13", "В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие.")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "13", "В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие.")
                 };
                 return false;
             }
@@ -648,7 +648,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     ErrorCode = 13,
                     Error = "Отсутствуют реквизиты лица, которому было выдано согласие.",
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Отсутствуют реквизиты лица, которому было выдано согласие.")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "13", "Отсутствуют реквизиты лица, которому было выдано согласие.")
                 };
                 return false;
             }
@@ -681,7 +681,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 15,
                         Error = error,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                     };
                     return false;
                 }
@@ -693,7 +693,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 15,
                         Error = error,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                     };
                     return false;
                 }
@@ -708,7 +708,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 15,
                         Error = error,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                     };
                     return false;
                 }
@@ -720,34 +720,34 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 15,
                         Error = error,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                     };
                     return false;
                 }
             }
 
             // Если у цели 99 нет описания
-            if (request?.Цель?.Any(x => x.КодЦели == QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)) ?? false)
+            if (request?.Цель?.Any(x => x.КодЦели == QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)) ?? false)
             {
                 error = $"Запрос содержит некорректные данные: Код цели запроса со значением \"99\" не содержит описания.";
                 result = new()
                 {
                     ErrorCode = 15,
                     Error = error,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                 };
                 return false;
             }
 
             // Если в согласии у цели 99 нет описания
-            if (request?.Согласие?.Цель?.Any(x => x.КодЦели == QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)) ?? false)
+            if (request?.Согласие?.Цель?.Any(x => x.КодЦели == QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)) ?? false)
             {
                 error = $"Запрос содержит некорректные данные: Код цели согласия со значением \"99\" не содержит описания.";
                 result = new()
                 {
                     ErrorCode = 15,
                     Error = error,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", error)
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", error)
                 };
                 return false;
             }
@@ -762,7 +762,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         ErrorCode = 13,
                         Error = "Одна или несколько целей, указанных в блоке «Запрос» отсутствует.",
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "13", "Одна или несколько целей, указанных в блоке «Запрос» отсутствует.")
+                        Ticket = ticketService.CreateResult(ResultType.Error, "13", "Одна или несколько целей, указанных в блоке «Запрос» отсутствует.")
                     };
 
                     return false;
@@ -794,7 +794,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = error,
                     ErrorCode = 15,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                 };
                 return false;
             }
@@ -810,7 +810,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = error,
                     ErrorCode = 15,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                 };
                 return false;
             }
@@ -829,7 +829,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         Error = error,
                         ErrorCode = 15,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                     };
                     return false;
                 }
@@ -846,7 +846,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             Error = error,
                             ErrorCode = 15,
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                         };
                         return false;
                     }
@@ -891,7 +891,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             Error = error,
                             ErrorCode = 15,
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                         };
                         return false;
                     }
@@ -908,13 +908,13 @@ namespace QBCH_api.Services.Implementations
         /// <param name="request">Запрос</param>
         /// <param name="result">Ответ</param>
         /// <returns>Результат проверки</returns>
-        public bool AdditionalValidation(ЗапросСведенийЗапрос request, [NotNullWhen(false)] out BaseResult? result) //3.0
+        public bool AdditionalValidation(ЗапросСведенийЗапрос request, [NotNullWhen(false)] out BaseResult? result) //2.0
         {
             string? error = null;
 
             // Наименование ДУЛ при коде 999 для ИП
             if (request.Источник?.ИндивидуальныйПредприниматель?.ДокументЛичности != null &&
-                request.Источник.ИндивидуальныйПредприниматель.ДокументЛичности.КодДУЛ == QBCH_lib.qcb_xml.v3_0.Enums.СправочникДУЛ.Item999 &&
+                request.Источник.ИндивидуальныйПредприниматель.ДокументЛичности.КодДУЛ == QBCH_lib.qcb_xml.v2_0.Enums.СправочникДУЛ.Item999 &&
                string.IsNullOrWhiteSpace(request.Источник.ИндивидуальныйПредприниматель.ДокументЛичности.НаименованиеДУЛ))
             {
                 error = $"При значении \"КодДУЛ\" - 999 у источника, \"НаименованиеДУЛ\" обязательно к заполнению";
@@ -923,14 +923,14 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = error,
                     ErrorCode = 15,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                 };
                 return false;
             }
 
             // Наименование ДУЛ при коде 999 для иностранного ИП
             if (request.Источник?.ИностранныйПредприниматель?.ДокументЛичности != null &&
-                request.Источник.ИностранныйПредприниматель.ДокументЛичности.КодДУЛ == QBCH_lib.qcb_xml.v3_0.Enums.СправочникДУЛ.Item999 &&
+                request.Источник.ИностранныйПредприниматель.ДокументЛичности.КодДУЛ == QBCH_lib.qcb_xml.v2_0.Enums.СправочникДУЛ.Item999 &&
                string.IsNullOrWhiteSpace(request.Источник.ИностранныйПредприниматель.ДокументЛичности.НаименованиеДУЛ))
             {
                 error = $"При значении \"КодДУЛ\" - 999 у источника, \"НаименованиеДУЛ\" обязательно к заполнению";
@@ -939,7 +939,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = error,
                     ErrorCode = 15,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                 };
                 return false;
             }
@@ -958,7 +958,7 @@ namespace QBCH_api.Services.Implementations
                     {
                         Error = error,
                         ErrorCode = 15,
-                        Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                        Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                     };
                     return false;
                 }
@@ -975,7 +975,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             Error = error,
                             ErrorCode = 15,
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                         };
                         return false;
                     }
@@ -987,17 +987,17 @@ namespace QBCH_api.Services.Implementations
             {
                 var creditTargets = new[]
                 {
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item1,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item2,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item3,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item4,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item5,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item10,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item11,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item12,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item13,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item14,
-                    QBCH_lib.qcb_xml.v3_0.Enums.ТипЦельКодЦели.Item15
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item1,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item2,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item3,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item4,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item5,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item10,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item11,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item12,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item13,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item14,
+                    QBCH_lib.qcb_xml.v2_0.Enums.ТипЦельКодЦели.Item15
                 };
                 bool HasCreditTarget = false;
 
@@ -1020,7 +1020,7 @@ namespace QBCH_api.Services.Implementations
                         {
                             Error = error,
                             ErrorCode = 15,
-                            Ticket = ticketService.CreateResult(ResponseType.Error, "15", $"Запрос содержит некорректные данные: {error}")
+                            Ticket = ticketService.CreateResult(ResultType.Error, "15", $"Запрос содержит некорректные данные: {error}")
                         };
                         return false;
                     }
@@ -1048,7 +1048,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = "Идентификатор запроса не уникален",
                     ErrorCode = 11,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "11", $"Идентификатор запроса не уникален")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "11", $"Идентификатор запроса не уникален")
                 };
                 return false;
             }
@@ -1090,7 +1090,7 @@ namespace QBCH_api.Services.Implementations
                 {
                     Error = "Взаимодействие с абонентом в режиме «одно окно» не предусмотрено договором",
                     ErrorCode = 11,
-                    Ticket = ticketService.CreateResult(ResponseType.Error, "14", $"Взаимодействие с абонентом в режиме «одно окно» не предусмотрено договором")
+                    Ticket = ticketService.CreateResult(ResultType.Error, "14", $"Взаимодействие с абонентом в режиме «одно окно» не предусмотрено договором")
                 };
                 return IsValid;
             }

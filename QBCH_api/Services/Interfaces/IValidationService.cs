@@ -2,7 +2,7 @@
 using Crypto_lib.Model;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.qcb_xml.v1_3.qcb_request;
-using QBCH_lib.qcb_xml.v3_0.qcb_request;
+using QBCH_lib.qcb_xml.v2_0.qcb_request;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 
