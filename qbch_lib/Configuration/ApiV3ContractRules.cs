@@ -1,4 +1,6 @@
-﻿namespace QBCH_api.Configuration;
+﻿using System;
+
+namespace QBCH_lib.Configuration;
 
 public class ApiV3ContractRules(ApiV3ContractOptions options)
 {

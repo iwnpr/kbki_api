@@ -1,4 +1,4 @@
-﻿namespace QBCH_api.Configuration;
+﻿namespace QBCH_lib.Configuration;
 
 /// <summary>
 /// Настройки контрактных ограничений API 3.0.

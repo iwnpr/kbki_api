@@ -1,4 +1,4 @@
-﻿namespace QBCH_api.Configuration;
+﻿namespace QBCH_lib.Configuration;
 
 /// <summary>
 /// Канонические лимиты и таймауты контракта API 3.0.

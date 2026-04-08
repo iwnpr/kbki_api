@@ -3,7 +3,7 @@ using Confluent.Kafka;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Options;
-using QBCH_api.Configuration;
+using QBCH_lib.Configuration;
 using QBCH_lib.domain.aggregate;
 using System.Text;
 using System.Text.Json;
