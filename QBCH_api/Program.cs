@@ -34,9 +34,8 @@ using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using XmlService_lib.Services.Implementations.V3;
 using XmlService_lib.Services.Interfaces.V3;
-using IXmlService = XmlService_lib.Services.Interfaces.IXmlService;
-using XmlService = XmlService_lib.Services.Implementations.XmlService;
-
+using XmlService_lib.Services.Implementations;
+using XmlService_lib.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -78,16 +77,28 @@ builder.Services.AddAuthentication(
              options.AllowedCertificateTypes = CertificateTypes.All);
 
 // Добавление сервисов в контейнер
+
+// Main
 builder.Services.AddFeatureManagement(builder.Configuration.GetSection("FeatureFlags"));
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(configuration.GetConnectionString("Redis")));
 builder.Services.AddTransient<ICryptoService, CryptoService>();
+builder.Services.AddTransient<ICertManagementService, CertManagementService>();
+builder.Services.AddSingleton<ICompressService, CompressService>();
+ThreadPool.SetMinThreads(200, 200);
+builder.Services.AddTransient<ICacheService, CacheService>();
+builder.Services.AddSingleton<IBKIRequisitsHandler, BKIRequsits>();
+builder.Services.AddSingleton<IKafkaService, KafkaService>();
+
+
+// V_2.0
 builder.Services.AddTransient<IXmlService, XmlService>();
 builder.Services.AddTransient<IValidationService, ValidationService>();
 builder.Services.AddTransient<IRepository, Repository>();
 builder.Services.AddTransient<IQBCHService, QBCHService>();
 builder.Services.AddTransient<ITransformer, Transformer>();
 builder.Services.AddTransient<ITicketService, TicketService>();
-builder.Services.AddTransient<ICertManagementService, CertManagementService>();
-builder.Services.AddSingleton<ICompressService, CompressService>();
+
+// V_3.0
 builder.Services.AddTransient<IXmlServiceV3, XmlServiceV3>();
 builder.Services.AddTransient<IValidationServiceV3, ValidationServiceV3>();
 builder.Services.AddTransient<IRepositoryV3, RepositoryV3>();
@@ -95,12 +106,6 @@ builder.Services.AddTransient<IQBCHServiceV3, QBCHServiceV3>();
 builder.Services.AddTransient<ITransformerV3, TransformerV3>();
 builder.Services.AddTransient<ITicketServiceV3, TicketServiceV3>();
 builder.Services.AddTransient<IDlPutServiceV3, DlPutServiceV3>();
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(configuration.GetConnectionString("Redis")));
-
-ThreadPool.SetMinThreads(200, 200);
-builder.Services.AddTransient<ICacheService, CacheService>();
-builder.Services.AddSingleton<IBKIRequisitsHandler, BKIRequsits>();
-builder.Services.AddSingleton<IKafkaService, KafkaService>();
 
 // Добавление http-клиентов в HttpClientFactory
 try

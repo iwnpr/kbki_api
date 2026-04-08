@@ -4,12 +4,12 @@ using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces;
 using QBCH_lib.Configuration;
 using QBCH_lib.Services.Interfaces;
-using XmlService_lib.Services.Interfaces;
+using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCH_api.Services.Implementations.V3;
 
 public class ValidationServiceV3(
-    IXmlService xmlService,
+    IXmlServiceV3 xmlService,
     ICryptoService cryptoService,
     IRepository qbchDb,
     ILogger<ValidationService> logger,

@@ -5,13 +5,13 @@ using Microsoft.Extensions.Logging;
 using Qbch_db_lib.Services.Interfaces;
 using QBCH_lib.Configuration;
 using QBCHService_lib.Services.Interfaces.V3;
-using XmlService_lib.Services.Interfaces;
+using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCHService_lib.Services.Implementations.V3;
 
 public class QBCHServiceV3(
     ICryptoService cryptoService,
-    IXmlService xmlService,
+    IXmlServiceV3 xmlService,
     ILogger<QBCHService> logger,
     IRepository qbchDb,
     ICacheService redisCache,
