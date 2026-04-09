@@ -8,7 +8,6 @@ using XmlService_lib.Services.Interfaces.V3;
 using АбонентИПV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
 using АбонентИЮЛV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентЮридическоеЛицо;
 using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
-using РежимЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation;
@@ -45,7 +44,7 @@ public static class QBCHValidationDispatcherV3
         await ValidateAbonentV3(transaction, repository, requestV3);
 
         // 6) packet
-        ValidatePacketV3(transaction, requestV3);
+        transaction.ValidateXmlRequestCollectionV3(requestV3);
 
         // 7) rights
         await ValidateRightsV3(transaction, repository, cancellationToken);
@@ -128,51 +127,6 @@ public static class QBCHValidationDispatcherV3
             !string.Equals(dbOgrn, requestOgrn, StringComparison.Ordinal))
         {
             transaction.RiseCriticalError(Error.Code10_RequestAndAbonentDataNotMach(requestInn, dbInn, requestOgrn, dbOgrn));
-        }
-    }
-
-    private static void ValidatePacketV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
-    {
-        if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
-        {
-            return;
-        }
-
-        var requests = requestV3.Запрос ?? [];
-        if (requestV3.РежимЗапроса == РежимЗапросаV3.Item1 && requests.Length != 1)
-        {
-            transaction.RiseCriticalError(Error.Code26_WrongBlockCount("Количество блоков \"Запрос\" не соответствует режиму запроса"));
-            return;
-        }
-
-        if (requestV3.РежимЗапроса == РежимЗапросаV3.Item2)
-        {
-            if (requests.Length == 0 || requests.Length > 10)
-            {
-                transaction.RiseCriticalError(Error.Code26_WrongBlockCount("Количество блоков \"Запрос\" не соответствует режиму запроса"));
-                return;
-            }
-
-            var parsedOrderNumbers = requests
-                .Select(x => int.TryParse(x.ПорядковыйНомер, out var value) ? value : -1)
-                .ToArray();
-
-            if (parsedOrderNumbers.Any(x => x <= 0))
-            {
-                transaction.RiseCriticalError(Error.Code26_WrongBlockCount("Порядковый номер запроса в пакете должен быть положительным целым числом"));
-                return;
-            }
-
-            if (parsedOrderNumbers.First() != 1)
-            {
-                transaction.RiseCriticalError(Error.Code26_WrongBlockCount("Порядковые номера запросов должны начинаться с \"1\""));
-                return;
-            }
-
-            if (parsedOrderNumbers.Distinct().Count() != parsedOrderNumbers.Length)
-            {
-                transaction.RiseCriticalError(Error.Code26_WrongBlockCount("Порядковый номер запроса в пакете должен быть уникальным"));
-            }
         }
     }
 
