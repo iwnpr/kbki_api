@@ -181,7 +181,7 @@ public static class QBCHValidationDispatcherV3
 
     private static void ValidateAgreementV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
     {
-        _ = (transaction, requestV3);
+        transaction.ValidateAgreementV3(requestV3);
     }
 
     private static void ValidateInnAndSelfProhibitionV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
