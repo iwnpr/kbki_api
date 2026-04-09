@@ -22,15 +22,15 @@ namespace QBCH.Lib.qcb_xml.v3_0
             };
         }
 
-        public void УстановитьИдентификаторОтвета(string идентификаторОтвета, string идентификаторЗапроса, DateTime датаЗапроса, long? времяГотовности = null)
+        public void УстановитьИдентификаторОтвета(string идентификаторОтвета, string идентификаторЗапроса, DateTime датаЗапроса, long? readyTime = null)
         {
             Item = new РезультатИдентификаторОтвета
             {
                 Value = идентификаторОтвета,
                 ИдентификаторЗапроса = идентификаторЗапроса,
                 ДатаЗапроса = датаЗапроса.Date,
-                ВремяГотовности = времяГотовности.GetValueOrDefault(),
-                ВремяГотовностиSpecified = времяГотовности.HasValue,
+                ВремяГотовности = readyTime.GetValueOrDefault(),
+                ВремяГотовностиSpecified = readyTime.HasValue,
             };
         }
 
