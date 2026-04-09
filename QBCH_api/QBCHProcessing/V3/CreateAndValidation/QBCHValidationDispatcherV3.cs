@@ -176,7 +176,7 @@ public static class QBCHValidationDispatcherV3
 
     private static void AdditionalValidationV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
     {
-        _ = (transaction, requestV3);
+        transaction.AdditionalValidationV3(requestV3);
     }
 
     private static void ValidateAgreementV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
@@ -186,7 +186,7 @@ public static class QBCHValidationDispatcherV3
 
     private static void ValidateInnAndSelfProhibitionV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
     {
-        _ = (transaction, requestV3);
+        transaction.ValidateInnAndSelfProhibitionV3(requestV3);
     }
 
     private static (string? inn, string? ogrn) GetAbonentRequisitesV3(ЗапросСведенийV3 request)
