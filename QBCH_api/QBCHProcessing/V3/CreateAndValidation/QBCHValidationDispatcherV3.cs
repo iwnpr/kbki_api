@@ -117,7 +117,7 @@ public static class QBCHValidationDispatcherV3
         }
 
         var (requestInn, requestOgrn) = GetAbonentRequisitesV3(requestV3);
-        var dbRequisites = await repository.GetInnOgrnByThumbprint(transaction.ClentRequest.Certificate?.Thumbprint);
+        var dbRequisites = await repository.GetInnOgrnByThumbprintV3(transaction.ClentRequest.Certificate?.Thumbprint);
         var dbInn = dbRequisites?.Element("inn")?.Value;
         var dbOgrn = dbRequisites?.Element("ogrn")?.Value;
 
@@ -133,7 +133,7 @@ public static class QBCHValidationDispatcherV3
     private static async Task ValidateRightsV3(QBCHProcessingTransaction transaction, IRepositoryV3 repository, CancellationToken cancellationToken)
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) &&
-            !await repository.IsPermissionGrantedv2(transaction.ClentRequest.Certificate?.Thumbprint, transaction.ServiceName, cancellationToken))
+            !await repository.IsPermissionGrantedV3(transaction.ClentRequest.Certificate?.Thumbprint, transaction.ServiceName, cancellationToken))
         {
             transaction.RiseCriticalError(Error.Code22_AccessDenied());
         }

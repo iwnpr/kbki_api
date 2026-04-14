@@ -89,7 +89,7 @@ public class ValidationServiceV3(
     }
 
     public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
-        => await _repository.IsPermissionGrantedv2(thumbprint, serviceName, ct);
+       => await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
 
     public bool IsUniqueRequestIdV3(string requestId, string methodName, string ogrn, [NotNullWhen(false)] out BaseResultV3? result)
     {
