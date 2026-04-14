@@ -7,6 +7,7 @@ using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.Configuration;
 using System.Data;
 using System.Security.Cryptography.X509Certificates;
+using System.Linq;
 using System.Xml.Linq;
 
 namespace Qbch_db_lib.Services.Implementations.V3;
@@ -81,14 +82,18 @@ public class RepositoryV3(
     /// <param name="subjectIds">Идентификаторы субъектов.</param>
     /// <param name="timeLeftMs">Оставшееся время выполнения, мс.</param>
     /// <returns>XML с обязательствами для прямого маппинга в ответ 3.0.</returns>
-    public Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long? timeLeftMs = null)
-        => ExecuteXmlProcedureV3(
+    public async Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long? timeLeftMs = null)
+    {
+        var xml = await ExecuteXmlProcedureV3(
             _config.GetValue<string>("QbchCalcOfAmpV3:Procedures:CalculationOfAmp"),
             _schemaQbchCalcOfAmpV3,
             _calcOfAmpConnectionPool,
             subjectIds,
             timeLeftMs ?? _calcOfAmpTimeout,
             "CalculationOfAmpV3");
+
+        return ApplyFourDayWindowForContracts(xml);
+    }
 
     /// <summary>
     /// Возвращает сведения о самозапрете по списку субъектов.
@@ -111,8 +116,9 @@ public class RepositoryV3(
     /// <param name="subjectIds">Идентификаторы субъектов.</param>
     /// <param name="timeLeftMs">Оставшееся время выполнения, мс.</param>
     /// <returns>XML с антифрод-записями для прямого маппинга в ответ 3.0.</returns>
-    public Task<XElement?> GetAntifraudV3(List<long> subjectIds, long? timeLeftMs = null)
-        => ExecuteXmlProcedureV3(
+    public async Task<XElement?> GetAntifraudV3(List<long> subjectIds, long? timeLeftMs = null)
+    {
+        var xml = await ExecuteXmlProcedureV3(
             _config.GetValue<string>("QbchAntifraudV3:Procedures:GetAntifraud"),
             _schemaQbchAntifraudV3,
             _antifraudConnectionPool,
@@ -120,20 +126,27 @@ public class RepositoryV3(
             timeLeftMs ?? _antifraudTimeout,
             "GetAntifraudV3");
 
+        return SelectAntifraudFields(xml);
+    }
+
     /// <summary>
     /// Возвращает признак наличия кредитной истории по списку субъектов.
     /// </summary>
     /// <param name="subjectIds">Идентификаторы субъектов.</param>
     /// <param name="timeLeftMs">Оставшееся время выполнения, мс.</param>
     /// <returns>XML с признаком наличия КИ для прямого маппинга в ответ 3.0.</returns>
-    public Task<XElement?> GetCreditHistoryPresenceFlagV3(List<long> subjectIds, long? timeLeftMs = null)
-        => ExecuteXmlProcedureV3(
+    public async Task<XElement?> GetCreditHistoryPresenceFlagV3(List<long> subjectIds, long? timeLeftMs = null)
+    {
+        var xml = await ExecuteXmlProcedureV3(
             _config.GetValue<string>("QbchCreditHistoryPresenceFlagV3:Procedures:GetCreditHistoryPresenceFlag"),
             _schemaQbchCreditHistoryPresenceFlagV3,
             _creditHistoryPresenceFlagConnectionPool,
             subjectIds,
             timeLeftMs ?? _creditHistoryPresenceFlagTimeout,
             "GetCreditHistoryPresenceFlagV3");
+
+        return NormalizeCreditHistoryPresenceFlag(xml);
+    }
 
     /// <summary>
     /// Проверяет наличие прав доступа у абонента к указанному сервису.
@@ -155,11 +168,17 @@ public class RepositoryV3(
             return false;
         }
 
+        var normalizedServiceName = NormalizeServiceNameForAccessCheck(serviceName);
+        if (string.IsNullOrWhiteSpace(normalizedServiceName))
+        {
+            return false;
+        }
+
         var sql = $"SELECT {_schemaQbchDbV3}.{procName}(@thumbprint, @serviceName)";
         var value = await ExecuteScalarAsync(sql, procName, _qbchDbConnectionPool, _qbchDbTimeout, cmd =>
         {
             cmd.Parameters.AddWithValue("thumbprint", thumbprint);
-            cmd.Parameters.AddWithValue("serviceName", serviceName);
+            cmd.Parameters.AddWithValue("serviceName", normalizedServiceName);
         }, "IsPermissionGrantedV3", ct);
 
         return value is bool boolValue && boolValue;
@@ -309,6 +328,143 @@ public class RepositoryV3(
         }
 
         return null;
+    }
+
+    private static XElement? ApplyFourDayWindowForContracts(XElement? source)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        var minDate = DateTime.Today.AddDays(-4);
+        var contracts = source.Descendants().Where(x => x.Name.LocalName == "Договор").ToList();
+
+        foreach (var contract in contracts)
+        {
+            var terminationDateNode = contract.Elements().FirstOrDefault(x => x.Name.LocalName == "ДатаПрекращения");
+            if (terminationDateNode is null || string.IsNullOrWhiteSpace(terminationDateNode.Value))
+            {
+                continue;
+            }
+
+            if (!DateTime.TryParse(terminationDateNode.Value, out var terminationDate) || terminationDate.Date >= minDate)
+            {
+                continue;
+            }
+
+            contract.Remove();
+        }
+
+        return source;
+    }
+
+    private static XElement? SelectAntifraudFields(XElement? source)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        var result = new XElement(source.Name.Namespace + "Антифрод");
+        var applications = source.Descendants().Where(x => x.Name.LocalName == "ОбращениеОбязательство");
+
+        foreach (var app in applications)
+        {
+            var row = new XElement(source.Name.Namespace + "ОбращениеОбязательство");
+            AddFieldIfExists(app, row, "КодИсточника");
+            AddFieldIfExists(app, row, "СтадияРассмотрения");
+            AddFieldIfExists(app, row, "ДатаСтадии");
+            AddFieldIfExists(app, row, "СуммаЗайма");
+            AddAllFieldsIfExists(app, row, "ПричинаОтказа");
+            AddFieldIfExists(app, row, "УИД");
+            result.Add(row);
+        }
+
+        return result;
+    }
+
+    private static void AddFieldIfExists(XElement source, XElement target, string fieldName)
+    {
+        var node = source.Elements().FirstOrDefault(x => x.Name.LocalName == fieldName);
+        if (node is not null)
+        {
+            target.Add(new XElement(target.Name.Namespace + fieldName, node.Value));
+        }
+    }
+
+    private static void AddAllFieldsIfExists(XElement source, XElement target, string fieldName)
+    {
+        var nodes = source.Elements().Where(x => x.Name.LocalName == fieldName).ToList();
+        if (nodes.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var node in nodes)
+        {
+            target.Add(new XElement(target.Name.Namespace + fieldName, node.Value));
+        }
+    }
+
+    private static XElement? NormalizeCreditHistoryPresenceFlag(XElement? source)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        var node = source.Descendants().FirstOrDefault(x => x.Name.LocalName is "ПризнакНаличияКИ" or "CreditHistoryPresenceFlag");
+        if (node is null || string.IsNullOrWhiteSpace(node.Value))
+        {
+            return null;
+        }
+
+        var value = node.Value.Trim();
+        var normalizedValue = value;
+        if (bool.TryParse(value, out var boolValue))
+        {
+            normalizedValue = boolValue ? "1" : "0";
+        }
+        else
+        {
+            normalizedValue = value.ToLowerInvariant() switch
+            {
+                "item1" => "1",
+                "item0" => "0",
+                "1" => "1",
+                "0" => "0",
+                _ => value
+            };
+        }
+
+        var ns = source.Name.Namespace;
+        return new XElement(ns + "СведенияКИ",
+            new XElement(ns + "ПризнакНаличияКИ", normalizedValue));
+    }
+
+    private static string? NormalizeServiceNameForAccessCheck(string serviceName)
+    {
+        var normalized = serviceName.Split('?', 2)[0].Trim().Trim('/').ToLowerInvariant();
+        if (normalized.StartsWith("v3.0/"))
+        {
+            normalized = normalized["v3.0/".Length..];
+        }
+        else if (normalized.StartsWith("v3/"))
+        {
+            normalized = normalized["v3/".Length..];
+        }
+
+        return normalized switch
+        {
+            "dlrequest" => "dlrequest",
+            "dlanswer" => "dlanswer",
+            "dlput" => "dlput",
+            "dlputanswer" => "dlputanswer",
+            "certadd" => "certadd",
+            "certrevoke" => "certrevoke",
+            _ => null
+        };
     }
 
     private async Task<object?> ExecuteScalarAsync(
