@@ -3,7 +3,10 @@ using Crypto_lib.Service;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Qbch_db_lib.Services.Interfaces.V3;
+using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
+using QBCH_lib.domain.aggregate;
+using QBCHService_lib.Models;
 using QBCHService_lib.Services.Interfaces.V3;
 using XmlService_lib.Services.Interfaces.V3;
 
@@ -28,4 +31,14 @@ public class QBCHServiceV3(
     private readonly IConfiguration _config = config;
     private readonly ApiV3ContractOptions _contractOptions = contractOptions;
     private readonly ApiV3ContractRules _contractRules = contractRules;
+
+    public Task<QBCHTaskResult> AmpFromDBv3(QBCHProcessingTransaction processing)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<QBCHTaskResult> AmpRequestv3(QBCHProcessingTransaction processing, HttpClient client, QBCHRequisite bureau)
+    {
+        throw new NotImplementedException();
+    }
 }
