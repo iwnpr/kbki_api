@@ -7,9 +7,9 @@ using Crypto_lib.Service;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using QBCH_api.QBCHProcessing.CreateAndValidation.Command;
-using QBCH_api.QBCHProcessing.Processing.Command;
-using QBCH_api.QBCHProcessing.StoreProcessingData.Commands;
+using QBCH_api.QBCHProcessing.V2.CreateAndValidation.Command;
+using QBCH_api.QBCHProcessing.V2.ResponseDataCollect.Command;
+using QBCH_api.QBCHProcessing.V2.StoreProcessingData.Event;
 using QBCH_api.Services.Interfaces;
 using Qbch_db_lib.Services.Interfaces;
 using QBCH_lib.CommonTypes.Api;
@@ -112,7 +112,7 @@ namespace QBCH_api.Controllers
                               singnedResponse: signedResp);
 
                 // Отправка события завершения обработки transaction в Kafka и Redis
-                await _mediator.Publish(new QBCHProcessingComplete(transaction));
+                await _mediator.Publish(new QBCHProcessing.V2.StoreProcessingData.Event.QBCHProcessingComplete(transaction));
 
                 return BadRequest(new MemoryStream(transaction.Response.SignedTicket!));
             }
