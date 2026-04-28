@@ -17,13 +17,14 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation;
 /// </summary>
 public static class QBCHValidationDispatcherV3
 {
+    private const string DlRequestV3Scope = "dlrequest:v3";
+
     public static async Task<QBCHProcessingTransaction> ValidateV3(
         this QBCHProcessingTransaction transaction,
         IValidationServiceV3 validationService,
         IXmlServiceV3 xmlService,
         IRepositoryV3 repository,
         ICacheService cacheService,
-        string apiVersion,
         CancellationToken cancellationToken)
     {
         // 1) method
@@ -53,7 +54,7 @@ public static class QBCHValidationDispatcherV3
         ValidateOneWindowV3(transaction);
 
         // 9) unique request id
-        await ValidateUniqueRequestIdV3(transaction, cacheService, apiVersion, requestV3);
+        await ValidateUniqueRequestIdV3(transaction, cacheService, requestV3);
 
         // 10) request date
         ValidateRequestDateV3(transaction, validationService, requestV3);
@@ -147,7 +148,6 @@ public static class QBCHValidationDispatcherV3
     private static async Task ValidateUniqueRequestIdV3(
         QBCHProcessingTransaction transaction,
         ICacheService cacheService,
-        string apiVersion,
         ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
@@ -156,8 +156,7 @@ public static class QBCHValidationDispatcherV3
         }
 
         var (_, requestOgrn) = GetAbonentRequisitesV3(requestV3);
-        var uniqueScope = $"{transaction.ServiceName}:v{apiVersion}";
-        var isUniqueRequest = await cacheService.IsUniqueRequestId(requestV3.ИдентификаторЗапроса, requestOgrn ?? string.Empty, uniqueScope);
+        var isUniqueRequest = await cacheService.IsUniqueRequestId(requestV3.ИдентификаторЗапроса, requestOgrn ?? string.Empty, DlRequestV3Scope);
 
         if (!isUniqueRequest)
         {

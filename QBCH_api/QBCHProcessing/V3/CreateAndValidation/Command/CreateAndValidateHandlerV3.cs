@@ -47,7 +47,6 @@ public sealed class CreateAndValidateHandlerV3(
             xmlService: _xmlService,
             repository: _repository,
             cacheService: _cacheService,
-            apiVersion: request.ApiVersion.ToString(),
             cancellationToken: cancellationToken);
     }
 }

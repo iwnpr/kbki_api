@@ -4,18 +4,16 @@ using CertManagement.Services.Interfaces;
 using Crypto_lib.Service;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using QBCH_api.QBCHProcessing.V2.StoreProcessingData.Event;
+using QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 using QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
 using QBCH_api.Services.Interfaces.V3;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
-using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.Services.Interfaces.V3;
 using System.Security.Cryptography.X509Certificates;
 using XmlService_lib.Services.Interfaces.V3;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
 using АбонентИПV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
@@ -54,6 +52,10 @@ public class QBCHIIIController(
     private readonly string? _ourBureauPSRN = config.GetValue<string>("Bureau:PSRN");
     private const string DlPutAnswerV3ReadyField = "putanswer_v3_response_xml";
     private const string DlPutAnswerV3ExistsField = "putanswer_v3_exists";
+    private const string DlRequestV3Scope = "dlrequest:v3";
+    private const string DlPutV3Scope = "dlput:v3";
+    private const string DlAnswerV3Scope = "dlanswer:v3";
+    private const string DlPutAnswerV3Scope = "dlputanswer:v3";
 
 
     [HttpPost("dlrequest")]
@@ -73,7 +75,7 @@ public class QBCHIIIController(
 
             transaction.Complete(errorResult, signedResp);
 
-            await _mediator.Publish(new QBCHProcessingComplete(transaction));
+            await _mediator.Publish(new QBCHProcessingCompleteV3(transaction));
 
             return BadRequest(new MemoryStream(transaction.Response.SignedTicket!));
         }
@@ -95,8 +97,7 @@ public class QBCHIIIController(
                 !string.IsNullOrWhiteSpace(requestOgrn) &&
                 requestDate.HasValue)
             {
-                var uniqueScope = $"{transaction.ServiceName}:v{apiVersion}";
-                await _redisCache.AddUniqueRequestId(uniqueScope, requestId, requestOgrn, requestDate.Value);
+                await _redisCache.AddUniqueRequestId(DlRequestV3Scope, requestId, requestOgrn, requestDate.Value);
             }
         }
         catch (Exception ex)
@@ -115,7 +116,7 @@ public class QBCHIIIController(
                     _config.GetValue<int>("APIConfiguration:QBCHResponseTimeoutMs"),
                     _ourBureauPSRN ?? string.Empty));
 
-            Response.OnCompleted(async () => await _mediator.Publish(new QBCHProcessingComplete(processingResult)));
+            Response.OnCompleted(async () => await _mediator.Publish(new QBCHProcessingCompleteV3(processingResult)));
 
             return processingResult.Status switch
             {
@@ -137,7 +138,7 @@ public class QBCHIIIController(
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
-        var serviceName = "dlanswer";
+        var serviceName = DlAnswerV3Scope;
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
 
@@ -199,7 +200,7 @@ public class QBCHIIIController(
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            if (!await _redisCache.KeyExists(["dlrequest", id]))
+            if (!await _redisCache.KeyExists([DlRequestV3Scope, id]))
             {
                 _logger.LogError("Указан некорректный идентификатор ответа");
 
@@ -215,7 +216,7 @@ public class QBCHIIIController(
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.TrySetKeyExpiration("dlrequest", id, _contractRules.ResponseRetentionMinutes);
+            await _redisCache.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
 
             var nowUtc = DateTimeOffset.UtcNow;
             var pollingKey = $"{id}:polling";
@@ -250,7 +251,7 @@ public class QBCHIIIController(
 
             await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-            if (_redisCache.TryGetHash("dlrequest", id, "qbch_tasks_aggregate_xml", out responseXml))
+            if (_redisCache.TryGetHash(DlRequestV3Scope, id, "qbch_tasks_aggregate_xml", out responseXml))
             {
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 return File(signedResponse, "application/octet-stream");
@@ -296,7 +297,7 @@ public class QBCHIIIController(
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
-        const string serviceName = "dlput";
+        const string serviceName = DlPutV3Scope;
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
 
@@ -414,6 +415,7 @@ public class QBCHIIIController(
             }
 
             var entitiesCount = requestV3.Сведения?.Length ?? 0;
+
             if (entitiesCount > 1000)
             {
                 _logger.LogError("Превышен лимит количества элементов Сведения: {count}", entitiesCount);
@@ -432,7 +434,8 @@ public class QBCHIIIController(
 
             var requestId = requestV3.ИдентификаторЗапроса;
             var requestOgrn = requestV3.БКИ?.ОГРН ?? string.Empty;
-            if (!_validationServiceV3.IsUniqueRequestIdV3(requestId, $"{serviceName}:v{apiVersion}", requestOgrn, out var uniqueValidationResult))
+
+            if (!_validationServiceV3.IsUniqueRequestIdV3(requestId, serviceName, requestOgrn, out var uniqueValidationResult))
             {
                 var ticket = uniqueValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(11, "Идентификатор запроса не уникален"));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
@@ -462,7 +465,7 @@ public class QBCHIIIController(
             responseXml = _xmlServiceV3.SerializeAsByteV3(dlPutResult.ReadyResult);
             signedResponse = _cryptoService.SignMsg(responseXml);
 
-            await _redisCache.AddUniqueRequestId($"{serviceName}:v{apiVersion}", requestId, requestOgrn, requestV3.ДатаЗапроса);
+            await _redisCache.AddUniqueRequestId(serviceName, requestId, requestOgrn, requestV3.ДатаЗапроса);
             await _redisCache.AddHash(serviceName, dlPutResult.ReadyResult!.ИдентификаторОтвета, DlPutAnswerV3ReadyField, responseXml);
             await _redisCache.AddHash(serviceName, dlPutResult.ReadyResult.ИдентификаторОтвета, DlPutAnswerV3ExistsField, "1");
             await _redisCache.TrySetKeyExpiration(serviceName, dlPutResult.ReadyResult.ИдентификаторОтвета, _contractRules.ResponseRetentionMinutes);
@@ -514,7 +517,7 @@ public class QBCHIIIController(
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
-        const string serviceName = "dlputanswer";
+        const string serviceName = DlPutAnswerV3Scope;
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
 
@@ -576,7 +579,7 @@ public class QBCHIIIController(
                 return errorResult.ActionResult;
             }
 
-            if (!await _redisCache.KeyExists(["dlput", id]))
+            if (!await _redisCache.KeyExists([DlPutV3Scope, id]))
             {
                 _logger.LogError("Указан некорректный идентификатор ответа");
 
@@ -592,7 +595,7 @@ public class QBCHIIIController(
                 return errorResult.ActionResult;
             }
 
-            if (!await _redisCache.HashFieldExists("dlput", id, DlPutAnswerV3ExistsField))
+            if (!await _redisCache.HashFieldExists(DlPutV3Scope, id, DlPutAnswerV3ExistsField))
             {
                 _logger.LogError("Указан некорректный идентификатор ответа");
 
@@ -608,9 +611,9 @@ public class QBCHIIIController(
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.TrySetKeyExpiration("dlput", id, _contractRules.ResponseRetentionMinutes);
+            await _redisCache.TrySetKeyExpiration(DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
 
-            if (_redisCache.TryGetHash("dlput", id, DlPutAnswerV3ReadyField, out responseXml))
+            if (_redisCache.TryGetHash(DlPutV3Scope, id, DlPutAnswerV3ReadyField, out responseXml))
             {
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 return File(signedResponse, "application/octet-stream");

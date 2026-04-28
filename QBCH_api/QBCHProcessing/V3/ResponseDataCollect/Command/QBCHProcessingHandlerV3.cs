@@ -28,6 +28,7 @@ public class QBCHProcessingHandlerV3(
     ApiV3ContractRules contractRules)
     : IRequestHandler<QBCHProcessedStartV3, QBCHProcessingTransaction>
 {
+    private const string DlRequestV3Scope = "dlrequest:v3";
     private readonly ILogger<QBCHProcessingHandlerV3> _logger = logger;
     private readonly IQBCHServiceV3 _qbchService = qbchService;
     private readonly ICacheService _redisCache = redisCache;
@@ -125,8 +126,8 @@ public class QBCHProcessingHandlerV3(
             }
 
             var responseXml = _xmlService.SerializeAsByteV3(response);
-            await _redisCache.AddHash(transaction.ServiceName, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
-            await _redisCache.AddHash(transaction.ServiceName, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
+            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
             processingTimer.Stop();
 
@@ -157,9 +158,9 @@ public class QBCHProcessingHandlerV3(
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "QBCH API 3.0 exception");
-            await _redisCache.AddHash(transaction.ServiceName, transaction.Id.ToString(), "cancellation_flag", "true");
-            await _redisCache.AddHash(transaction.ServiceName, transaction.Id.ToString(), "error_code", "99");
-            await _redisCache.AddHash(transaction.ServiceName, transaction.Id.ToString(), "error_message", ex.Message);
+            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
+            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", "99");
+            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", ex.Message);
 
             var failedTicket = _ticketService.CreateResultV3Error(new QBCH_lib.core.Error(99, ex.Message));
             var failedTicketBytes = _xmlService.SerializeAsByteV3(failedTicket);
