@@ -138,12 +138,8 @@ public class QBCHProcessingHandlerV3(
             processingTimer.Stop();
 
             // Для API 3.0: если время сборки превышает 4 секунды, возвращаем qcb_result с ИдентификаторОтвета.
-            var hardDeadlineMs = 4000;
-            var configuredDeadlineMs = request.ImmediateResponseDeadlineMs > 0
-                ? request.ImmediateResponseDeadlineMs
-                : _contractRules.ImmediateResponseDeadlineMs;
+            const int immediateDeadlineMs = 4000;
 
-            var immediateDeadlineMs = Math.Min(hardDeadlineMs, configuredDeadlineMs);
             if (processingTimer.ElapsedMilliseconds > immediateDeadlineMs)
             {
                 var acceptedCreatedAtUtc = DateTimeOffset.UtcNow;
