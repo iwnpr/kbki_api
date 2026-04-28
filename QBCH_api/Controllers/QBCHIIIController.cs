@@ -12,6 +12,7 @@ using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.Services.Interfaces.V3;
+using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using XmlService_lib.Services.Interfaces.V3;
 using System.Text;
@@ -56,6 +57,11 @@ public class QBCHIIIController(
     private const string DlPutV3Scope = "dlput:v3";
     private const string DlAnswerV3Scope = "dlanswer:v3";
     private const string DlPutAnswerV3Scope = "dlputanswer:v3";
+    private const string ReadyAtUtcField = "ready_at_utc";
+    private const string ReadyAtMskField = "ready_at_msk";
+    private const string FirstPollAllowedAtUtcField = "first_poll_allowed_at_utc";
+    private const string ResponseExpireAtUtcField = "response_expire_at_utc";
+    private const string LastPollUtcField = "last_poll_utc";
 
 
     [HttpPost("dlrequest")]
@@ -219,19 +225,16 @@ public class QBCHIIIController(
             await _redisCache.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
 
             var nowUtc = DateTimeOffset.UtcNow;
-            var pollingKey = $"{id}:polling";
+            var firstPollAllowedAtUtc = await GetFirstPollAllowedAtUtcAsync(DlRequestV3Scope, id);
 
-            if (_redisCache.TryGetHashValue(serviceName, pollingKey, "last_poll_utc", out var lastPollRaw) &&
-                DateTimeOffset.TryParse(lastPollRaw?.ToString(), out var lastPollUtc) &&
-                !_contractRules.IsAnswerRetryAllowed(lastPollUtc, nowUtc))
+            if (firstPollAllowedAtUtc.HasValue && nowUtc < firstPollAllowedAtUtc.Value)
             {
                 var minIntervalSec = _contractRules.MinAnswerPollingIntervalSeconds;
-                _logger.LogWarning("Нарушение polling-ограничения /dlanswer v3 id={id}. Интервал меньше {interval} сек.", id, minIntervalSec);
+                _logger.LogWarning("Нарушение polling-ограничения /dlanswer v3 id={id}. Первый опрос разрешён с {firstPollAllowedAtUtc}, текущее UTC={nowUtc}.", id, firstPollAllowedAtUtc.Value, nowUtc);
 
-                await _redisCache.AddHash(serviceName, pollingKey, "polling_violation_utc", nowUtc.ToString("O"));
-                await _redisCache.AddHash(serviceName, pollingKey, "polling_violation_ip", ipAddress ?? "-");
+                await _redisCache.AddHash(DlRequestV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
+                await _redisCache.AddHash(DlRequestV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
                 await _redisCache.ListSet([serviceName, "polling_violations", id], $"{nowUtc:O}|{ipAddress ?? "-"}|min_interval={minIntervalSec}s");
-                await _redisCache.TrySetKeyExpiration(serviceName, pollingKey, _contractRules.ResponseRetentionMinutes);
                 await _redisCache.TrySetKeyExpiration(serviceName, $"polling_violations:{id}", _contractRules.ResponseRetentionMinutes);
 
                 var errorResult = await BuildV3ErrorResponseAsync(
@@ -246,8 +249,18 @@ public class QBCHIIIController(
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.AddHash(serviceName, pollingKey, "last_poll_utc", nowUtc.ToString("O"));
-            await _redisCache.TrySetKeyExpiration(serviceName, pollingKey, _contractRules.ResponseRetentionMinutes);
+            if (_redisCache.TryGetHashValue(DlRequestV3Scope, id, LastPollUtcField, out var lastPollRaw) &&
+                DateTimeOffset.TryParse(lastPollRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var lastPollUtc) &&
+                !_contractRules.IsAnswerRetryAllowed(lastPollUtc, nowUtc))
+            {
+                var minIntervalSec = _contractRules.MinAnswerPollingIntervalSeconds;
+                _logger.LogWarning("Нарушение polling-ограничения /dlanswer v3 id={id}. Последний опрос={lastPollUtc}, текущий UTC={nowUtc}, min={interval} сек.", id, lastPollUtc, nowUtc, minIntervalSec);
+                await _redisCache.AddHash(DlRequestV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
+                await _redisCache.AddHash(DlRequestV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
+            }
+
+            await _redisCache.AddHash(DlRequestV3Scope, id, LastPollUtcField, nowUtc.ToString("O"));
+            await _redisCache.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
 
             await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
@@ -448,15 +461,37 @@ public class QBCHIIIController(
             var dlPutResult = _dlPutServiceV3.Process(requestV3);
             if (dlPutResult.IsAccepted)
             {
-                responseXml = _xmlServiceV3.SerializeAsByteV3(dlPutResult.AcceptedTicket);
-                signedResponse = _cryptoService.SignMsg(responseXml);
-
                 if (dlPutResult.AcceptedTicket?.Item is QBCH.Lib.qcb_xml.v3_0.РезультатИдентификаторОтвета acceptedResponseId &&
                     !string.IsNullOrWhiteSpace(acceptedResponseId.ИдентификаторОтвета))
                 {
+                    var acceptedCreatedAtUtc = DateTimeOffset.UtcNow;
+                    var readyTimeMs = acceptedResponseId.ВремяГотовностиSpecified
+                        ? acceptedResponseId.ВремяГотовности
+                        : _contractRules.MinAnswerPollingIntervalSeconds * 1000L;
+
+                    var readyAtUtc = acceptedCreatedAtUtc.AddMilliseconds(Math.Max(1, readyTimeMs));
+                    var firstPollAllowedAtUtc = acceptedCreatedAtUtc.AddSeconds(_contractRules.MinAnswerPollingIntervalSeconds);
+                    var responseExpireAtUtc = acceptedCreatedAtUtc.AddHours(_contractRules.ResponseRetentionHours);
+
+                    acceptedResponseId.ВремяГотовности = Math.Max(1, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
+                    acceptedResponseId.ВремяГотовностиSpecified = true;
+
+                    responseXml = _xmlServiceV3.SerializeAsByteV3(dlPutResult.AcceptedTicket);
+                    signedResponse = _cryptoService.SignMsg(responseXml);
+
                     await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, DlPutAnswerV3ExistsField, "1");
+                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ReadyAtUtcField, readyAtUtc.ToString("O"));
+                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ReadyAtMskField, readyAtUtc.ToOffset(TimeSpan.FromHours(3)).ToString("O"));
+                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
+                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
+                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, "response_guid", acceptedResponseId.ИдентификаторОтвета);
                     await _redisCache.TrySetKeyExpiration(serviceName, acceptedResponseId.ИдентификаторОтвета, _contractRules.ResponseRetentionMinutes);
                     await _redisCache.AddHash(serviceName, guid, "response_guid", acceptedResponseId.ИдентификаторОтвета);
+                }
+                else
+                {
+                    responseXml = _xmlServiceV3.SerializeAsByteV3(dlPutResult.AcceptedTicket);
+                    signedResponse = _cryptoService.SignMsg(responseXml);
                 }
 
                 return Accepted(new MemoryStream(signedResponse));
@@ -611,6 +646,28 @@ public class QBCHIIIController(
                 return errorResult.ActionResult;
             }
 
+            await _redisCache.TrySetKeyExpiration(DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
+            var nowUtc = DateTimeOffset.UtcNow;
+            var firstPollAllowedAtUtc = await GetFirstPollAllowedAtUtcAsync(DlPutV3Scope, id);
+
+            if (firstPollAllowedAtUtc.HasValue && nowUtc < firstPollAllowedAtUtc.Value)
+            {
+                var minIntervalSec = _contractRules.MinAnswerPollingIntervalSeconds;
+                _logger.LogWarning("Нарушение polling-ограничения /dlputanswer v3 id={id}. Первый опрос разрешён с {firstPollAllowedAtUtc}, текущее UTC={nowUtc}.", id, firstPollAllowedAtUtc.Value, nowUtc);
+                await _redisCache.AddHash(DlPutV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
+                await _redisCache.AddHash(DlPutV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
+            }
+
+            if (_redisCache.TryGetHashValue(DlPutV3Scope, id, LastPollUtcField, out var lastPollRaw) &&
+                DateTimeOffset.TryParse(lastPollRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var lastPollUtc) &&
+                !_contractRules.IsAnswerRetryAllowed(lastPollUtc, nowUtc))
+            {
+                _logger.LogWarning("Нарушение polling-ограничения /dlputanswer v3 id={id}. Последний опрос={lastPollUtc}, текущий UTC={nowUtc}, min={interval} сек.", id, lastPollUtc, nowUtc, _contractRules.MinAnswerPollingIntervalSeconds);
+                await _redisCache.AddHash(DlPutV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
+                await _redisCache.AddHash(DlPutV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
+            }
+
+            await _redisCache.AddHash(DlPutV3Scope, id, LastPollUtcField, nowUtc.ToString("O"));
             await _redisCache.TrySetKeyExpiration(DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
 
             if (_redisCache.TryGetHash(DlPutV3Scope, id, DlPutAnswerV3ReadyField, out responseXml))
@@ -1088,5 +1145,22 @@ public class QBCHIIIController(
             SignedResponse = signedResponse,
             ActionResult = File(signedResponse, "application/octet-stream")
         };
+    }
+    private async Task<DateTimeOffset?> GetFirstPollAllowedAtUtcAsync(string scope, string responseId)
+    {
+        if (_redisCache.TryGetHashValue(scope, responseId, FirstPollAllowedAtUtcField, out var firstPollRaw) &&
+            DateTimeOffset.TryParse(firstPollRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var firstPollAllowedAtUtc))
+        {
+            return firstPollAllowedAtUtc;
+        }
+
+        if (_redisCache.TryGetHashValue(scope, responseId, ReadyAtUtcField, out var readyAtRaw) &&
+            DateTimeOffset.TryParse(readyAtRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var readyAtUtc))
+        {
+            await _redisCache.AddHash(scope, responseId, FirstPollAllowedAtUtcField, readyAtUtc.ToString("O"));
+            return readyAtUtc;
+        }
+
+        return null;
     }
 }

@@ -29,6 +29,12 @@ public class QBCHProcessingHandlerV3(
     : IRequestHandler<QBCHProcessedStartV3, QBCHProcessingTransaction>
 {
     private const string DlRequestV3Scope = "dlrequest:v3";
+    private const string ReadyAtUtcField = "ready_at_utc";
+    private const string ReadyAtMskField = "ready_at_msk";
+    private const string FirstPollAllowedAtUtcField = "first_poll_allowed_at_utc";
+    private const string ResponseExpireAtUtcField = "response_expire_at_utc";
+    private const string LastPollUtcField = "last_poll_utc";
+    private const string ResponseGuidField = "response_guid";
     private readonly ILogger<QBCHProcessingHandlerV3> _logger = logger;
     private readonly IQBCHServiceV3 _qbchService = qbchService;
     private readonly ICacheService _redisCache = redisCache;
@@ -140,11 +146,23 @@ public class QBCHProcessingHandlerV3(
             var immediateDeadlineMs = Math.Min(hardDeadlineMs, configuredDeadlineMs);
             if (processingTimer.ElapsedMilliseconds > immediateDeadlineMs)
             {
+                var acceptedCreatedAtUtc = DateTimeOffset.UtcNow;
+                var firstPollAllowedAtUtc = acceptedCreatedAtUtc.AddSeconds(_contractRules.MinAnswerPollingIntervalSeconds);
+                var responseExpireAtUtc = acceptedCreatedAtUtc.AddHours(_contractRules.ResponseRetentionHours);
+                var readyAtUtc = firstPollAllowedAtUtc;
+                var readyTimeMs = Math.Max(1L, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
+
                 var acceptedTicket = _ticketService.CreateResultV3Accepted(
                     requestId: input.ИдентификаторЗапроса,
                     responseId: transaction.Id.ToString(),
                     requestDate: input.ДатаЗапроса,
-                    readyTime: Math.Max(1, processingTimer.ElapsedMilliseconds));
+                    readyTime: readyTimeMs);
+
+                await SaveAcceptedPollingMetadataAsync(
+                    responseId: transaction.Id.ToString(),
+                    readyAtUtc: readyAtUtc,
+                    firstPollAllowedAtUtc: firstPollAllowedAtUtc,
+                    responseExpireAtUtc: responseExpireAtUtc);
 
                 var ticketBytes = _xmlService.SerializeAsByteV3(acceptedTicket);
                 transaction.Accepted();
@@ -167,5 +185,20 @@ public class QBCHProcessingHandlerV3(
             transaction.Complete(failedTicketBytes, _cryptoService.SignMsg(failedTicketBytes));
             return transaction;
         }
+    }
+
+    private async Task SaveAcceptedPollingMetadataAsync(
+        string responseId,
+        DateTimeOffset readyAtUtc,
+        DateTimeOffset firstPollAllowedAtUtc,
+        DateTimeOffset responseExpireAtUtc)
+    {
+        await _redisCache.AddHash(DlRequestV3Scope, responseId, ReadyAtUtcField, readyAtUtc.ToString("O"));
+        await _redisCache.AddHash(DlRequestV3Scope, responseId, ReadyAtMskField, readyAtUtc.ToOffset(TimeSpan.FromHours(3)).ToString("O"));
+        await _redisCache.AddHash(DlRequestV3Scope, responseId, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
+        await _redisCache.AddHash(DlRequestV3Scope, responseId, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
+        await _redisCache.AddHash(DlRequestV3Scope, responseId, ResponseGuidField, responseId);
+        await _redisCache.AddHash(DlRequestV3Scope, responseId, LastPollUtcField, string.Empty);
+        await _redisCache.TrySetKeyExpiration(DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
     }
 }

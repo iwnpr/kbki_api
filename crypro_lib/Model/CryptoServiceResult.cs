@@ -25,7 +25,7 @@ namespace Crypto_lib.Model
 
 
         /// <summary>
-        /// Отпечаток сертификата pfghjcf
+        /// Отпечаток сертификата запроса
         /// </summary>
         public string? RequestThumbprint { get; set; } //cr
 
