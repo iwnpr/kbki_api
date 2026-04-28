@@ -4,18 +4,18 @@ using CertManagement.Services.Interfaces;
 using Crypto_lib.Service;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
+using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 using QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
+using QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 using QBCH_api.Services.Interfaces.V3;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
-using QBCH_lib.domain.aggregate;
 using QBCH_lib.Services.Interfaces.V3;
 using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
-using XmlService_lib.Services.Interfaces.V3;
 using System.Text;
+using XmlService_lib.Services.Interfaces.V3;
 using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
 using АбонентИПV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
 using АбонентИЮЛV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентЮридическоеЛицо;
@@ -124,12 +124,15 @@ public class QBCHIIIController(
 
             Response.OnCompleted(async () => await _mediator.Publish(new QBCHProcessingCompleteV3(processingResult)));
 
-            return processingResult.Status switch
+            if (processingResult.Response.SignedTicket is not null && processingResult.Response.TicketXML is not null)
             {
-                QBCHProcessingStatus.Accepted =>
-                    Accepted(new MemoryStream(processingResult.Response.SignedTicket!)),
-                _ => File(processingResult.Response.SignedResponse!, "application/octet-stream")
-            };
+                var statusCode = DetermineTicketStatusCode(processingResult.Response.TicketXML);
+                Response.StatusCode = statusCode;
+                return File(processingResult.Response.SignedTicket, "application/octet-stream");
+            }
+
+            Response.StatusCode = StatusCodes.Status200OK;
+            return File(processingResult.Response.SignedResponse!, "application/octet-stream");
         }
         catch (Exception ex)
         {
@@ -170,7 +173,7 @@ public class QBCHIIIController(
                     guid,
                     3,
                     "Запрос не содержит обязательных параметров: id",
-                    StatusCodes.Status400BadRequest);
+                     ResolveDlAnswerStatusCodeByErrorCode(3));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -188,7 +191,7 @@ public class QBCHIIIController(
                     guid,
                     22,
                     "Запрос не доступен для абонента",
-                    StatusCodes.Status400BadRequest);
+                    ResolveDlAnswerStatusCodeByErrorCode(22));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -215,7 +218,7 @@ public class QBCHIIIController(
                     guid,
                     16,
                     "Указан некорректный идентификатор ответа",
-                    StatusCodes.Status400BadRequest);
+                    ResolveDlAnswerStatusCodeByErrorCode(16));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -242,7 +245,7 @@ public class QBCHIIIController(
                     guid,
                     12,
                     "Ответ не готов",
-                    StatusCodes.Status202Accepted);
+                    ResolveDlAnswerStatusCodeByErrorCode(12));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -275,7 +278,7 @@ public class QBCHIIIController(
                 guid,
                 12,
                 "Ответ не готов",
-                StatusCodes.Status202Accepted);
+                ResolveDlAnswerStatusCodeByErrorCode(12));
 
             responseXml = notReadyResult.ResponseXml;
             signedResponse = notReadyResult.SignedResponse;
@@ -578,7 +581,7 @@ public class QBCHIIIController(
                     guid,
                     3,
                     "Запрос не содержит обязательных параметров: id",
-                    StatusCodes.Status400BadRequest);
+                    ResolveDlPutAnswerStatusCodeByErrorCode(3));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -607,7 +610,7 @@ public class QBCHIIIController(
                     guid,
                     22,
                     "Запрос не доступен для абонента",
-                    StatusCodes.Status400BadRequest);
+                    ResolveDlPutAnswerStatusCodeByErrorCode(22));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -623,7 +626,7 @@ public class QBCHIIIController(
                     guid,
                     16,
                     "Указан некорректный идентификатор ответа",
-                    StatusCodes.Status400BadRequest);
+                    ResolveDlPutAnswerStatusCodeByErrorCode(16));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -639,7 +642,7 @@ public class QBCHIIIController(
                     guid,
                     16,
                     "Указан некорректный идентификатор ответа",
-                    StatusCodes.Status400BadRequest);
+                    ResolveDlPutAnswerStatusCodeByErrorCode(16));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -681,7 +684,7 @@ public class QBCHIIIController(
                 guid,
                 12,
                 "Ответ не готов",
-                StatusCodes.Status202Accepted);
+                ResolveDlPutAnswerStatusCodeByErrorCode(12));
 
             responseXml = notReadyResult.ResponseXml;
             signedResponse = notReadyResult.SignedResponse;
@@ -1146,6 +1149,24 @@ public class QBCHIIIController(
             ActionResult = File(signedResponse, "application/octet-stream")
         };
     }
+
+    private int DetermineTicketStatusCode(byte[] ticketXml)
+    {
+        var ticket = _xmlServiceV3.DeserializeV3<Результат>(ticketXml);
+        return ticket?.Item switch
+        {
+            ТипОшибка => StatusCodes.Status400BadRequest,
+            РезультатИдентификаторОтвета => StatusCodes.Status202Accepted,
+            _ => StatusCodes.Status200OK
+        };
+    }
+
+    private static int ResolveDlAnswerStatusCodeByErrorCode(int errorCode) =>
+        errorCode == 12 ? StatusCodes.Status202Accepted : StatusCodes.Status400BadRequest;
+
+    private static int ResolveDlPutAnswerStatusCodeByErrorCode(int errorCode) =>
+        errorCode == 12 ? StatusCodes.Status202Accepted : StatusCodes.Status400BadRequest;
+
     private async Task<DateTimeOffset?> GetFirstPollAllowedAtUtcAsync(string scope, string responseId)
     {
         if (_redisCache.TryGetHashValue(scope, responseId, FirstPollAllowedAtUtcField, out var firstPollRaw) &&
