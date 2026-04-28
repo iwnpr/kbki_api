@@ -257,6 +257,54 @@ public class RepositoryV3(
         return value is bool boolValue && boolValue;
     }
 
+    public async Task<bool> IsCertActive(string thumbprint)
+    {
+        if (string.IsNullOrWhiteSpace(thumbprint) || string.IsNullOrWhiteSpace(_schemaQbchDbV3))
+        {
+            return false;
+        }
+
+        var sql = $"SELECT EXISTS(SELECT 1 FROM {_schemaQbchDbV3}.tr_abonent_certificates WHERE UPPER(thumbprint)=UPPER(@thumbprint) AND is_active=true)";
+        var value = await ExecuteFirstColumnAsync(sql, _qbchDbConnectionPool, _qbchDbTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("thumbprint", thumbprint);
+        }, "IsCertActiveV3");
+
+        return value is bool boolValue && boolValue;
+    }
+
+    public async Task<int> GetActiveCertificatesCountByThumbprint(string thumbprint)
+    {
+        if (string.IsNullOrWhiteSpace(thumbprint) || string.IsNullOrWhiteSpace(_schemaQbchDbV3))
+        {
+            return 0;
+        }
+
+        var sql = $"""
+                   SELECT COUNT(*)
+                   FROM {_schemaQbchDbV3}.tr_abonent_certificates ac
+                   WHERE ac.is_active = true
+                     AND ac.abonent_key_id = (
+                        SELECT abonent_key_id
+                        FROM {_schemaQbchDbV3}.tr_abonent_certificates
+                        WHERE UPPER(thumbprint) = UPPER(@thumbprint)
+                        LIMIT 1
+                     )
+                   """;
+
+        var value = await ExecuteFirstColumnAsync(sql, _qbchDbConnectionPool, _qbchDbTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("thumbprint", thumbprint);
+        }, "GetActiveCertificatesCountByThumbprintV3");
+
+        return value switch
+        {
+            int intValue => intValue,
+            long longValue => (int)longValue,
+            _ => 0
+        };
+    }
+
     /// <summary>
     /// Добавляет сертификат абонента в базу.
     /// </summary>

@@ -19,4 +19,10 @@ public interface IValidationServiceV3
     bool IsUniqueRequestIdV3(string requestId, string methodName, string ogrn, [NotNullWhen(false)] out BaseResultV3? result);
 
     Task<bool> IsCertExistsV3(byte[] cert);
+
+    Task<bool> IsCertActiveV3(string thumbprint);
+
+    Task<int> GetActiveCertificatesCountV3(byte[] cert);
+
+    Task<bool> SetCertificateInactiveV3(byte[] cert);
 }

@@ -12,8 +12,9 @@ public interface IRepositoryV3
     Task<XElement?> GetCreditHistoryPresenceFlagV3(List<long> subjectIds, long? timeLeftMs = null);
     Task<bool> IsPermissionGrantedV3(string? thumbprint, string? serviceName, CancellationToken? ct = null);
     Task<XElement?> GetInnOgrnByThumbprintV3(string? thumbprint);
-
     Task<bool> IsCertExist(byte[] cert);
+    Task<bool> IsCertActive(string thumbprint);
+    Task<int> GetActiveCertificatesCountByThumbprint(string thumbprint);
     Task<bool> AddCertificate(int abonentId, string thumbprint, DateTime expirationDate);
     Task<bool> SetCertificateInactive(string thumbprint);
     Task<int?> GetAbonentKeyIdByPSRN(string? psrn);

@@ -106,6 +106,29 @@ public class ValidationServiceV3(
 
     public async Task<bool> IsCertExistsV3(byte[] cert) => await _repository.IsCertExist(cert);
 
+    public async Task<bool> IsCertActiveV3(string thumbprint) => await _repository.IsCertActive(thumbprint);
+
+    public async Task<int> GetActiveCertificatesCountV3(byte[] cert)
+    {
+        if (cert.Length == 0)
+        {
+            return 0;
+        }
+
+        var certificate = new X509Certificate2(cert);
+        return await _repository.GetActiveCertificatesCountByThumbprint(certificate.Thumbprint ?? string.Empty);
+    }
+
+    public async Task<bool> SetCertificateInactiveV3(byte[] cert)
+    {
+        if (cert.Length == 0)
+        {
+            return false;
+        }
+
+        var certificate = new X509Certificate2(cert);
+        return await _repository.SetCertificateInactive(certificate.Thumbprint ?? string.Empty);
+    }
     private BaseResultV3 CreateErrorResult(Error error)
     {
         return new BaseResultV3
