@@ -29,7 +29,7 @@ namespace QBCH.Lib.qcb_xml.v3_0
 
         public void УстановитьОшибку(int код, string описание)
         {
-            SetSingle(new ТипОшибка { Код = код.ToString(), Value = описание ?? string.Empty }, ItemsChoiceType.Ошибка);
+            SetSingle(ТипОшибка.Создать(код, описание), ItemsChoiceType.Ошибка);
         }
 
         public void ПометитьКакСубъектНеНайден()

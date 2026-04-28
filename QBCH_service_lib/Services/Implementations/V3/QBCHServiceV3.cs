@@ -424,20 +424,21 @@ public class QBCHServiceV3(
 
     private static ОтветНаЗапросСведений CreateErrorAnswerV3(string psrn, string code, string message, string[] orderNumbers, string requestId, ЗапросСведений request)
     {
-        var rows = orderNumbers.Select(order => new ОтветНаЗапросСведенийСведения
+        var rows = orderNumbers.Select(order =>
         {
-            ПорядковыйНомер = order,
-            КБКИ =
-            [
-                new ОтветНаЗапросСведенийСведенияКБКИ
-                {
-                    ОГРН = psrn,
-                    ПоСостояниюНа = DateTime.Now,
-                    ИдентификаторОтвета = requestId,
-                    Items = [new ТипОшибка { Код = code, Value = message }],
-                    ItemsElementName = [ItemsChoiceType.Ошибка]
-                }
-            ]
+            var kbki = new ОтветНаЗапросСведенийСведенияКБКИ
+            {
+                ОГРН = psrn,
+                ПоСостояниюНа = DateTime.Now,
+                ИдентификаторОтвета = requestId,
+            };
+            kbki.УстановитьОшибку(int.TryParse(code, out var codeValue) ? codeValue : 99, message);
+
+            return new ОтветНаЗапросСведенийСведения
+            {
+                ПорядковыйНомер = order,
+                КБКИ = [kbki]
+            };
         }).ToArray();
 
         return new ОтветНаЗапросСведений

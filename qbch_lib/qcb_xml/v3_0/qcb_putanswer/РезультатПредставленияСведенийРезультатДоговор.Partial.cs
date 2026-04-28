@@ -13,11 +13,7 @@ namespace QBCH.Lib.qcb_xml.v3_0
 
         public void УстановитьОшибку(int код, string описание)
         {
-            Item = new ТипОшибка
-            {
-                Код = код.ToString(),
-                Value = описание ?? string.Empty,
-            };
+            Item = ТипОшибка.Создать(код, описание);
         }
 
         public ТипОшибка ПолучитьОшибку() => Item as ТипОшибка;
