@@ -21,6 +21,7 @@ public class ValidationServiceV3(
     ITicketServiceV3 ticketService,
     ILogger<ValidationServiceV3> logger) : IValidationServiceV3
 {
+    private static readonly TimeZoneInfo MoscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
     private readonly IXmlServiceV3 _xmlService = xmlService;
     private readonly ICryptoService _cryptoService = cryptoService;
     private readonly ICacheService _cache = cache;
@@ -62,9 +63,11 @@ public class ValidationServiceV3(
 
     public bool ValidateRequestDateV3(DateTime? requestDate, [NotNullWhen(false)] out BaseResultV3? result)
     {
-        if (requestDate != DateTime.Today)
+        var currentMoscowDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, MoscowTimeZone).Date;
+        if (requestDate?.Date != currentMoscowDate)
         {
-            _logger.LogError("Дата запроса указана некорректно");
+            _logger.LogError("Дата запроса указана некорректно. Передано: {requestDate}, текущая московская дата: {currentMoscowDate}",
+                requestDate?.ToString("dd.MM.yyyy"), currentMoscowDate.ToString("dd.MM.yyyy"));
             result = CreateErrorResult(Error.Code23_InvalidRerquestDate());
             return false;
         }

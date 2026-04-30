@@ -448,6 +448,16 @@ public class QBCHIIIController(
                 return errorResult.ActionResult;
             }
 
+            if (!_validationServiceV3.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult))
+            {
+                var ticket = dateValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(23, "Дата запроса указана некорректно"));
+                responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
+                signedResponse = _cryptoService.SignMsg(responseXml);
+                await _redisCache.AddHash(serviceName, guid, "error_code", dateValidationResult?.ErrorCode.ToString() ?? "23");
+                await _redisCache.AddHash(serviceName, guid, "error_message", dateValidationResult?.Error ?? "Дата запроса указана некорректно");
+                return BadRequest(new MemoryStream(signedResponse));
+            }
+
             var requestId = requestV3.ИдентификаторЗапроса;
             var requestOgrn = requestV3.БКИ?.ОГРН ?? string.Empty;
 
