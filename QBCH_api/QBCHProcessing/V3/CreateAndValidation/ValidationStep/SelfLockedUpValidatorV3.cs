@@ -43,14 +43,19 @@ public static class SelfLockedUpValidatorV3
     private static void ValidateInnMatrix(QBCHProcessingTransaction transaction, СправочникВидыСведенийV3 infoCode, СправочникРежимыЗапросаV3 mode, ЗапросСведенийЗапросV3 requestItem, int orderNumber)
     {
         // Матрица ИНН/ПризнакПроверки:
-        // Код 6: блокируется "запрет".
-        // Код 7: блокируются "запрет" и "антифрод".
-        // Код 8: блокируются "запрет" и "антифрод без платежной части".
-        // Техническое условие для блокировки: ИНН отсутствует или ПризнакПроверки != 1.
+        // Код 6: для "запрета" нужны ИНН и ПризнакПроверки=1.
+        // Код 7: при отсутствии ИНН или ПризнакПроверки=0 не предоставляются "запрет" и "антифрод".
+        // Код 8: те же правила, что и для кода 7.
         var subjectInn = requestItem.Субъект?.ИНН;
-        var isInnBlocked = subjectInn is null ||
-                           string.IsNullOrWhiteSpace(subjectInn.Value) ||
-                           subjectInn.ПризнакПроверки != ТипИННФЛсПризнакомПризнакПроверкиV3.Item1;
+        var hasInn = subjectInn is not null && !string.IsNullOrWhiteSpace(subjectInn.Value);
+
+        var isInnBlocked = infoCode switch
+        {
+            СправочникВидыСведенийV3.Item6 => !hasInn || subjectInn!.ПризнакПроверки != ТипИННФЛсПризнакомПризнакПроверкиV3.Item1,
+            СправочникВидыСведенийV3.Item7 or СправочникВидыСведенийV3.Item8
+                => !hasInn || subjectInn!.ПризнакПроверки == ТипИННФЛсПризнакомПризнакПроверкиV3.Item0,
+            _ => false
+        };
 
         if (!isInnBlocked)
         {
