@@ -385,7 +385,7 @@ public class RepositoryV3(
             return null;
         }
 
-        var minDate = DateTime.Today.AddDays(-4);
+        var minDate = DateTime.UtcNow.Date.AddDays(-4);
         var contracts = source.Descendants().Where(x => x.Name.LocalName == "Договор").ToList();
 
         foreach (var contract in contracts)
@@ -396,7 +396,8 @@ public class RepositoryV3(
                 continue;
             }
 
-            if (!DateTime.TryParse(terminationDateNode.Value, out var terminationDate) || terminationDate.Date >= minDate)
+            var rawTerminationDate = terminationDateNode.Value.Trim();
+            if (!DateTime.TryParse(rawTerminationDate, out var terminationDate) || terminationDate.Date >= minDate)
             {
                 continue;
             }

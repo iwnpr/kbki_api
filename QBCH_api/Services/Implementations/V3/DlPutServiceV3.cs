@@ -80,10 +80,21 @@ public class DlPutServiceV3(ApiV3ContractRules contractRules, ITicketServiceV3 t
             case ТипДоговорV3 add:
                 deal.Операция = СправочникОперацииV3.Добавить;
                 deal.УИД = add.УИД;
+
+                if (string.IsNullOrWhiteSpace(add.УИД))
+                {
+                    deal.УстановитьОшибку(20, "Договор с указанным УИД не найден.");
+                    break;
+                }
                 if (add.СреднемесячныйПлатеж is not null)
                 {
                     deal.ДатаРасчета = add.СреднемесячныйПлатеж.ДатаРасчета.Date;
                     deal.ДатаРасчетаSpecified = true;
+                }
+                else
+                {
+                    deal.УстановитьОшибку(21, "Сведения о величине среднемесячного платежа по договору и дате его расчета не найдены.");
+                    break;
                 }
                 deal.УстановитьУспех();
                 break;
@@ -132,6 +143,11 @@ public class DlPutServiceV3(ApiV3ContractRules contractRules, ITicketServiceV3 t
             case ТипОбращениеV3 add:
                 appeal.Операция = СправочникОперацииV3.Добавить;
                 appeal.УИД = add.УИД;
+                if (string.IsNullOrWhiteSpace(add.УИД))
+                {
+                    appeal.УстановитьОшибку(30, "Обращение/обязательство с указанным УИД не найдено.");
+                    break;
+                }
                 appeal.СтадияРассмотрения = add.СтадияРассмотрения;
                 appeal.СтадияРассмотренияSpecified = true;
                 appeal.УстановитьУспех();
