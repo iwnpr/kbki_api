@@ -26,8 +26,7 @@ namespace QBCH_api.Controllers;
 [ApiVersion("3.0")]
 [Route("v{version:apiVersion}")]
 [ApiController]
-public class QBCHIIIController(
-        IMediator mediator,
+public class QBCHIIIController(IMediator mediator,
         ICryptoService cryptoService,
         ILogger<QBCHIIIController> logger,
         IXmlServiceV3 xmlServiceV3,
@@ -50,7 +49,9 @@ public class QBCHIIIController(
     private readonly ICertManagementService _certManagement = certManagement;
     private readonly ApiV3ContractRules _contractRules = contractRules;
     private readonly IConfiguration _config = config;
+
     private readonly string? _ourBureauPSRN = config.GetValue<string>("Bureau:PSRN");
+
     private const string DlPutAnswerV3ReadyField = "putanswer_v3_response_xml";
     private const string DlPutAnswerV3ExistsField = "putanswer_v3_exists";
     private const string DlRequestV3Scope = "dlrequest:v3";
@@ -432,16 +433,11 @@ public class QBCHIIIController(
 
             var entitiesCount = requestV3.Сведения?.Length ?? 0;
 
-            if (entitiesCount > 1000)
+            if (entitiesCount > _contractRules.MaxDlPutEntities)
             {
                 _logger.LogError("Превышен лимит количества элементов Сведения: {count}", entitiesCount);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    3,
-                    "Количество элементов Сведения превышает допустимый лимит 1000",
-                    StatusCodes.Status400BadRequest);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 3, $"Количество элементов Сведения превышает допустимый лимит {_contractRules.MaxDlPutEntities}", StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -474,6 +470,8 @@ public class QBCHIIIController(
             var dlPutResult = _dlPutServiceV3.Process(requestV3);
             if (dlPutResult.IsAccepted)
             {
+                await _redisCache.AddUniqueRequestId(serviceName, requestId, requestOgrn, requestV3.ДатаЗапроса);
+
                 if (dlPutResult.AcceptedTicket?.Item is QBCH.Lib.qcb_xml.v3_0.РезультатИдентификаторОтвета acceptedResponseId &&
                     !string.IsNullOrWhiteSpace(acceptedResponseId.ИдентификаторОтвета))
                 {
@@ -525,12 +523,7 @@ public class QBCHIIIController(
         {
             _logger.LogError(ex, "Ошибка бизнес-валидации dlput v3");
 
-            var errorResult = await BuildV3ErrorResponseAsync(
-                serviceName,
-                guid,
-                3,
-                "Количество элементов Сведения превышает допустимый лимит 1000",
-                StatusCodes.Status400BadRequest);
+            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 3, $"Количество элементов Сведения превышает допустимый лимит {_contractRules.MaxDlPutEntities}", StatusCodes.Status400BadRequest);
 
             responseXml = errorResult.ResponseXml;
             signedResponse = errorResult.SignedResponse;

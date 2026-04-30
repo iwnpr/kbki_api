@@ -91,11 +91,24 @@ public class DlPutServiceV3(ApiV3ContractRules contractRules, ITicketServiceV3 t
             case ПредставлениеСведенийСведенияДоговорУдалитьV3 delete:
                 deal.Операция = СправочникОперацииV3.Удалить;
                 deal.УИД = delete.УИД;
+
+                if (string.IsNullOrWhiteSpace(delete.УИД))
+                {
+                    deal.УстановитьОшибку(20, "Договор с указанным УИД не найден.");
+                    break;
+                }
+
+                if (!delete.ДатаРасчетаSpecified)
+                {
+                    deal.УстановитьОшибку(21, "Сведения о величине среднемесячного платежа по договору и дате его расчета не найдены.");
+                    break;
+                }
                 if (delete.ДатаРасчетаSpecified)
                 {
                     deal.ДатаРасчета = delete.ДатаРасчета.Date;
                     deal.ДатаРасчетаSpecified = true;
                 }
+
                 deal.УстановитьУспех();
                 break;
 
@@ -127,6 +140,19 @@ public class DlPutServiceV3(ApiV3ContractRules contractRules, ITicketServiceV3 t
             case ПредставлениеСведенийСведенияОбращениеУдалитьV3 delete:
                 appeal.Операция = СправочникОперацииV3.Удалить;
                 appeal.УИД = delete.УИД;
+
+                if (string.IsNullOrWhiteSpace(delete.УИД))
+                {
+                    appeal.УстановитьОшибку(30, "Обращение/обязательство с указанным УИД не найдено.");
+                    break;
+                }
+
+                if (!delete.СтадияРассмотренияSpecified)
+                {
+                    appeal.УстановитьОшибку(31, "Сведения для предупреждения мошенничества по стадии не найдены.");
+                    break;
+                }
+
                 if (delete.СтадияРассмотренияSpecified)
                 {
                     appeal.СтадияРассмотрения = delete.СтадияРассмотрения;
