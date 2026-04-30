@@ -182,7 +182,7 @@ public class QBCHIIIController(
 
             await _redisCache.AddHash(serviceName, guid, "response_guid", id);
 
-            if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, "dlrequest"))
+            if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, DlRequestV3Scope))
             {
                 _logger.LogError("Запрос не доступен для абонента");
 

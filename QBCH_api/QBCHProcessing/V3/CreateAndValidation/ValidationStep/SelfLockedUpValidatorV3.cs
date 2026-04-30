@@ -57,20 +57,20 @@ public static class SelfLockedUpValidatorV3
             return;
         }
 
-        switch (infoCode)
-        {
-            case СправочникВидыСведенийV3.Item6:
-                AddCode25(transaction, mode, orderNumber);
-                return;
+        if (ShouldApplyInnMatrix(infoCode))
+            AddCode25(transaction, mode, orderNumber);
 
-            case СправочникВидыСведенийV3.Item7:
-                AddCode25(transaction, mode, orderNumber);
-                return;
+    }
 
-            case СправочникВидыСведенийV3.Item8:
-                AddCode25(transaction, mode, orderNumber);
-                return;
-        }
+    private static bool ShouldApplyInnMatrix(СправочникВидыСведенийV3 infoCode)
+    {
+        // Матрица кодов сведений 3.0:
+        // 6 — запрет/снятие запрета
+        // 7 — платежи + антифрод + запрет
+        // 8 — антифрод + запрет
+        return infoCode is СправочникВидыСведенийV3.Item6
+            or СправочникВидыСведенийV3.Item7
+            or СправочникВидыСведенийV3.Item8;
     }
 
     private static void AddCode25(QBCHProcessingTransaction transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber)

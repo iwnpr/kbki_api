@@ -22,7 +22,7 @@ public static class AgreementValidatorV3
             return transaction;
         }
 
-        var requiresAgreement = requestV3.КодСведений is СправочникВидыСведенийV3.Item7 or СправочникВидыСведенийV3.Item8;
+        var requiresAgreement = RequiresAgreement(requestV3.КодСведений);
         var requests = requestV3.Запрос ?? [];
 
         for (var i = 0; i < requests.Length; i++)
@@ -127,6 +127,14 @@ public static class AgreementValidatorV3
         transaction.RiseCriticalError(error);
     }
 
+    private static bool RequiresAgreement(СправочникВидыСведенийV3 infoCode)
+    {
+        // Матрица кодов сведений 3.0:
+        // 6 — запрет/снятие запрета (согласие не требуется)
+        // 7 — платежи + антифрод + запрет (согласие требуется)
+        // 8 — антифрод + запрет (согласие требуется)
+        return infoCode is СправочникВидыСведенийV3.Item7 or СправочникВидыСведенийV3.Item8;
+    }
     private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)
     {
         return int.TryParse(orderNumberRaw, out var parsedOrderNumber) && parsedOrderNumber > 0
