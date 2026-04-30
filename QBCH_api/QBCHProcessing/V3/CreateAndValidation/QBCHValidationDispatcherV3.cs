@@ -5,6 +5,7 @@ using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
 using XmlService_lib.Services.Interfaces.V3;
+using СправочникСпособыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникСпособыЗапроса;
 using АбонентИПV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
 using АбонентИЮЛV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентЮридическоеЛицо;
 using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
@@ -142,7 +143,23 @@ public static class QBCHValidationDispatcherV3
 
     private static void ValidateOneWindowV3(QBCHProcessingTransaction transaction)
     {
-        _ = transaction;
+        if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
+        {
+            return;
+        }
+
+        var requestV3 = transaction.GetRequest<ЗапросСведенийV3>();
+        if (requestV3?.ТипЗапроса != СправочникСпособыЗапросаV3.Item2)
+        {
+            return;
+        }
+
+        var (_, requestOgrn) = GetAbonentRequisitesV3(requestV3);
+        var hasOneWindowPermission = transaction.Requisites.All(x => x.ogrn != requestOgrn);
+        if (!hasOneWindowPermission)
+        {
+            transaction.RiseCriticalError(Error.Code14_SingleWindowDenied());
+        }
     }
 
     private static async Task ValidateUniqueRequestIdV3(
