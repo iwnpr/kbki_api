@@ -50,9 +50,11 @@ public class QBCHIIIController(IMediator mediator,
     private readonly IConfiguration _config = config;
 
     private readonly string? _ourBureauPSRN = config.GetValue<string>("Bureau:PSRN");
+    private readonly string? _ourBureauName = config.GetValue<string>("Bureau:Name");
 
     private const string DlPutAnswerV3ReadyField = "putanswer_v3_response_xml";
     private const string DlPutAnswerV3ExistsField = "putanswer_v3_exists";
+    private const string ResponseDeliveredUtcField = "response_delivered_utc";
     private const string DlRequestV3Scope = "dlrequest:v3";
     private const string DlPutV3Scope = "dlput:v3";
     private const string DlAnswerV3Scope = "dlanswer:v3";
@@ -268,6 +270,21 @@ public class QBCHIIIController(IMediator mediator,
 
             if (_redisCache.TryGetHash(DlRequestV3Scope, id, "qbch_tasks_aggregate_xml", out responseXml))
             {
+                if (await _redisCache.HashFieldExists(DlRequestV3Scope, id, ResponseDeliveredUtcField))
+                {
+                    var alreadyDeliveredResult = await BuildV3ErrorResponseAsync(
+                        serviceName,
+                        guid,
+                        17,
+                        "Ответ уже получен",
+                        ResolveDlAnswerStatusCodeByErrorCode(17));
+
+                    responseXml = alreadyDeliveredResult.ResponseXml;
+                    signedResponse = alreadyDeliveredResult.SignedResponse;
+                    return alreadyDeliveredResult.ActionResult;
+                }
+
+                await _redisCache.AddHash(DlRequestV3Scope, id, ResponseDeliveredUtcField, DateTimeOffset.UtcNow.ToString("O"));
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 return File(signedResponse, "application/octet-stream");
             }
@@ -422,6 +439,39 @@ public class QBCHIIIController(IMediator mediator,
                     guid,
                     9,
                     "Не удалось прочитать XML запроса",
+                    StatusCodes.Status400BadRequest);
+
+                responseXml = errorResult.ResponseXml;
+                signedResponse = errorResult.SignedResponse;
+                return errorResult.ActionResult;
+            }
+
+            if (requestV3.БКИ is null || !string.Equals(requestV3.БКИ.ОГРН, _ourBureauPSRN, StringComparison.Ordinal))
+            {
+                _logger.LogError("ОГРН БКИ в запросе не соответствует ОГРН принимающего бюро");
+
+                var errorResult = await BuildV3ErrorResponseAsync(
+                    serviceName,
+                    guid,
+                    20,
+                    "ОГРН БКИ в запросе не соответствует ОГРН принимающего бюро",
+                    StatusCodes.Status400BadRequest);
+
+                responseXml = errorResult.ResponseXml;
+                signedResponse = errorResult.SignedResponse;
+                return errorResult.ActionResult;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_ourBureauName) &&
+                !string.Equals(requestV3.БКИ.Value, _ourBureauName, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogError("Наименование БКИ в запросе не соответствует наименованию принимающего бюро");
+
+                var errorResult = await BuildV3ErrorResponseAsync(
+                    serviceName,
+                    guid,
+                    21,
+                    "Наименование БКИ в запросе не соответствует наименованию принимающего бюро",
                     StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
@@ -602,7 +652,7 @@ public class QBCHIIIController(IMediator mediator,
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, "dlput"))
+            if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, DlPutV3Scope))
             {
                 _logger.LogError("Запрос не доступен для абонента");
 
@@ -676,6 +726,21 @@ public class QBCHIIIController(IMediator mediator,
 
             if (_redisCache.TryGetHash(DlPutV3Scope, id, DlPutAnswerV3ReadyField, out responseXml))
             {
+                if (await _redisCache.HashFieldExists(DlPutV3Scope, id, ResponseDeliveredUtcField))
+                {
+                    var alreadyDeliveredResult = await BuildV3ErrorResponseAsync(
+                        serviceName,
+                        guid,
+                        17,
+                        "Ответ уже получен",
+                        ResolveDlPutAnswerStatusCodeByErrorCode(17));
+
+                    responseXml = alreadyDeliveredResult.ResponseXml;
+                    signedResponse = alreadyDeliveredResult.SignedResponse;
+                    return alreadyDeliveredResult.ActionResult;
+                }
+
+                await _redisCache.AddHash(DlPutV3Scope, id, ResponseDeliveredUtcField, DateTimeOffset.UtcNow.ToString("O"));
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 return File(signedResponse, "application/octet-stream");
             }

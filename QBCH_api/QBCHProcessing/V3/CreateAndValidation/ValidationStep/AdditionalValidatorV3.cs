@@ -216,7 +216,7 @@ public static class AdditionalValidatorV3
 
         if (hasPlaceOfBirthElements || hasPlaceOfBirthAttributes)
         {
-            AddError(transaction, requestMode, 1,
+            transaction.RiseCriticalError(
                 Error.Code15_InvalidRequestData("Поля и элементы \"МестоРождения\" не допускаются в запросах API 3.0"));
         }
     }
