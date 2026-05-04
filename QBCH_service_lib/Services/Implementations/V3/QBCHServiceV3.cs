@@ -18,6 +18,9 @@ using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCHService_lib.Services.Implementations.V3;
 
+/// <summary>
+/// Реализация сервиса обработки запросов КБКИ по API версии 3.
+/// </summary>
 public class QBCHServiceV3(
     ICryptoService cryptoService,
     IXmlServiceV3 xmlService,
@@ -44,15 +47,19 @@ public class QBCHServiceV3(
     private readonly int _qbchResponseTimeoutMs = config.GetValue<int>("APIConfiguration:QBCHResponseTimeoutMs", 10000);
     private readonly int _qbchResponseDelayMs = config.GetValue<int>("APIConfiguration:QBCHResponseDelayMs", 1000);
 
-    public async Task<QBCHTaskResult> AmpFromDBv3(QBCHProcessingTransaction processing)
+    /// <summary>
+    /// Выполняет обработку запроса на основе данных, полученных из внутренней базы.
+    /// </summary>
+    /// <param name="processing">Транзакция с телом запроса и техническим контекстом обработки.</param>
+    /// <returns>Результат обработки с ответом <c>ОтветНаЗапросСведений</c>.</returns>
+    public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransaction processing)
     {
         await _redisCache.AddHash("dlrequest", $"{processing.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
         var package = processing.GetRequest<ЗапросСведений>();
+
         if (package is null)
-        {
             return new QBCHTaskResult(_ourBureauPsrn);
-        }
 
         var answer = new ОтветНаЗапросСведений
         {
@@ -69,6 +76,7 @@ public class QBCHServiceV3(
         _logger.LogDebug("{guid} {bureau}: Таймаут для запросов {timeLeft} ms", processing.Id, _ourBureauPsrn, timeLeft);
 
         var responseRows = new List<ОтветНаЗапросСведенийСведения>(requests.Length);
+
         foreach (var requestItem in requests)
         {
             var response = new ОтветНаЗапросСведенийСведения
@@ -145,7 +153,14 @@ public class QBCHServiceV3(
         return new QBCHTaskResult(_ourBureauPsrn, answer3: answer);
     }
 
-    public async Task<QBCHTaskResult> AmpRequestv3(QBCHProcessingTransaction processing, HttpClient client, QBCHRequisite bureau)
+    /// <summary>
+    /// Отправляет запрос во внешнее бюро и возвращает итоговый ответ.
+    /// </summary>
+    /// <param name="processing">Транзакция обработки с данными запроса.</param>
+    /// <param name="client">HTTP-клиент для взаимодействия с внешним сервисом бюро.</param>
+    /// <param name="bureau">Реквизиты целевого бюро кредитных историй.</param>
+    /// <returns>Результат обработки, содержащий ответ бюро или информацию об ошибке.</returns>
+    public async Task<QBCHTaskResult> RequestFromExternalBureau(QBCHProcessingTransaction processing, HttpClient client, QBCHRequisite bureau)
     {
         var request = processing.GetRequest<ЗапросСведений>();
         if (request is null)
@@ -296,14 +311,7 @@ public class QBCHServiceV3(
         }
     }
 
-    private async Task<ОтветНаЗапросСведений> ResendDlanswer(
-        string responseId,
-        HttpClient client,
-        QBCHRequisite bureau,
-        string guid,
-        CancellationToken ct,
-        string[] orderNumbers,
-        ЗапросСведений request)
+    private async Task<ОтветНаЗапросСведений> ResendDlanswer(string responseId, HttpClient client, QBCHRequisite bureau, string guid, CancellationToken ct, string[] orderNumbers, ЗапросСведений request)
     {
         HttpResponseMessage? responseMessage = null;
 

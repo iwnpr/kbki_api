@@ -54,6 +54,7 @@ public class QBCHProcessingHandlerV3(
         {
             var nullRequestTicket = _ticketService.CreateResultV3Error(new QBCH_lib.core.Error(99, "Не удалось получить данные запроса API 3.0"));
             var nullRequestTicketBytes = _xmlService.SerializeAsByteV3(nullRequestTicket);
+
             transaction.Complete(nullRequestTicketBytes, _cryptoService.SignMsg(nullRequestTicketBytes));
             return transaction;
         }
@@ -61,7 +62,7 @@ public class QBCHProcessingHandlerV3(
         var processingTimer = Stopwatch.StartNew();
         var tasks = new List<Task<QBCHTaskResult>>
         {
-            _qbchService.AmpFromDBv3(transaction)
+            _qbchService.RequestFromDB(transaction)
         };
 
         // Item2 в API 3.0 — запрос "во все КБКИ".
@@ -69,7 +70,7 @@ public class QBCHProcessingHandlerV3(
         {
             _qbchList.ForEach(qbch =>
             {
-                tasks.Add(_qbchService.AmpRequestv3(
+                tasks.Add(_qbchService.RequestFromExternalBureau(
                     processing: transaction,
                     client: _httpClientFactory.CreateClient($"{qbch.Name}v3"),
                     bureau: qbch));

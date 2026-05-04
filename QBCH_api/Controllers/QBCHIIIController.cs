@@ -16,14 +16,13 @@ using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using XmlService_lib.Services.Interfaces.V3;
-using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
-using АбонентИПV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
-using АбонентИЮЛV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентЮридическоеЛицо;
-using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
-using ПредставлениеСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ПредставлениеСведений;
+using АбонентИно = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
+using АбонентИП = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
+using АбонентЮЛ = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентЮридическоеЛицо;
+
 namespace QBCH_api.Controllers;
 
-[ApiVersion("3.0")]
+[ApiVersion("3")]
 [Route("v{version:apiVersion}")]
 [ApiController]
 public class QBCHIIIController(IMediator mediator,
@@ -87,25 +86,25 @@ public class QBCHIIIController(IMediator mediator,
             return BadRequest(new MemoryStream(transaction.Response.SignedTicket!));
         }
 
+        // Негарантированная запись уникального requestId в Redis
         try
         {
-            var requestV3 = transaction.GetRequest<ЗапросСведенийV3>();
-            var requestId = requestV3?.ИдентификаторЗапроса;
-            var requestDate = requestV3?.ДатаЗапроса;
-            var requestOgrn = requestV3?.Абонент?.Item switch
+            //Достаём из transaction распарсенный запрос 'ЗапросСведений'.
+            var request = transaction.GetRequest<ЗапросСведений>();
+
+            var requestId = request?.ИдентификаторЗапроса;
+            var requestDate = request?.ДатаЗапроса;
+            var requestOgrn = request?.Абонент?.Item switch
             {
-                АбонентИЮЛV3 юрЛицо => юрЛицо.ОГРН,
-                АбонентИПV3 ип => ип.ОГРНИП,
-                АбонентИноV3 ино => ино.РегНомер,
+                АбонентЮЛ юрЛицо => юрЛицо.ОГРН,
+                АбонентИП ип => ип.ОГРНИП,
+                АбонентИно ино => ино.РегНомер,
                 _ => null
             };
 
-            if (!string.IsNullOrWhiteSpace(requestId) &&
-                !string.IsNullOrWhiteSpace(requestOgrn) &&
-                requestDate.HasValue)
-            {
+            // Если все значения валидные — пишет их в Redis
+            if (!string.IsNullOrWhiteSpace(requestId) && !string.IsNullOrWhiteSpace(requestOgrn) && requestDate.HasValue)
                 await _redisCache.AddUniqueRequestId(DlRequestV3Scope, requestId, requestOgrn, requestDate.Value);
-            }
         }
         catch (Exception ex)
         {
@@ -115,13 +114,12 @@ public class QBCHIIIController(IMediator mediator,
         transaction.TimeElapsedForValidation.Stop();
         _logger.LogDebug("{guid} Validation time elapsed: {elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
 
+
+        // Основной processing и формирование HTTP-ответа
         try
         {
-            var processingResult = await _mediator
-                .Send(new QBCHProcessedStartV3(
-                    transaction,
-                    _config.GetValue<int>("APIConfiguration:QBCHResponseTimeoutMs"),
-                    _ourBureauPSRN ?? string.Empty));
+            // Запускает основной pipeline обработки
+            var processingResult = await _mediator.Send(new QBCHProcessedStartV3(transaction, _config.GetValue<int>("APIConfiguration:QBCHResponseTimeoutMs"), _ourBureauPSRN ?? string.Empty));
 
             Response.OnCompleted(async () => await _mediator.Publish(new QBCHProcessingCompleteV3(processingResult)));
 
@@ -414,7 +412,7 @@ public class QBCHIIIController(IMediator mediator,
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            var requestV3 = _xmlServiceV3.DeserializeV3<ПредставлениеСведенийV3>(bodyBytes);
+            var requestV3 = _xmlServiceV3.DeserializeV3<ПредставлениеСведений>(bodyBytes);
             if (requestV3 is null)
             {
                 _logger.LogError("Не удалось десериализовать тело запроса dlput v3");
