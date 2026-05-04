@@ -79,16 +79,23 @@ public class ValidationServiceV3(
     public bool ValidateCertificateV3(X509Certificate2? requestCert, [NotNullWhen(false)] out BaseResultV3? result)
     {
         var isValid = _cryptoService.ValidateCertificate(requestCert, out CryptoServiceResult? certResult);
-        if (isValid)
+        if (!isValid)
         {
-            result = null;
-            return true;
+            var code = certResult?.ErrorCode ?? 5;
+            var message = certResult?.Error ?? "Ошибка проверки сертификата";
+            result = CreateErrorResult(new Error(code, message));
+            return false;
         }
 
-        var code = certResult?.ErrorCode ?? 5;
-        var message = certResult?.Error ?? "Ошибка проверки сертификата";
-        result = CreateErrorResult(new Error(code, message));
-        return false;
+        // Раздел 4.3 спецификации: срок действия сертификата не должен превышать 5 лет.
+        if (requestCert != null && (requestCert.NotAfter - requestCert.NotBefore).TotalDays > 366 * 5)
+        {
+            result = CreateErrorResult(new Error(6, "Срок действия сертификата превышает допустимые 5 лет"));
+            return false;
+        }
+
+        result = null;
+        return true;
     }
 
     public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
