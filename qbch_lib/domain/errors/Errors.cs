@@ -75,6 +75,8 @@ public class Error : BaseError
     /// 
     /// </summary>
     /// <returns></returns>
+    public static Error Code20_ContractNotFound() => new(20, "Договор с указанным УИД не найден");
+    public static Error Code21_CalculationDateNotFound() => new(21, "Сведения о величине среднемесячного платежа по договору и дате его расчета не найдены");
     public static Error Code22_AccessDenied() => new(22, "Запрос не доступен для абонента");
     /// <summary>
     /// 
@@ -103,7 +105,24 @@ public class Error : BaseError
     /// <returns></returns>
     public static Error Code28_RequestDataNotFound() => new(28, "В ответе КБКИ отсутствуют запрошенные сведения");
     /// <summary>
-    /// 
+    /// В запросе /dlput в блоке «Договор» или «ОбращениеОбязательство» с вложенным блоком «Удалить»
+    /// указаны сведения о Субъекте, информация о котором ранее не передавалась абонентом.
+    /// </summary>
+    public static Error Code29_SubjectNotFound() => new(29, "Субъект не найден");
+    /// <summary>
+    /// В запросе /dlput в атрибуте «УИД» для обращения (обязательства) с операцией «Удалить»
+    /// указан УИД обращения (договора (сделки)), информация о котором ранее не передавалась
+    /// абонентом для указанного Субъекта.
+    /// </summary>
+    public static Error Code30_AppealObligationNotFound() => new(30, "Обращение (обязательство) с указанным УИД не найдено");
+    /// <summary>
+    /// В запросе /dlput в атрибуте «СтадияРассмотрения» для обращения (обязательства)
+    /// с операцией «Удалить» указана стадия, информация о которой ранее не передавалась
+    /// абонентом для указанного обращения (обязательства).
+    /// </summary>
+    public static Error Code31_AntiFraudDataNotFound() => new(31, "Сведения для предупреждения мошенничества не найдены");
+    /// <summary>
+    ///
     /// </summary>
     /// <param name="code"></param>
     /// <param name="msq"></param>

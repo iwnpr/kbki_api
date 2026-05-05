@@ -5,7 +5,7 @@ namespace QBCH_api.Services.Interfaces.V3;
 
 public interface IDlPutServiceV3
 {
-    DlPutServiceV3ProcessingResult Process(ПредставлениеСведенийV3 request, bool returnAcceptedTicket = false, string? responseId = null, long? readyTime = null);
+    Task<DlPutServiceV3ProcessingResult> ProcessAsync(ПредставлениеСведенийV3 request, bool returnAcceptedTicket = false, string? responseId = null, long? readyTime = null);
 }
 public sealed record DlPutServiceV3ProcessingResult(
     bool IsAccepted,

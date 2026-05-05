@@ -18,4 +18,11 @@ public interface IRepositoryV3
     Task<bool> AddCertificate(int abonentId, string thumbprint, DateTime expirationDate);
     Task<bool> SetCertificateInactive(string thumbprint);
     Task<int?> GetAbonentKeyIdByPSRN(string? psrn);
+
+    Task<List<long>?> SearchContractSubjectsForDlPutV3(string subjectXml, long? timeLeftMs = null);
+    Task<bool?> ContractUidExistsForSubjectsV3(List<long> subjectIds, string uid, long? timeLeftMs = null);
+    Task<bool?> ContractCalculationDateExistsForSubjectsV3(List<long> subjectIds, string uid, DateTime calculationDate, long? timeLeftMs = null);
+    Task<List<long>?> SearchAppealSubjectsByInnForDlPutV3(string inn, long? timeLeftMs = null);
+    Task<bool?> AppealUidExistsForSubjectsV3(List<long> subjectIds, string uid, long? timeLeftMs = null);
+    Task<bool?> AppealStageExistsForSubjectsV3(List<long> subjectIds, string uid, ushort stage, long? timeLeftMs = null);
 }

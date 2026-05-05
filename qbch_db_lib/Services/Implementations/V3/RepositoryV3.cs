@@ -351,6 +351,114 @@ public class RepositoryV3(
         return affectedRows > 0;
     }
 
+    public async Task<List<long>?> SearchContractSubjectsForDlPutV3(string subjectXml, long? timeLeftMs = null)
+    {
+        var procName = _config.GetValue<string>("QbchSearchSubjectsV3:Procedures:SearchContractSubjectsForDlPut");
+        if (string.IsNullOrWhiteSpace(subjectXml) || string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchSearchSubjectsV3))
+        {
+            return null;
+        }
+
+        var sql = $"SELECT {_schemaQbchSearchSubjectsV3}.{procName}(@subject)";
+        var value = await ExecuteScalarAsync(sql, procName, _searchSubjectsConnectionPool, timeLeftMs ?? _searchSubjectsTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("subject", NpgsqlDbType.Xml, subjectXml);
+        }, nameof(SearchContractSubjectsForDlPutV3));
+
+        return value as List<long>;
+    }
+
+    public async Task<bool?> ContractUidExistsForSubjectsV3(List<long> subjectIds, string uid, long? timeLeftMs = null)
+    {
+        var procName = _config.GetValue<string>("QbchCalcOfAmpV3:Procedures:ContractUidExistsForDlPut");
+        if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchCalcOfAmpV3) || subjectIds.Count == 0)
+        {
+            return null;
+        }
+
+        var sql = $"SELECT {_schemaQbchCalcOfAmpV3}.{procName}(@subj_id, @uid)";
+        var value = await ExecuteScalarAsync(sql, procName, _calcOfAmpConnectionPool, timeLeftMs ?? _calcOfAmpTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("subj_id", NpgsqlDbType.Array | NpgsqlDbType.Bigint, subjectIds);
+            cmd.Parameters.AddWithValue("uid", uid);
+        }, nameof(ContractUidExistsForSubjectsV3));
+
+        return value is bool b ? b : null;
+    }
+
+    public async Task<bool?> ContractCalculationDateExistsForSubjectsV3(List<long> subjectIds, string uid, DateTime calculationDate, long? timeLeftMs = null)
+    {
+        var procName = _config.GetValue<string>("QbchCalcOfAmpV3:Procedures:ContractCalculationDateExistsForDlPut");
+        if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchCalcOfAmpV3) || subjectIds.Count == 0)
+        {
+            return null;
+        }
+
+        var sql = $"SELECT {_schemaQbchCalcOfAmpV3}.{procName}(@subj_id, @uid, @calc_date)";
+        var value = await ExecuteScalarAsync(sql, procName, _calcOfAmpConnectionPool, timeLeftMs ?? _calcOfAmpTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("subj_id", NpgsqlDbType.Array | NpgsqlDbType.Bigint, subjectIds);
+            cmd.Parameters.AddWithValue("uid", uid);
+            cmd.Parameters.AddWithValue("calc_date", NpgsqlDbType.Date, calculationDate.Date);
+        }, nameof(ContractCalculationDateExistsForSubjectsV3));
+
+        return value is bool b ? b : null;
+    }
+
+    public async Task<List<long>?> SearchAppealSubjectsByInnForDlPutV3(string inn, long? timeLeftMs = null)
+    {
+        var procName = _config.GetValue<string>("QbchAntifraudV3:Procedures:SearchAppealSubjectsByInnForDlPut");
+        if (string.IsNullOrWhiteSpace(inn) || string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchAntifraudV3))
+        {
+            return null;
+        }
+
+        var sql = $"SELECT {_schemaQbchAntifraudV3}.{procName}(@inn)";
+        var value = await ExecuteScalarAsync(sql, procName, _antifraudConnectionPool, timeLeftMs ?? _antifraudTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("inn", inn);
+        }, nameof(SearchAppealSubjectsByInnForDlPutV3));
+
+        return value as List<long>;
+    }
+
+    public async Task<bool?> AppealUidExistsForSubjectsV3(List<long> subjectIds, string uid, long? timeLeftMs = null)
+    {
+        var procName = _config.GetValue<string>("QbchAntifraudV3:Procedures:AppealUidExistsForDlPut");
+        if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchAntifraudV3) || subjectIds.Count == 0)
+        {
+            return null;
+        }
+
+        var sql = $"SELECT {_schemaQbchAntifraudV3}.{procName}(@subj_id, @uid)";
+        var value = await ExecuteScalarAsync(sql, procName, _antifraudConnectionPool, timeLeftMs ?? _antifraudTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("subj_id", NpgsqlDbType.Array | NpgsqlDbType.Bigint, subjectIds);
+            cmd.Parameters.AddWithValue("uid", uid);
+        }, nameof(AppealUidExistsForSubjectsV3));
+
+        return value is bool b ? b : null;
+    }
+
+    public async Task<bool?> AppealStageExistsForSubjectsV3(List<long> subjectIds, string uid, ushort stage, long? timeLeftMs = null)
+    {
+        var procName = _config.GetValue<string>("QbchAntifraudV3:Procedures:AppealStageExistsForDlPut");
+        if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchAntifraudV3) || subjectIds.Count == 0)
+        {
+            return null;
+        }
+
+        var sql = $"SELECT {_schemaQbchAntifraudV3}.{procName}(@subj_id, @uid, @stage)";
+        var value = await ExecuteScalarAsync(sql, procName, _antifraudConnectionPool, timeLeftMs ?? _antifraudTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("subj_id", NpgsqlDbType.Array | NpgsqlDbType.Bigint, subjectIds);
+            cmd.Parameters.AddWithValue("uid", uid);
+            cmd.Parameters.AddWithValue("stage", (int)stage);
+        }, nameof(AppealStageExistsForSubjectsV3));
+
+        return value is bool b ? b : null;
+    }
+
     private async Task<XElement?> ExecuteXmlProcedureV3(
         string? procName,
         string? schema,
