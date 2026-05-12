@@ -128,22 +128,25 @@ public class QBCHServiceV3(
             }
 
             var getSelfProhibitionTask = _qbchDb.GetSelfProhibitionV3(subjectKeys, timeLeft);
-            var getCreditHistoryFlagTask = _qbchDb.GetCreditHistoryPresenceFlagV3(subjectKeys, timeLeft);
 
             var includeAmp = package.КодСведений == СправочникВидыСведений.Item7;
             var includeAntifraud = package.КодСведений is СправочникВидыСведений.Item7 or СправочникВидыСведений.Item8;
             var getAmpTask = includeAmp ? _qbchDb.GetCalculationOfAmpV3(subjectKeys, timeLeft) : null;
             var getAntifraudTask = includeAntifraud ? _qbchDb.GetAntifraudV3(subjectKeys, timeLeft) : null;
 
-            var pendingTasks = new List<Task<XElement?>> { getSelfProhibitionTask, getCreditHistoryFlagTask };
-            if (getAmpTask is not null) pendingTasks.Add(getAmpTask);
-            if (getAntifraudTask is not null) pendingTasks.Add(getAntifraudTask);
+            var pendingTasks = new List<Task<XElement?>> { getSelfProhibitionTask };
+
+            if(getAmpTask is not null)
+                pendingTasks.Add(getAmpTask);
+
+            if (getAntifraudTask is not null)
+                pendingTasks.Add(getAntifraudTask);
+
             await Task.WhenAll(pendingTasks);
 
             FillObligationsSection(kbki, includeAmp, getAmpTask?.Result);
             FillSelfProhibitionSection(kbki, getSelfProhibitionTask.Result, requestItem.Субъект?.ИНН);
-            FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result, requestItem.Субъект?.ИНН);
-            FillCreditHistoryPresence(kbki, getCreditHistoryFlagTask.Result);
+            FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result);
 
             response.КБКИ = [kbki];
             responseRows.Add(response);
@@ -496,16 +499,10 @@ public class QBCHServiceV3(
         kbki.ДобавитьПризнакОтсутствияСведенийОЗапрете();
     }
 
-    private void FillAntifraudSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAntifraud, XElement? antifraudXml, ТипИННФЛсПризнаком? inn)
+    private void FillAntifraudSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAntifraud, XElement? antifraudXml)
     {
         if (!includeAntifraud)
         {
-            return;
-        }
-
-        if (!IsInnVerified(inn))
-        {
-            kbki.ДобавитьПризнакНепредоставленияАнтифродСведений();
             return;
         }
 
@@ -517,28 +514,6 @@ public class QBCHServiceV3(
         }
 
         kbki.ДобавитьПризнакОтсутствияАнтифродСведений();
-    }
-
-    private static void FillCreditHistoryPresence(ОтветНаЗапросСведенийСведенияКБКИ kbki, XElement? creditHistoryPresenceFlagXml)
-    {
-        var value = creditHistoryPresenceFlagXml?
-            .Descendants()
-            .FirstOrDefault(x => x.Name.LocalName == "ПризнакНаличияКИ")
-            ?.Value?
-            .Trim();
-
-        if (value == "1")
-        {
-            kbki.ПризнакНаличияКИ = ОтветНаЗапросСведенийСведенияКБКИПризнакНаличияКИ.Item1;
-            kbki.ПризнакНаличияКИSpecified = true;
-            return;
-        }
-
-        if (value == "0")
-        {
-            kbki.ПризнакНаличияКИ = ОтветНаЗапросСведенийСведенияКБКИПризнакНаличияКИ.Item0;
-            kbki.ПризнакНаличияКИSpecified = true;
-        }
     }
 
     private static XDocument? ToDocument(XElement? xml) => xml is null ? null : new XDocument(xml);

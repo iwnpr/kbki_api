@@ -103,7 +103,6 @@ builder.Services.AddTransient<IXmlServiceV3, XmlServiceV3>();
 builder.Services.AddTransient<IValidationServiceV3, ValidationServiceV3>();
 builder.Services.AddTransient<IRepositoryV3, RepositoryV3>();
 builder.Services.AddTransient<IQBCHServiceV3, QBCHServiceV3>();
-builder.Services.AddTransient<ITransformerV3, TransformerV3>();
 builder.Services.AddTransient<ITicketServiceV3, TicketServiceV3>();
 builder.Services.AddTransient<IDlPutServiceV3, DlPutServiceV3>();
 

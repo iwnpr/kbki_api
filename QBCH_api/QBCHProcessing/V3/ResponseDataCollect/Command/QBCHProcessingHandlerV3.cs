@@ -114,13 +114,6 @@ public class QBCHProcessingHandlerV3(
                     var sourceInfo = taskResult.Answer3?.Сведения?.FirstOrDefault(x => x.ПорядковыйНомер == info.ПорядковыйНомер);
                     if (sourceInfo?.КБКИ is { Length: > 0 })
                     {
-                        if (input.ТипЗапроса == СправочникСпособыЗапроса.Item2)
-                        {
-                            foreach (var kbki in sourceInfo.КБКИ)
-                            {
-                                RemoveCreditHistoryPresenceFlagForExternalKbki(kbki, request.OurBureauPSRN);
-                            }
-                        }
                         kbkiItems.AddRange(sourceInfo.КБКИ);
                     }
                     else
@@ -202,22 +195,5 @@ public class QBCHProcessingHandlerV3(
         await _redisCache.AddHash(DlRequestV3Scope, responseId, ResponseGuidField, responseId);
         await _redisCache.AddHash(DlRequestV3Scope, responseId, LastPollUtcField, string.Empty);
         await _redisCache.TrySetKeyExpiration(DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
-    }
-
-    private static void RemoveCreditHistoryPresenceFlagForExternalKbki(
-        ОтветНаЗапросСведенийСведенияКБКИ kbki,
-        string ourBureauPsrn)
-    {
-        if (kbki is null)
-        {
-            return;
-        }
-
-        if (string.Equals(kbki.ОГРН, ourBureauPsrn, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        kbki.ПризнакНаличияКИSpecified = false;
     }
 }

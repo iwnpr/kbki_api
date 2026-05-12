@@ -26,7 +26,6 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
             await _redisCache.AddHashArray(transaction.ServiceName, transaction.Id.ToString(), resultData);
 
             var (responseKind, schemaFamily) = ResolveResponseShape(transaction);
-
             var kafkaPayload = JsonSerializer.Serialize(new
             {
                 api_version = ApiVersion,
