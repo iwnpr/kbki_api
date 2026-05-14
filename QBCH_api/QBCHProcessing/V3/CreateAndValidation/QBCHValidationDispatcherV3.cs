@@ -156,14 +156,16 @@ public static class QBCHValidationDispatcherV3
 
         var (_, requestOgrn) = GetAbonentRequisitesV3(requestV3);
         var hasOneWindowPermission = transaction.Requisites.All(x => x.ogrn != requestOgrn);
-
         if (!hasOneWindowPermission)
         {
             transaction.RiseCriticalError(Error.Code14_SingleWindowDenied());
         }
     }
 
-    private static async Task ValidateUniqueRequestIdV3(QBCHProcessingTransaction transaction, ICacheService cacheService, ЗапросСведенийV3? requestV3)
+    private static async Task ValidateUniqueRequestIdV3(
+        QBCHProcessingTransaction transaction,
+        ICacheService cacheService,
+        ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
         {

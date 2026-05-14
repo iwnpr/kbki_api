@@ -16,7 +16,7 @@ public interface IValidationServiceV3
 
     Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null);
 
-    bool IsUniqueRequestIdV3(string requestId, string methodName, string ogrn, [NotNullWhen(false)] out BaseResultV3? result);
+    Task<(bool IsUnique, BaseResultV3? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn);
 
     Task<bool> IsCertExistsV3(byte[] cert);
 

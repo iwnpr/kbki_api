@@ -87,10 +87,11 @@ public class ValidationServiceV3(
             return false;
         }
 
-        // Раздел 4.3 спецификации: срок действия сертификата не должен превышать 5 лет.
+        // Срок действия сертификата не должен превышать 5 лет.
+        // Код 5 — «Истёк срок сертификата УЭП» — ближайший по смыслу к ограничению срока.
         if (requestCert != null && (requestCert.NotAfter - requestCert.NotBefore).TotalDays > 366 * 5)
         {
-            result = CreateErrorResult(new Error(6, "Срок действия сертификата превышает допустимые 5 лет"));
+            result = CreateErrorResult(new Error(5, "Срок действия сертификата превышает допустимые 5 лет"));
             return false;
         }
 
@@ -101,17 +102,13 @@ public class ValidationServiceV3(
     public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
        => await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
 
-    public bool IsUniqueRequestIdV3(string requestId, string methodName, string ogrn, [NotNullWhen(false)] out BaseResultV3? result)
+    public async Task<(bool IsUnique, BaseResultV3? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
     {
-        var isUnique = _cache.IsUniqueRequestId(requestId, ogrn, methodName).Result;
+        var isUnique = await _cache.IsUniqueRequestId(requestId, ogrn, methodName);
         if (isUnique)
-        {
-            result = null;
-            return true;
-        }
+            return (true, null);
 
-        result = CreateErrorResult(Error.Code11_RequestIdIsNotUnique());
-        return false;
+        return (false, CreateErrorResult(Error.Code11_RequestIdIsNotUnique()));
     }
 
     public async Task<bool> IsCertExistsV3(byte[] cert) => await _repository.IsCertExist(cert);

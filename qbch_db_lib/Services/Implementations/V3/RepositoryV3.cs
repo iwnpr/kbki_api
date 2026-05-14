@@ -51,7 +51,6 @@ public class RepositoryV3(
     private readonly string? _schemaQbchCalcOfAmpV3 = config.GetValue<string>("QbchCalcOfAmpV3:Schema");
     private readonly string? _schemaQbchSelfProhibitionV3 = config.GetValue<string>("QbchSelfProhibitionV3:Schema");
     private readonly string? _schemaQbchAntifraudV3 = config.GetValue<string>("QbchAntifraudV3:Schema");
-    private readonly string? _schemaQbchCreditHistoryPresenceFlagV3 = config.GetValue<string>("QbchCreditHistoryPresenceFlagV3:Schema");
 
     /// <summary>
     /// Возвращает список идентификаторов субъектов
@@ -127,25 +126,6 @@ public class RepositoryV3(
             "GetAntifraudV3");
 
         return SelectAntifraudFields(xml);
-    }
-
-    /// <summary>
-    /// Возвращает признак наличия кредитной истории по списку субъектов.
-    /// </summary>
-    /// <param name="subjectIds">Идентификаторы субъектов.</param>
-    /// <param name="timeLeftMs">Оставшееся время выполнения, мс.</param>
-    /// <returns>XML с признаком наличия КИ для прямого маппинга в ответ 3.0.</returns>
-    public async Task<XElement?> GetCreditHistoryPresenceFlagV3(List<long> subjectIds, long? timeLeftMs = null)
-    {
-        var xml = await ExecuteXmlProcedureV3(
-            _config.GetValue<string>("QbchCreditHistoryPresenceFlagV3:Procedures:GetCreditHistoryPresenceFlag"),
-            _schemaQbchCreditHistoryPresenceFlagV3,
-            _creditHistoryPresenceFlagConnectionPool,
-            subjectIds,
-            timeLeftMs ?? _creditHistoryPresenceFlagTimeout,
-            "GetCreditHistoryPresenceFlagV3");
-
-        return NormalizeCreditHistoryPresenceFlag(xml);
     }
 
     /// <summary>

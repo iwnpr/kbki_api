@@ -136,7 +136,7 @@ public class QBCHServiceV3(
 
             var pendingTasks = new List<Task<XElement?>> { getSelfProhibitionTask };
 
-            if(getAmpTask is not null)
+            if (getAmpTask is not null)
                 pendingTasks.Add(getAmpTask);
 
             if (getAntifraudTask is not null)

@@ -9,7 +9,6 @@ public interface IRepositoryV3
     Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long? timeLeftMs = null);
     Task<XElement?> GetSelfProhibitionV3(List<long> subjectIds, long? timeLeftMs = null);
     Task<XElement?> GetAntifraudV3(List<long> subjectIds, long? timeLeftMs = null);
-    Task<XElement?> GetCreditHistoryPresenceFlagV3(List<long> subjectIds, long? timeLeftMs = null);
     Task<bool> IsPermissionGrantedV3(string? thumbprint, string? serviceName, CancellationToken? ct = null);
     Task<XElement?> GetInnOgrnByThumbprintV3(string? thumbprint);
     Task<bool> IsCertExist(byte[] cert);
