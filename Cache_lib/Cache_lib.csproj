@@ -19,6 +19,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\qbch_lib\QBCH_lib.csproj" />
+    <ProjectReference Include="..\qbch_lib\qbch_lib.csproj" />
   </ItemGroup>
 </Project>

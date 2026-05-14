@@ -5,7 +5,7 @@ VisualStudioVersion = 18.3.11520.95 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QBCH_api", "QBCH_api\QBCH_api.csproj", "{FD512446-D48E-4C31-92A8-424C588DE316}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QBCH_lib", "qbch_lib\QBCH_lib.csproj", "{8BA18FE7-D8A1-4DB1-B664-9538D6AE0445}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QBCH_lib", "qbch_lib\qbch_lib.csproj", "{8BA18FE7-D8A1-4DB1-B664-9538D6AE0445}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "XmlService_lib", "XmlService_lib\XmlService_lib.csproj", "{86810F4F-936F-41AD-AA96-DB891D8417EC}"
 EndProject
