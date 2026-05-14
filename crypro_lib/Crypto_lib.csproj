@@ -27,7 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Cache_lib\Cache_lib.csproj" />
-    <ProjectReference Include="..\qbch_lib\QBCH_lib.csproj" />
+    <ProjectReference Include="..\qbch_lib\qbch_lib.csproj" />
     <ProjectReference Include="..\XmlService_lib\XmlService_lib.csproj" />
   </ItemGroup>
 </Project>
