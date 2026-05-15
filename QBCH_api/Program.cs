@@ -109,51 +109,58 @@ builder.Services.AddTransient<IDlPutServiceV3, DlPutServiceV3>();
 // Добавление http-клиентов в HttpClientFactory
 try
 {
-    var _searchValue = builder.Configuration.GetValue<string>("Signer:SearchValue");
-    var _storeLocation = builder.Configuration.GetValue<string>("Signer:StoreLocation");
-    var _storeName = builder.Configuration.GetValue<string>("Signer:StoreName");
-    var _findType = builder.Configuration.GetValue<string>("Signer:FindType");
+    var requireSignerCertificate = builder.Configuration.GetValue("Signer:RequireCertificate", true);
+    X509Certificate2? signerCertificate = null;
 
-    if (string.IsNullOrWhiteSpace(_searchValue))
+    if (requireSignerCertificate)
     {
-        serilog.Error("Отсутствует значение для поиска сертифката для подписи запросов КБКИ.");
-        return;
+        var searchValue = builder.Configuration.GetValue<string>("Signer:SearchValue");
+        var storeLocationValue = builder.Configuration.GetValue<string>("Signer:StoreLocation");
+        var storeNameValue = builder.Configuration.GetValue<string>("Signer:StoreName");
+        var findTypeValue = builder.Configuration.GetValue<string>("Signer:FindType");
+
+        if (string.IsNullOrWhiteSpace(searchValue))
+        {
+            serilog.Error("Отсутствует значение для поиска сертификата для подписи запросов КБКИ.");
+            return;
+        }
+
+        if (!Enum.TryParse<StoreLocation>(storeLocationValue, true, out var storeLocation))
+        {
+            storeLocation = StoreLocation.LocalMachine;
+        }
+
+        if (!Enum.TryParse<StoreName>(storeNameValue, true, out var storeName))
+        {
+            storeName = StoreName.My;
+        }
+
+        if (!Enum.TryParse<X509FindType>(findTypeValue, true, out var findType))
+        {
+            findType = X509FindType.FindByThumbprint;
+        }
+
+        using var store = new X509Store(storeName, storeLocation);
+        store.Open(OpenFlags.ReadOnly);
+
+        signerCertificate = store.Certificates
+            .Find(findType, searchValue, true)
+            .FirstOrDefault();
+
+        if (signerCertificate == null)
+        {
+            serilog.Error("Отсутствует сертификат для подписания запросов в КБКИ.");
+            return;
+        }
+    }
+    else
+    {
+        serilog.Warning("Проверка сертификата подписи отключена настройкой Signer:RequireCertificate=false.");
     }
 
-    // Расположение хранилища сертифкатов
-    if (!Enum.TryParse<StoreLocation>(_storeLocation, true, out var storeLocation))
-        storeLocation = StoreLocation.LocalMachine;
-
-    // Директория в хранилище
-    if (!Enum.TryParse<StoreName>(_storeName, true, out var storeName))
-        storeName = StoreName.My;
-
-    // Определения параметра поиска
-    if (!Enum.TryParse<X509FindType>(_findType, true, out var findType))
-        findType = X509FindType.FindByThumbprint;
-
-    X509Store store = new(storeName, storeLocation);
-    store.Open(OpenFlags.ReadOnly);
-
-    if (string.IsNullOrWhiteSpace(_searchValue))
-    {
-        throw new Exception("Сертификат не найден");
-    }
-
-    // Находим сертификаты с нужным именем и добавляем в коллекцию.
-    var foundCertColl = store.Certificates.Find(findType, _searchValue, true).FirstOrDefault();
-
-    // Сертификат не найден
-    if (foundCertColl == null)
-    {
-        serilog.Error("Отсутствует сертификат для подписания запросов в КБКИ.");
-        return;
-    }
-
-    // Добавление именованных http-клиентов в фабрику клиентов
     foreach (var item in builder.Configuration.GetSection("QBCH").GetChildren())
     {
-        AddHttpClientToFactory(builder, serilog, foundCertColl, item, contractOptions.HttpClientTimeoutSeconds);
+        AddHttpClientToFactory(builder, serilog, signerCertificate, item, contractOptions.HttpClientTimeoutSeconds);
     }
 }
 catch (Exception ex)
@@ -198,7 +205,7 @@ app.MapControllers();
 app.Run();
 
 // Метод добавляющий http-client в фабрику клиентов
-static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog, X509Certificate2 certificate, IConfigurationSection section, int httpClientTimeoutSeconds)
+static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog, X509Certificate2? certificate, IConfigurationSection section, int httpClientTimeoutSeconds)
 {
     var clientName = section.GetValue<string>("Name");
     var url = section.GetValue<string>("Url");
@@ -210,52 +217,53 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
         throw new NullReferenceException();
     }
 
-    // Проверяем, что значение указано
     if (string.IsNullOrEmpty(url))
     {
         serilog.Fatal("Отсутствует BaseAddress для http-клиента {clientName}.", clientName);
         throw new NullReferenceException();
     }
 
-    // Проверяем, что значение указано
     if (string.IsNullOrEmpty(urlv2))
     {
         serilog.Fatal("Отсутствует BaseAddress для http-клиента v3: {clientName}.", clientName);
         throw new NullReferenceException();
     }
 
-    // Добавление http-client в фабрику HttpClientFactory
-    builder.Services.AddHttpClient(clientName, client =>
+    var httpClientBuilder = builder.Services.AddHttpClient(clientName, client =>
     {
-        client.BaseAddress = new(url);
-        client.Timeout = TimeSpan.FromSeconds(4);
+        client.BaseAddress = new Uri(url);
         client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
-    })
-        // Добавляем сертификат в запрос
-        .ConfigurePrimaryHttpMessageHandler(() =>
-        {
-            return new HttpClientHandler
-            {
-                ClientCertificateOptions = ClientCertificateOption.Manual,
-                ClientCertificates = { certificate },
-                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
-            };
-        });
+    });
 
-    builder.Services.AddHttpClient($"{clientName}v3", client =>
+    var httpClientBuilderV3 = builder.Services.AddHttpClient($"{clientName}v3", client =>
     {
-        client.BaseAddress = new(urlv2);
-        client.Timeout = TimeSpan.FromSeconds(4);
+        client.BaseAddress = new Uri(urlv2);
         client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
-    })
-        // Добавляем сертификат в запрос
-        .ConfigurePrimaryHttpMessageHandler(() =>
+    });
+
+    if (certificate == null)
+    {
+        serilog.Warning("HttpClient {clientName} и {clientName}v3 зарегистрированы без клиентского сертификата.", clientName);
+        return;
+    }
+
+    httpClientBuilder.ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        return new HttpClientHandler
         {
-            return new HttpClientHandler
-            {
-                ClientCertificateOptions = ClientCertificateOption.Manual,
-                ClientCertificates = { certificate },
-                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
-            };
-        });
+            ClientCertificateOptions = ClientCertificateOption.Manual,
+            ClientCertificates = { certificate },
+            ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+        };
+    });
+
+    httpClientBuilderV3.ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        return new HttpClientHandler
+        {
+            ClientCertificateOptions = ClientCertificateOption.Manual,
+            ClientCertificates = { certificate },
+            ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+        };
+    });
 }
