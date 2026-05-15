@@ -79,6 +79,18 @@ namespace QBCH_api.Controllers
         private readonly string? OurBureauPSRN = config.GetValue<string>("Bureau:PSRN");
         private readonly string? _kakfaTopic = config.GetValue<string>("KafkaService:Topic");
 
+
+        [HttpGet("healthz")]
+        [MapToApiVersion("2.0")]
+        public IActionResult Healthz(ApiVersion apiVersion)
+        {
+            return Ok(new
+            {
+                status = "ok",
+                version = apiVersion.ToString()
+            });
+        }
+
         /// <summary>
         /// Запрос сведений о среднемесячных платежах Субъекта.
         /// </summary>

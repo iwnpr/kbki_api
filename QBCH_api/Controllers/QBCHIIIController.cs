@@ -65,6 +65,16 @@ public class QBCHIIIController(IMediator mediator,
     private const string ResponseExpireAtUtcField = "response_expire_at_utc";
     private const string LastPollUtcField = "last_poll_utc";
 
+    [HttpGet("healthz")]
+    [MapToApiVersion("3.0")]
+    public IActionResult Healthz(ApiVersion apiVersion)
+    {
+        return Ok(new
+        {
+            status = "ok",
+            version = apiVersion.ToString()
+        });
+    }
 
     [HttpPost("dlrequest")]
     [MapToApiVersion("3.0")]
