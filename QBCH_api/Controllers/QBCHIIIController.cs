@@ -87,7 +87,8 @@ public class QBCHIIIController(IMediator mediator,
         {
             var errorTicket = _ticketServiceV3.CreateResultV3Error(transaction.ProcessingErrors.First());
             var errorResult = _xmlServiceV3.SerializeAsByteV3(errorTicket);
-            var signedResp = _cryptoService.SignMsg(errorResult);
+            // var signedResp = _cryptoService.SignMsg(errorResult);
+            var signedResp = errorResult;
 
             transaction.Complete(errorResult, signedResp);
 
