@@ -97,4 +97,10 @@
 	  </None>
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Content Include="xsd/**">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	</ItemGroup>
+
 </Project>
