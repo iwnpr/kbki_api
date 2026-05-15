@@ -202,5 +202,5 @@ public class XmlServiceV3(
         };
 
     private static XmlSerializer CreateSerializerV3<T>() where T : class
-        => new(typeof(T), V3KnownTypes);
+        => new(typeof(T));
 }
