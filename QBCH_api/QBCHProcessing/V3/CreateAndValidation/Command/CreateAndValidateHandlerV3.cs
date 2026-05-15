@@ -30,8 +30,18 @@ public sealed class CreateAndValidateHandlerV3(
 
     public async Task<QBCHProcessingTransaction> Handle(CreateToValidateCommandV3 request, CancellationToken cancellationToken)
     {
+        request.Request.EnableBuffering();
+        if (request.Request.Body.CanSeek)
+        {
+            request.Request.Body.Position = 0;
+        }
+
         using var memoryStream = new MemoryStream();
         await request.Request.Body.CopyToAsync(memoryStream, cancellationToken);
+        if (request.Request.Body.CanSeek)
+        {
+            request.Request.Body.Position = 0;
+        }
 
         var clientRequest = ClentRequest.Create(
             requestMethod: request.Request.Method,
