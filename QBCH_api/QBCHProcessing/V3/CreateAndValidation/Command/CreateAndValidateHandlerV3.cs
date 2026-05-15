@@ -49,7 +49,9 @@ public sealed class CreateAndValidateHandlerV3(
             ipAddress: request.Request.HttpContext.Connection.RemoteIpAddress?.ToString(),
             certificate: request.Request.HttpContext.Connection.ClientCertificate);
 
-        var attachement = Attachment.Create(signedRequest: memoryStream.ToArray());
+        var requestBody = memoryStream.ToArray();
+        var attachement = Attachment.Create(signedRequest: requestBody);
+        attachement.SetRequestBody(requestBody);
         var transaction = QBCHProcessingTransaction.Create(DateTime.Now, clientRequest, attachement, _bKIRequisits.GetBureaList());
 
         return await transaction.ValidateV3(
