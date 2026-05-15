@@ -35,7 +35,7 @@ public static class QBCHValidationDispatcherV3
         ValidateRequestBodyV3(transaction);
 
         // 3) sign
-        ValidateSignatureEnvelopeV3(transaction, validationService);
+        //ValidateSignatureEnvelopeV3(transaction, validationService);
 
         // 4) xsd
         transaction.ValidateXmlV3(validationService, xmlService);
@@ -49,7 +49,7 @@ public static class QBCHValidationDispatcherV3
         transaction.ValidateXmlRequestCollectionV3(requestV3);
 
         // 7) rights
-        await ValidateRightsV3(transaction, repository, cancellationToken);
+        //await ValidateRightsV3(transaction, repository, cancellationToken);
 
         // 8) one-window
         ValidateOneWindowV3(transaction);

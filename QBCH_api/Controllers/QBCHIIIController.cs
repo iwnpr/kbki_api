@@ -66,7 +66,6 @@ public class QBCHIIIController(IMediator mediator,
     private const string LastPollUtcField = "last_poll_utc";
 
     [HttpGet("healthz")]
-    [MapToApiVersion("3.0")]
     public IActionResult Healthz(ApiVersion apiVersion)
     {
         return Ok(new
@@ -77,7 +76,6 @@ public class QBCHIIIController(IMediator mediator,
     }
 
     [HttpPost("dlrequest")]
-    [MapToApiVersion("3.0")]
     public async Task<IActionResult> DlRequest_v_3(ApiVersion apiVersion)
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
@@ -153,7 +151,6 @@ public class QBCHIIIController(IMediator mediator,
     }
 
     [HttpGet("dlanswer")]
-    [MapToApiVersion("3.0")]
     public async Task<IActionResult> DlAnswer_v_3(string? id = null)
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
@@ -348,7 +345,6 @@ public class QBCHIIIController(IMediator mediator,
     }
 
     [HttpPost("dlput")]
-    [MapToApiVersion("3.0")]
     public async Task<IActionResult> DlPut_v_3(ApiVersion apiVersion)
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
@@ -627,7 +623,6 @@ public class QBCHIIIController(IMediator mediator,
     }
 
     [HttpGet("dlputanswer")]
-    [MapToApiVersion("3.0")]
     public async Task<IActionResult> DlPutAnswer_v_3(ApiVersion version, string? id = null)
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
@@ -817,7 +812,6 @@ public class QBCHIIIController(IMediator mediator,
     }
 
     [HttpPost("certadd")]
-    [MapToApiVersion("3.0")]
     public async Task<IActionResult> CertAdd_v_3([FromForm] CertForm form)
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
@@ -1056,7 +1050,6 @@ public class QBCHIIIController(IMediator mediator,
     }
 
     [HttpPost("certrevoke")]
-    [MapToApiVersion("3.0")]
     public async Task<IActionResult> CertRevoke_v_3([FromForm] CertForm form)
     {
         byte[]? responseXml = null;
