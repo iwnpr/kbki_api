@@ -2,6 +2,7 @@
 using KafkaService_lib.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace KafkaService_lib.Services.Implementation
 {
@@ -19,6 +20,9 @@ namespace KafkaService_lib.Services.Implementation
         private readonly int _messageTimeoutMs;
         private readonly int _requestTimeoutMs;
         private readonly int _socketTimeoutMs;
+        private readonly int _produceRetryCount;
+        private readonly int _produceRetryDelayMs;
+        private readonly int _produceRetryTotalTimeoutMs;
         private readonly ICompressService _compressService;
 
 
@@ -34,6 +38,9 @@ namespace KafkaService_lib.Services.Implementation
             _messageTimeoutMs = _config.GetValue<int>("KafkaService:MessageTimeoutMs");
             _requestTimeoutMs = _config.GetValue<int>("KafkaService:RequestTimeoutMs");
             _socketTimeoutMs = _config.GetValue<int>("KafkaService:SocketTimeoutMs");
+            _produceRetryCount = Math.Max(0, _config.GetValue<int?>("KafkaService:ProduceRetryCount") ?? 2);
+            _produceRetryDelayMs = Math.Max(0, _config.GetValue<int?>("KafkaService:ProduceRetryDelayMs") ?? 100);
+            _produceRetryTotalTimeoutMs = Math.Max(1, _config.GetValue<int?>("KafkaService:ProduceRetryTotalTimeoutMs") ?? 2000);
         }
 
         public bool IsAvailable()
@@ -87,17 +94,52 @@ namespace KafkaService_lib.Services.Implementation
             }).Build();
 
             topic ??= _topic;
+            var maxAttempts = _produceRetryCount + 1;
+            var stopwatch = Stopwatch.StartNew();
 
-            try
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                await _producerMsg.ProduceAsync(topic, message);
-                return true;
+                try
+                {
+                    await _producerMsg.ProduceAsync(topic, message);
+                    return true;
+                }
+                catch (ProduceException<Null, string> e)
+                {
+                    var elapsedMs = stopwatch.ElapsedMilliseconds;
+                    var hasAttemptsLeft = attempt < maxAttempts;
+                    var hasTimeLeft = elapsedMs < _produceRetryTotalTimeoutMs;
+
+                    if (!hasAttemptsLeft || !hasTimeLeft)
+                    {
+                        _logger.LogCritical(e,
+                            "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Достигнут лимит ретраев/времени ({elapsedMs} ms из {timeoutMs} ms)",
+                            message.Value,
+                            attempt,
+                            maxAttempts,
+                            elapsedMs,
+                            _produceRetryTotalTimeoutMs);
+                        return false;
+                    }
+
+                    _logger.LogWarning(e,
+                        "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Повтор через {delayMs} ms",
+                        message.Value,
+                        attempt,
+                        maxAttempts,
+                        _produceRetryDelayMs);
+
+                    if (_produceRetryDelayMs > 0)
+                    {
+                        var remainingTimeoutMs = _produceRetryTotalTimeoutMs - elapsedMs;
+                        var delayMs = (int)Math.Min(_produceRetryDelayMs, remainingTimeoutMs);
+                        if (delayMs > 0)
+                            await Task.Delay(delayMs);
+                    }
+                }
             }
-            catch (ProduceException<Null, string> e)
-            {
-                _logger.LogCritical(e, "Ошибка добавления в кафку {value}", message.Value);
-                return false;
-            }
+
+            return false;
         }
 
         public async Task<bool> Produce(List<Message<string, string>> messages, string? topic = null)
