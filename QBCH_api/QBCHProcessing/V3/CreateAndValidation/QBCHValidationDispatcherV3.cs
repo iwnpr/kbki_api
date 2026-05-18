@@ -108,10 +108,7 @@ public static class QBCHValidationDispatcherV3
         }
     }
 
-    private static async Task ValidateAbonentV3(
-        QBCHProcessingTransaction transaction,
-        IRepositoryV3 repository,
-        ЗапросСведенийV3? requestV3)
+    private static async Task ValidateAbonentV3(QBCHProcessingTransaction transaction, IRepositoryV3 repository, ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
         {
@@ -119,9 +116,11 @@ public static class QBCHValidationDispatcherV3
         }
 
         var (requestInn, requestOgrn) = GetAbonentRequisitesV3(requestV3);
-        var dbRequisites = await repository.GetInnOgrnByThumbprintV3(transaction.ClentRequest.Certificate?.Thumbprint);
-        var dbInn = dbRequisites?.Element("inn")?.Value;
-        var dbOgrn = dbRequisites?.Element("ogrn")?.Value;
+        //var dbRequisites = await repository.GetInnOgrnByThumbprintV3(transaction.ClentRequest.Certificate?.Thumbprint);
+        //var dbInn = dbRequisites?.Element("inn")?.Value;
+        //var dbOgrn = dbRequisites?.Element("ogrn")?.Value;
+        var dbInn = requestInn;
+        var dbOgrn = requestOgrn;
 
         transaction.ClentRequest.SetRequestCertificateData(transaction.ClentRequest.Certificate?.Thumbprint, dbInn, dbOgrn);
 
