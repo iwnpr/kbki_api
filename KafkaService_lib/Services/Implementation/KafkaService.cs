@@ -99,6 +99,19 @@ namespace KafkaService_lib.Services.Implementation
 
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
+                var elapsedMsBeforeAttempt = stopwatch.ElapsedMilliseconds;
+                if (elapsedMsBeforeAttempt >= _produceRetryTotalTimeoutMs)
+                {
+                    _logger.LogCritical(
+                        "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Лимит времени исчерпан до отправки ({elapsedMs} ms из {timeoutMs} ms)",
+                        message.Value,
+                        attempt,
+                        maxAttempts,
+                        elapsedMsBeforeAttempt,
+                        _produceRetryTotalTimeoutMs);
+                    return false;
+                }
+
                 try
                 {
                     await _producerMsg.ProduceAsync(topic, message);
