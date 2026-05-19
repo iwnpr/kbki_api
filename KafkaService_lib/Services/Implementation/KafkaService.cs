@@ -99,9 +99,51 @@ namespace KafkaService_lib.Services.Implementation
 
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
+                var elapsedMsBeforeAttempt = stopwatch.ElapsedMilliseconds;
+                if (elapsedMsBeforeAttempt >= _produceRetryTotalTimeoutMs)
+                {
+                    _logger.LogCritical(
+                        "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Лимит времени исчерпан до отправки ({elapsedMs} ms из {timeoutMs} ms)",
+                        message.Value,
+                        attempt,
+                        maxAttempts,
+                        elapsedMsBeforeAttempt,
+                        _produceRetryTotalTimeoutMs);
+                    return false;
+                }
+
                 try
                 {
-                    await _producerMsg.ProduceAsync(topic, message);
+                    var remainingTimeoutMsBeforeAttempt = _produceRetryTotalTimeoutMs - elapsedMsBeforeAttempt;
+                    var produceTask = _producerMsg.ProduceAsync(topic, message);
+
+                    if (remainingTimeoutMsBeforeAttempt <= 0)
+                    {
+                        _logger.LogCritical(
+                            "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Лимит времени исчерпан до отправки ({elapsedMs} ms из {timeoutMs} ms)",
+                            message.Value,
+                            attempt,
+                            maxAttempts,
+                            elapsedMsBeforeAttempt,
+                            _produceRetryTotalTimeoutMs);
+                        return false;
+                    }
+
+                    var timeoutTask = Task.Delay((int)Math.Min(int.MaxValue, remainingTimeoutMsBeforeAttempt));
+                    var completedTask = await Task.WhenAny(produceTask, timeoutTask);
+
+                    if (completedTask != produceTask)
+                    {
+                        _logger.LogCritical(
+                            "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Превышен общий timeout во время отправки ({timeoutMs} ms)",
+                            message.Value,
+                            attempt,
+                            maxAttempts,
+                            _produceRetryTotalTimeoutMs);
+                        return false;
+                    }
+
+                    await produceTask;
                     return true;
                 }
                 catch (ProduceException<Null, string> e)
