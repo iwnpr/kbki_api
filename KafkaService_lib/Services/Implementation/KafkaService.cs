@@ -38,9 +38,9 @@ namespace KafkaService_lib.Services.Implementation
             _messageTimeoutMs = _config.GetValue<int>("KafkaService:MessageTimeoutMs");
             _requestTimeoutMs = _config.GetValue<int>("KafkaService:RequestTimeoutMs");
             _socketTimeoutMs = _config.GetValue<int>("KafkaService:SocketTimeoutMs");
-            _produceRetryCount = Math.Max(0, _config.GetValue<int?>("KafkaService:ProduceRetryCount") ?? 2);
-            _produceRetryDelayMs = Math.Max(0, _config.GetValue<int?>("KafkaService:ProduceRetryDelayMs") ?? 100);
-            _produceRetryTotalTimeoutMs = Math.Max(1, _config.GetValue<int?>("KafkaService:ProduceRetryTotalTimeoutMs") ?? 2000);
+            _produceRetryCount = _config.GetValue<int?>("KafkaService:ProduceRetryCount") ?? 2;
+            _produceRetryDelayMs = _config.GetValue<int?>("KafkaService:ProduceRetryDelayMs") ?? 100;
+            _produceRetryTotalTimeoutMs = _config.GetValue<int?>("KafkaService:ProduceRetryTotalTimeoutMs") ?? 2000;
         }
 
         public bool IsAvailable()
