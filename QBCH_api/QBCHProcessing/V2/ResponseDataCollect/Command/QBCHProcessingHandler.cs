@@ -22,7 +22,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
     private readonly ConcurrentBag<Task<QBCHTaskResult>> _tasksList = [];
     private readonly ILogger<QBCHProcessingHandler> _logger;
     private readonly IQBCHService _qBCHService;
-    private readonly ICacheService _redisСache;
+    private readonly IKeyValueStorageService _redisСache;
     private readonly ICryptoService _cryptoService;
     private readonly ITicketService _ticketService;
     private readonly IXmlService _xmlService;
@@ -42,7 +42,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
     /// <param name="bKIRequisitsHandler"></param>
     public QBCHProcessingHandler(ILogger<QBCHProcessingHandler> logger,
                                  IQBCHService qBCHService,
-                                 ICacheService redisСache,
+                                 IKeyValueStorageService redisСache,
                                  ICryptoService cryptoService,
                                  ITicketService ticketService,
                                  IXmlService xmlService,
@@ -176,7 +176,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
             _logger.LogError(ex, "Ошибка времени ожидания выполнения запроса. Время проверки превысило {TicketTimeout} миллисекунд.", request.TicketTimeout);
         }
 
-        var commonTicket = _ticketService.CreateResultV2Common(requestId: transaction.ClentRequest.RequestId!, guid: transaction.Id.ToString(), dateTime: transaction.ClentRequest.Request!.ДатаЗапроса);
+        var commonTicket = _ticketService.CreateResultV2(ResponseType.Ticket, requestId: transaction.ClentRequest.RequestId!, guid: transaction.Id.ToString());
         var commonTicketBytes = _xmlService.SerializeAsByte(commonTicket);
         transaction.Accepted();
         transaction.Complete(commonTicketBytes, _cryptoService.SignMsg(commonTicketBytes));

@@ -16,7 +16,7 @@ public sealed class CreateAndValidateHandlerV3(
     IValidationServiceV3 validationService,
     IXmlServiceV3 xmlService,
     IRepositoryV3 repository,
-    ICacheService cacheService,
+    IKeyValueStorageService storageService,
     IBKIRequisitsHandler bKIRequisits,
     ILogger<CreateAndValidateHandlerV3> logger)
     : IRequestHandler<CreateToValidateCommandV3, QBCHProcessingTransaction>
@@ -24,7 +24,7 @@ public sealed class CreateAndValidateHandlerV3(
     private readonly IValidationServiceV3 _validationService = validationService;
     private readonly IXmlServiceV3 _xmlService = xmlService;
     private readonly IRepositoryV3 _repository = repository;
-    private readonly ICacheService _cacheService = cacheService;
+    private readonly IKeyValueStorageService _storageService = storageService;
     private readonly IBKIRequisitsHandler _bKIRequisits = bKIRequisits;
     private readonly ILogger<CreateAndValidateHandlerV3> _logger = logger;
 
@@ -58,7 +58,7 @@ public sealed class CreateAndValidateHandlerV3(
             validationService: _validationService,
             xmlService: _xmlService,
             repository: _repository,
-            cacheService: _cacheService,
+            cacheService: _storageService,
             cancellationToken: cancellationToken);
     }
 }

@@ -25,14 +25,14 @@ namespace QBCH_api.QBCHProcessing.V2.CreateAndValidation.Command;
 public sealed class CreateAndValidateHandler(ICryptoService cryptoService,
                                 IXmlService xmlService,
                                 IRepository repository,
-                                ICacheService redisCache,
+                                IKeyValueStorageService redisCache,
                                 IBKIRequisitsHandler bKIRequisits,
                                 ILogger<CreateAndValidateHandler> logger) : IRequestHandler<CreateToValidateCommand, QBCHProcessingTransaction>
 {
     private readonly ICryptoService _cryptoService = cryptoService;
     private readonly IXmlService _xmlService = xmlService;
     private readonly IRepository _repository = repository;
-    private readonly ICacheService _redisCache = redisCache;
+    private readonly IKeyValueStorageService _redisCache = redisCache;
     private readonly IBKIRequisitsHandler _bKIRequisits = bKIRequisits;
     private readonly ILogger<CreateAndValidateHandler> _logger = logger;
 

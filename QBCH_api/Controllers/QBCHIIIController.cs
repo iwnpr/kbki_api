@@ -16,6 +16,7 @@ using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using XmlService_lib.Services.Interfaces.V3;
+using qbch_lib.domain.errors;
 using АбонентИно = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
 using АбонентИП = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
 using АбонентЮЛ = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентЮридическоеЛицо;
@@ -29,7 +30,7 @@ public class QBCHIIIController(IMediator mediator,
         ICryptoService cryptoService,
         ILogger<QBCHIIIController> logger,
         IXmlServiceV3 xmlServiceV3,
-        ICacheService redisСache,
+        IKeyValueStorageService storageService,
         IValidationServiceV3 validationServiceV3,
         ITicketServiceV3 ticketServiceV3,
         IDlPutServiceV3 dlPutServiceV3,
@@ -41,7 +42,7 @@ public class QBCHIIIController(IMediator mediator,
     private readonly ICryptoService _cryptoService = cryptoService;
     private readonly ILogger<QBCHIIIController> _logger = logger;
     private readonly IXmlServiceV3 _xmlServiceV3 = xmlServiceV3;
-    private readonly ICacheService _redisCache = redisСache;
+    private readonly IKeyValueStorageService _storageService = storageService;
     private readonly IValidationServiceV3 _validationServiceV3 = validationServiceV3;
     private readonly ITicketServiceV3 _ticketServiceV3 = ticketServiceV3;
     private readonly IDlPutServiceV3 _dlPutServiceV3 = dlPutServiceV3;
@@ -53,11 +54,23 @@ public class QBCHIIIController(IMediator mediator,
     private readonly string? _ourBureauName = config.GetValue<string>("Bureau:Name");
 
     private const string DlPutAnswerV3ReadyField = "putanswer_v3_response_xml";
+    /// <summary>
+    /// Флаг Redis о наличии сохранённого ответа для /dlputanswer версии 3.
+    /// </summary>
     private const string DlPutAnswerV3ExistsField = "putanswer_v3_exists";
     private const string ResponseDeliveredUtcField = "response_delivered_utc";
     private const string DlRequestV3Scope = "dlrequest:v3";
+    /// <summary>
+    /// Redis-scope (префикс ключей) для запросов /dlput версии 3.
+    /// </summary>
     private const string DlPutV3Scope = "dlput:v3";
+    /// <summary>
+    /// Redis-scope (префикс ключей) для запросов /dlanswer версии 3.
+    /// </summary>
     private const string DlAnswerV3Scope = "dlanswer:v3";
+    /// <summary>
+    /// Redis-scope (префикс ключей) для запросов /dlputanswer версии 3.
+    /// </summary>
     private const string DlPutAnswerV3Scope = "dlputanswer:v3";
     private const string ReadyAtUtcField = "ready_at_utc";
     private const string ReadyAtMskField = "ready_at_msk";
@@ -115,16 +128,15 @@ public class QBCHIIIController(IMediator mediator,
 
             // Если все значения валидные — пишет их в Redis
             if (!string.IsNullOrWhiteSpace(requestId) && !string.IsNullOrWhiteSpace(requestOgrn) && requestDate.HasValue)
-                await _redisCache.AddUniqueRequestId(DlRequestV3Scope, requestId, requestOgrn, requestDate.Value);
+                await _storageService.AddUniqueRequestId(DlRequestV3Scope, requestId, requestOgrn, requestDate.Value);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Ошибка записи уникальнго requestId в redis");
+            _logger.LogError(ex, "Ошибка записи уникальнго requestId в redis");
         }
 
         transaction.TimeElapsedForValidation.Stop();
         _logger.LogDebug("{guid} Validation time elapsed: {elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
-
 
         // Основной processing и формирование HTTP-ответа
         try
@@ -159,96 +171,92 @@ public class QBCHIIIController(IMediator mediator,
         var serviceName = DlAnswerV3Scope;
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
+        Error standartError;
 
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
 
         try
         {
-            await _redisCache.AddHash(serviceName, guid, "request_date_time", requestTime);
-            await _redisCache.AddHash(serviceName, guid, "temp_guid", guid);
-            await _redisCache.AddHash(serviceName, guid, "request_certificate_thumbprint", certificate?.Thumbprint ?? "-");
-            await _redisCache.AddHash(serviceName, guid, "request_certificate_data", certificate?.Thumbprint ?? "-");
+            await _storageService.AddHash(serviceName, guid, "request_date_time", requestTime);
+            await _storageService.AddHash(serviceName, guid, "temp_guid", guid);
+            await _storageService.AddHash(serviceName, guid, "request_certificate_thumbprint", certificate?.Thumbprint ?? "-");
+            await _storageService.AddHash(serviceName, guid, "request_certificate_data", certificate?.Thumbprint ?? "-");
 
             if (!string.IsNullOrWhiteSpace(ipAddress))
-                await _redisCache.AddHash(serviceName, guid, "ip_address", ipAddress);
+                await _storageService.AddHash(serviceName, guid, "ip_address", ipAddress);
 
             // Ошибка 1: метод не GET — спецификация требует GET для /dlanswer
             if (!string.Equals(Request.Method, HttpMethods.Get, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogError("Метод передачи запроса не соответствует ожидаемому");
-                var methodError = await BuildV3ErrorResponseAsync(
-                    serviceName, guid, 1,
-                    "Метод передачи запроса не соответствует ожидаемому",
-                    StatusCodes.Status400BadRequest);
+                standartError = Error.Code1_WrongRequestMethod();
+                _logger.LogError(standartError.Message);
+
+                var methodError = await BuildV3ErrorResponseAsync(serviceName, guid, standartError.Code, standartError.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = methodError.ResponseXml;
                 signedResponse = methodError.SignedResponse;
+
                 return methodError.ActionResult;
             }
 
             if (string.IsNullOrWhiteSpace(id))
             {
-                _logger.LogError("Запрос не содержит обязательных параметров: id");
+                standartError = Error.Code3_EmptyRequiredParameters(nameof(id));
+                _logger.LogError(standartError.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    3,
-                    "Запрос не содержит обязательных параметров: id",
-                     ResolveDlAnswerStatusCodeByErrorCode(3));
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, standartError.Code, standartError.Message, ResolveDlAnswerStatusCodeByErrorCode(standartError.Code));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.AddHash(serviceName, guid, "response_guid", id);
+            await _storageService.AddHash(serviceName, guid, "response_guid", id);
 
             if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, DlRequestV3Scope))
             {
-                _logger.LogError("Запрос не доступен для абонента");
+                standartError = Error.Code22_AccessDenied();
+                _logger.LogError(standartError.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    22,
-                    "Запрос не доступен для абонента",
-                    ResolveDlAnswerStatusCodeByErrorCode(22));
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, standartError.Code, standartError.Message, ResolveDlAnswerStatusCodeByErrorCode(standartError.Code));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
             }
 
-            if (!_validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult))
+
+            var isCertificateValid = _validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult);
+
+            if (!isCertificateValid & certValidationResult is not null)
             {
-                var ticket = certValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(5, "Ошибка проверки сертификата"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(certValidationResult.ErrorCode, certValidationResult.Error));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
-                await _redisCache.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
-                await _redisCache.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
+                await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
+                await _storageService.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            if (!await _redisCache.KeyExists([DlRequestV3Scope, id]))
+            if (!await _storageService.KeyExists([DlRequestV3Scope, id]))
             {
-                _logger.LogError("Указан некорректный идентификатор ответа");
+                _logger.LogError("Данные по указанному идентификатору не найдены");
 
                 var errorResult = await BuildV3ErrorResponseAsync(
                     serviceName,
                     guid,
                     16,
-                    "Указан некорректный идентификатор ответа",
-                    ResolveDlAnswerStatusCodeByErrorCode(16));
+                    "Данные по указанному идентификатору не найдены",
+                    StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
+            await _storageService.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
 
             var nowUtc = DateTimeOffset.UtcNow;
             var firstPollAllowedAtUtc = await GetFirstPollAllowedAtUtcAsync(DlRequestV3Scope, id);
@@ -258,65 +266,55 @@ public class QBCHIIIController(IMediator mediator,
                 var minIntervalSec = _contractRules.MinAnswerPollingIntervalSeconds;
                 _logger.LogWarning("Нарушение polling-ограничения /dlanswer v3 id={id}. Первый опрос разрешён с {firstPollAllowedAtUtc}, текущее UTC={nowUtc}.", id, firstPollAllowedAtUtc.Value, nowUtc);
 
-                await _redisCache.AddHash(DlRequestV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
-                await _redisCache.AddHash(DlRequestV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
-                await _redisCache.ListSet([serviceName, "polling_violations", id], $"{nowUtc:O}|{ipAddress ?? "-"}|min_interval={minIntervalSec}s");
-                await _redisCache.TrySetKeyExpiration(serviceName, $"polling_violations:{id}", _contractRules.ResponseRetentionMinutes);
+                await _storageService.AddHash(DlRequestV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
+                await _storageService.AddHash(DlRequestV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
+                await _storageService.ListSet([serviceName, "polling_violations", id], $"{nowUtc:O}|{ipAddress ?? "-"}|min_interval={minIntervalSec}s");
+                await _storageService.TrySetKeyExpiration(serviceName, $"polling_violations:{id}", _contractRules.ResponseRetentionMinutes);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    12,
-                    "Ответ не готов",
-                    ResolveDlAnswerStatusCodeByErrorCode(12));
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 12, "Ответ не готов", ResolveDlAnswerStatusCodeByErrorCode(12));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
             }
 
-            if (_redisCache.TryGetHashValue(DlRequestV3Scope, id, LastPollUtcField, out var lastPollRaw) &&
+            if (_storageService.TryGetHashValue(DlRequestV3Scope, id, LastPollUtcField, out var lastPollRaw) &&
                 DateTimeOffset.TryParse(lastPollRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var lastPollUtc) &&
                 !_contractRules.IsAnswerRetryAllowed(lastPollUtc, nowUtc))
             {
                 var minIntervalSec = _contractRules.MinAnswerPollingIntervalSeconds;
                 _logger.LogWarning("Нарушение polling-ограничения /dlanswer v3 id={id}. Последний опрос={lastPollUtc}, текущий UTC={nowUtc}, min={interval} сек.", id, lastPollUtc, nowUtc, minIntervalSec);
-                await _redisCache.AddHash(DlRequestV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
-                await _redisCache.AddHash(DlRequestV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
+                await _storageService.AddHash(DlRequestV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
+                await _storageService.AddHash(DlRequestV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
             }
 
-            await _redisCache.AddHash(DlRequestV3Scope, id, LastPollUtcField, nowUtc.ToString("O"));
-            await _redisCache.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(DlRequestV3Scope, id, LastPollUtcField, nowUtc.ToString("O"));
+            await _storageService.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-            await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-
-            if (_redisCache.TryGetHash(DlRequestV3Scope, id, "qbch_tasks_aggregate_xml", out responseXml))
+            if (_storageService.TryGetHash(DlRequestV3Scope, id, "qbch_tasks_aggregate_xml", out responseXml))
             {
                 // Ошибка 99: ответ уже был получен клиентом — повторная доставка запрещена протоколом v3.
                 // Код 17 по спецификации зарезервирован для ошибки соединения в режиме «одно окно».
-                if (await _redisCache.HashFieldExists(DlRequestV3Scope, id, ResponseDeliveredUtcField))
+                if (await _storageService.HashFieldExists(DlRequestV3Scope, id, ResponseDeliveredUtcField))
                 {
-                    var alreadyDeliveredResult = await BuildV3ErrorResponseAsync(
-                         serviceName, guid, 99,
-                        "Ответ уже получен",
-                        ResolveDlAnswerStatusCodeByErrorCode(99));
+                    standartError = Error.Code99_OtherError("Ответ уже получен");
+
+                    var alreadyDeliveredResult = await BuildV3ErrorResponseAsync(serviceName, guid, standartError.Code, standartError.Message, ResolveDlAnswerStatusCodeByErrorCode(standartError.Code));
 
                     responseXml = alreadyDeliveredResult.ResponseXml;
                     signedResponse = alreadyDeliveredResult.SignedResponse;
+
                     return alreadyDeliveredResult.ActionResult;
                 }
 
-                await _redisCache.AddHash(DlRequestV3Scope, id, ResponseDeliveredUtcField, DateTimeOffset.UtcNow.ToString("O"));
+                await _storageService.AddHash(DlRequestV3Scope, id, ResponseDeliveredUtcField, DateTimeOffset.UtcNow.ToString("O"));
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 return File(signedResponse, "application/octet-stream");
             }
 
-            var notReadyResult = await BuildV3ErrorResponseAsync(
-                serviceName,
-                guid,
-                12,
-                "Ответ не готов",
-                ResolveDlAnswerStatusCodeByErrorCode(12));
+            var error = Error.Code12_ResponseIsIncomplete();
+            var notReadyResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, ResolveDlAnswerStatusCodeByErrorCode(error.Code));
 
             responseXml = notReadyResult.ResponseXml;
             signedResponse = notReadyResult.SignedResponse;
@@ -325,23 +323,23 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /dlanswer v3");
-            await _redisCache.AddHash(serviceName, guid, "error_code", "500");
-            await _redisCache.AddHash(serviceName, guid, "error_message", ex.ToString());
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             return StatusCode(500);
         }
         finally
         {
             if (signedResponse is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_signed_data", signedResponse);
+                await _storageService.AddHash(serviceName, guid, "response_signed_data", signedResponse);
 
             if (responseXml is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_xml", responseXml);
+                await _storageService.AddHash(serviceName, guid, "response_xml", responseXml);
 
-            if (!await _redisCache.HashFieldExists(serviceName, guid, "validation_date_time"))
-                await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            if (!await _storageService.HashFieldExists(serviceName, guid, "validation_date_time"))
+                await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-            await _redisCache.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _redisCache.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
         }
     }
 
@@ -359,24 +357,20 @@ public class QBCHIIIController(IMediator mediator,
 
         try
         {
-            await _redisCache.AddHash(serviceName, guid, "request_date_time", requestTime);
-            await _redisCache.AddHash(serviceName, guid, "temp_guid", guid);
-            await _redisCache.AddHash(serviceName, guid, "request_certificate_thumbprint", certificate?.Thumbprint ?? "-");
-            await _redisCache.AddHash(serviceName, guid, "request_certificate_data", certificate?.Thumbprint ?? "-");
+            await _storageService.AddHash(serviceName, guid, "request_date_time", requestTime);
+            await _storageService.AddHash(serviceName, guid, "temp_guid", guid);
+            await _storageService.AddHash(serviceName, guid, "request_certificate_thumbprint", certificate?.Thumbprint ?? "-");
+            await _storageService.AddHash(serviceName, guid, "request_certificate_data", certificate?.Thumbprint ?? "-");
 
             if (!string.IsNullOrWhiteSpace(ipAddress))
-                await _redisCache.AddHash(serviceName, guid, "ip_address", ipAddress);
+                await _storageService.AddHash(serviceName, guid, "ip_address", ipAddress);
 
             if (!string.Equals(Request.Method, HttpMethods.Post, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogError("Метод передачи запроса не соответствует ожидаемому");
+                var error = Error.Code1_WrongRequestMethod();
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    1,
-                    "Метод передачи запроса не соответствует ожидаемому",
-                    StatusCodes.Status400BadRequest);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -384,55 +378,53 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             using var bodyStream = new MemoryStream();
+
             await Request.Body.CopyToAsync(bodyStream);
             var bodyBytes = bodyStream.ToArray();
 
             if (bodyBytes.Length == 0)
             {
-                _logger.LogError("Пустое тело запроса");
+                var error = Error.Code2_EmptyRequestBody();
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    2,
-                    "Тело запроса отсутствует",
-                    StatusCodes.Status400BadRequest);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
             }
 
-            if (!_validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult))
+            var isCertificateValid = _validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult);
+
+            if (!isCertificateValid & certValidationResult is not null)
             {
-                var ticket = certValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(5, "Ошибка проверки сертификата"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(certValidationResult.ErrorCode, certValidationResult.Error));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
-                await _redisCache.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
-                await _redisCache.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
+                await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
+                await _storageService.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            if (!_validationServiceV3.ValidateEncodingV3(bodyBytes, out var encodingValidationResult))
+            var IsEncodingValid = _validationServiceV3.ValidateEncodingV3(bodyBytes, out var encodingValidationResult);
+
+            if (!IsEncodingValid & encodingValidationResult is not null)
             {
-                var ticket = encodingValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(8, "Неподдерживаемая кодировка, файл не в кодировке Utf-8"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(encodingValidationResult.ErrorCode, encodingValidationResult.Error));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
-                await _redisCache.AddHash(serviceName, guid, "error_code", encodingValidationResult?.ErrorCode.ToString() ?? "8");
-                await _redisCache.AddHash(serviceName, guid, "error_message", encodingValidationResult?.Error ?? "Неподдерживаемая кодировка, файл не в кодировке Utf-8");
+                await _storageService.AddHash(serviceName, guid, "error_code", encodingValidationResult?.ErrorCode.ToString() ?? "8");
+                await _storageService.AddHash(serviceName, guid, "error_message", encodingValidationResult?.Error ?? "Неподдерживаемая кодировка, файл не в кодировке Utf-8");
+
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
             if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, serviceName))
             {
-                _logger.LogError("Запрос не доступен для абонента");
+                var error = Error.Code22_AccessDenied();
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    22,
-                    "Запрос не доступен для абонента",
-                    StatusCodes.Status400BadRequest);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -440,71 +432,68 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             using var validationStream = new MemoryStream(bodyBytes);
-            if (!_validationServiceV3.ValidateXmlV3(validationStream, serviceName, out var xsdValidationResult))
+
+            var isXmlValid = _validationServiceV3.ValidateXmlV3(validationStream, serviceName, out var xsdValidationResult);
+
+            if (!isXmlValid & xsdValidationResult is not null)
             {
-                var ticket = xsdValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(9, "Запрос не соответствует схеме"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(xsdValidationResult.ErrorCode, xsdValidationResult.Error));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
-                await _redisCache.AddHash(serviceName, guid, "error_code", xsdValidationResult?.ErrorCode.ToString() ?? "9");
-                await _redisCache.AddHash(serviceName, guid, "error_message", xsdValidationResult?.Error ?? "Запрос не соответствует схеме");
+                await _storageService.AddHash(serviceName, guid, "error_code", xsdValidationResult?.ErrorCode.ToString() ?? "9");
+                await _storageService.AddHash(serviceName, guid, "error_message", xsdValidationResult?.Error ?? "Запрос не соответствует схеме");
+
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
             var requestV3 = _xmlServiceV3.DeserializeV3<ПредставлениеСведений>(bodyBytes);
+
             if (requestV3 is null)
             {
                 _logger.LogError("Не удалось десериализовать тело запроса dlput v3");
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    9,
-                    "Не удалось прочитать XML запроса",
-                    StatusCodes.Status400BadRequest);
+                var error = Error.Code99_OtherError("Не удалось прочитать XML запроса");
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
             if (requestV3.БКИ is null || !string.Equals(requestV3.БКИ.ОГРН, _ourBureauPSRN, StringComparison.Ordinal))
             {
-                _logger.LogError("ОГРН БКИ в запросе не соответствует ОГРН принимающего бюро");
+                var error = Error.Code99_OtherError("ОГРН БКИ в запросе не соответствует ОГРН принимающего бюро");
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    20,
-                    "ОГРН БКИ в запросе не соответствует ОГРН принимающего бюро",
-                    StatusCodes.Status400BadRequest);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
-            if (!string.IsNullOrWhiteSpace(_ourBureauName) &&
-                !string.Equals(requestV3.БКИ.Value, _ourBureauName, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(_ourBureauName) && !string.Equals(requestV3.БКИ.Value, _ourBureauName, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogError("Наименование БКИ в запросе не соответствует наименованию принимающего бюро");
+                var error = Error.Code99_OtherError("Наименование БКИ в запросе не соответствует наименованию принимающего бюро");
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    21,
-                    "Наименование БКИ в запросе не соответствует наименованию принимающего бюро",
-                    StatusCodes.Status400BadRequest);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
+            //TODO проверить есть лимит
             var entitiesCount = requestV3.Сведения?.Length ?? 0;
 
             if (entitiesCount > _contractRules.MaxDlPutEntities)
             {
-                _logger.LogError("Превышен лимит количества элементов Сведения: {count}", entitiesCount);
+                var error = Error.Code99_OtherError($"Превышен лимит количества элементов Сведения: {entitiesCount}");
+                _logger.LogError(error.Message);
 
                 var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 3, $"Количество элементов Сведения превышает допустимый лимит {_contractRules.MaxDlPutEntities}", StatusCodes.Status400BadRequest);
 
@@ -513,13 +502,17 @@ public class QBCHIIIController(IMediator mediator,
                 return errorResult.ActionResult;
             }
 
-            if (!_validationServiceV3.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult))
+            var isDateValid = !_validationServiceV3.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult);
+
+            if (!isDateValid & dateValidationResult is not null)
             {
-                var ticket = dateValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(23, "Дата запроса указана некорректно"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(dateValidationResult.ErrorCode, dateValidationResult.Error));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
-                await _redisCache.AddHash(serviceName, guid, "error_code", dateValidationResult?.ErrorCode.ToString() ?? "23");
-                await _redisCache.AddHash(serviceName, guid, "error_message", dateValidationResult?.Error ?? "Дата запроса указана некорректно");
+
+                await _storageService.AddHash(serviceName, guid, "error_code", dateValidationResult?.ErrorCode.ToString() ?? "23");
+                await _storageService.AddHash(serviceName, guid, "error_message", dateValidationResult?.Error ?? "Дата запроса указана некорректно");
+
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
@@ -528,20 +521,22 @@ public class QBCHIIIController(IMediator mediator,
 
             var (isUniqueId, uniqueValidationResult) = await _validationServiceV3.IsUniqueRequestIdV3Async(requestId, serviceName, requestOgrn);
 
-            if (!isUniqueId)
+            if (!isUniqueId & uniqueValidationResult is not null)
             {
-                var ticket = uniqueValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(11, "Идентификатор запроса не уникален"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(uniqueValidationResult.ErrorCode, uniqueValidationResult.ErrorMessage));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
-                await _redisCache.AddHash(serviceName, guid, "error_code", uniqueValidationResult?.ErrorCode.ToString() ?? "11");
-                await _redisCache.AddHash(serviceName, guid, "error_message", uniqueValidationResult?.Error ?? "Идентификатор запроса не уникален");
+                await _storageService.AddHash(serviceName, guid, "error_code", uniqueValidationResult?.ErrorCode.ToString() ?? "11");
+                await _storageService.AddHash(serviceName, guid, "error_message", uniqueValidationResult?.Error ?? "Идентификатор запроса не уникален");
+
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
             var dlPutResult = await _dlPutServiceV3.ProcessAsync(requestV3);
+
             if (dlPutResult.IsAccepted)
             {
-                await _redisCache.AddUniqueRequestId(serviceName, requestId, requestOgrn, requestV3.ДатаЗапроса);
+                await _storageService.AddUniqueRequestId(serviceName, requestId, requestOgrn, requestV3.ДатаЗапроса);
 
                 if (dlPutResult.AcceptedTicket?.Item is QBCH.Lib.qcb_xml.v3_0.РезультатИдентификаторОтвета acceptedResponseId &&
                     !string.IsNullOrWhiteSpace(acceptedResponseId.ИдентификаторОтвета))
@@ -561,14 +556,14 @@ public class QBCHIIIController(IMediator mediator,
                     responseXml = _xmlServiceV3.SerializeAsByteV3(dlPutResult.AcceptedTicket);
                     signedResponse = _cryptoService.SignMsg(responseXml);
 
-                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, DlPutAnswerV3ExistsField, "1");
-                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ReadyAtUtcField, readyAtUtc.ToString("O"));
-                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ReadyAtMskField, readyAtUtc.ToOffset(TimeSpan.FromHours(3)).ToString("O"));
-                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
-                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
-                    await _redisCache.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, "response_guid", acceptedResponseId.ИдентификаторОтвета);
-                    await _redisCache.TrySetKeyExpiration(serviceName, acceptedResponseId.ИдентификаторОтвета, _contractRules.ResponseRetentionMinutes);
-                    await _redisCache.AddHash(serviceName, guid, "response_guid", acceptedResponseId.ИдентификаторОтвета);
+                    await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, DlPutAnswerV3ExistsField, "1");
+                    await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ReadyAtUtcField, readyAtUtc.ToString("O"));
+                    await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ReadyAtMskField, readyAtUtc.ToOffset(TimeSpan.FromHours(3)).ToString("O"));
+                    await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
+                    await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
+                    await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, "response_guid", acceptedResponseId.ИдентификаторОтвета);
+                    await _storageService.TrySetKeyExpiration(serviceName, acceptedResponseId.ИдентификаторОтвета, _contractRules.ResponseRetentionMinutes);
+                    await _storageService.AddHash(serviceName, guid, "response_guid", acceptedResponseId.ИдентификаторОтвета);
                 }
                 else
                 {
@@ -582,11 +577,11 @@ public class QBCHIIIController(IMediator mediator,
             responseXml = _xmlServiceV3.SerializeAsByteV3(dlPutResult.ReadyResult);
             signedResponse = _cryptoService.SignMsg(responseXml);
 
-            await _redisCache.AddUniqueRequestId(serviceName, requestId, requestOgrn, requestV3.ДатаЗапроса);
-            await _redisCache.AddHash(serviceName, dlPutResult.ReadyResult!.ИдентификаторОтвета, DlPutAnswerV3ReadyField, responseXml);
-            await _redisCache.AddHash(serviceName, dlPutResult.ReadyResult.ИдентификаторОтвета, DlPutAnswerV3ExistsField, "1");
-            await _redisCache.TrySetKeyExpiration(serviceName, dlPutResult.ReadyResult.ИдентификаторОтвета, _contractRules.ResponseRetentionMinutes);
-            await _redisCache.AddHash(serviceName, guid, "response_guid", dlPutResult.ReadyResult.ИдентификаторОтвета);
+            await _storageService.AddUniqueRequestId(serviceName, requestId, requestOgrn, requestV3.ДатаЗапроса);
+            await _storageService.AddHash(serviceName, dlPutResult.ReadyResult!.ИдентификаторОтвета, DlPutAnswerV3ReadyField, responseXml);
+            await _storageService.AddHash(serviceName, dlPutResult.ReadyResult.ИдентификаторОтвета, DlPutAnswerV3ExistsField, "1");
+            await _storageService.TrySetKeyExpiration(serviceName, dlPutResult.ReadyResult.ИдентификаторОтвета, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(serviceName, guid, "response_guid", dlPutResult.ReadyResult.ИдентификаторОтвета);
 
             return File(signedResponse, "application/octet-stream");
         }
@@ -603,23 +598,23 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /dlput v3");
-            await _redisCache.AddHash(serviceName, guid, "error_code", "500");
-            await _redisCache.AddHash(serviceName, guid, "error_message", ex.ToString());
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             return StatusCode(500);
         }
         finally
         {
             if (signedResponse is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_signed_data", signedResponse);
+                await _storageService.AddHash(serviceName, guid, "response_signed_data", signedResponse);
 
             if (responseXml is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_xml", responseXml);
+                await _storageService.AddHash(serviceName, guid, "response_xml", responseXml);
 
-            if (!await _redisCache.HashFieldExists(serviceName, guid, "validation_date_time"))
-                await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            if (!await _storageService.HashFieldExists(serviceName, guid, "validation_date_time"))
+                await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-            await _redisCache.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _redisCache.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
         }
     }
 
@@ -635,108 +630,95 @@ public class QBCHIIIController(IMediator mediator,
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
 
+        Error error = null;
+
         try
         {
-            await _redisCache.AddHash(serviceName, guid, "request_date_time", requestTime);
-            await _redisCache.AddHash(serviceName, guid, "temp_guid", guid);
-            await _redisCache.AddHash(serviceName, guid, "request_certificate_thumbprint", certificate?.Thumbprint ?? "-");
-            await _redisCache.AddHash(serviceName, guid, "request_certificate_data", certificate?.Thumbprint ?? "-");
+            await _storageService.AddHash(serviceName, guid, "request_date_time", requestTime);
+            await _storageService.AddHash(serviceName, guid, "temp_guid", guid);
+            await _storageService.AddHash(serviceName, guid, "request_certificate_thumbprint", certificate?.Thumbprint ?? "-");
+            await _storageService.AddHash(serviceName, guid, "request_certificate_data", certificate?.Thumbprint ?? "-");
 
             if (!string.IsNullOrWhiteSpace(ipAddress))
-                await _redisCache.AddHash(serviceName, guid, "ip_address", ipAddress);
+                await _storageService.AddHash(serviceName, guid, "ip_address", ipAddress);
 
-            // Ошибка 1: метод не GET — спецификация требует GET для /dlputanswer
             if (!string.Equals(Request.Method, HttpMethods.Get, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogError("Метод передачи запроса не соответствует ожидаемому");
-                var methodError = await BuildV3ErrorResponseAsync(
-                    serviceName, guid, 1,
-                    "Метод передачи запроса не соответствует ожидаемому",
-                    StatusCodes.Status400BadRequest);
+                error = Error.Code1_WrongRequestMethod();
+                _logger.LogError(error.Message);
+                var methodError = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = methodError.ResponseXml;
                 signedResponse = methodError.SignedResponse;
+
                 return methodError.ActionResult;
             }
 
             if (string.IsNullOrWhiteSpace(id))
             {
-                _logger.LogError("Запрос не содержит обязательных параметров: id");
+                error = Error.Code3_EmptyRequiredParameters(nameof(id));
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    3,
-                    "Запрос не содержит обязательных параметров: id",
-                    ResolveDlPutAnswerStatusCodeByErrorCode(3));
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, ResolveDlPutAnswerStatusCodeByErrorCode(error.Code));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.AddHash(serviceName, guid, "response_guid", id);
+            await _storageService.AddHash(serviceName, guid, "response_guid", id);
 
-            if (!_validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult))
+            var isCertificateValid = _validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult);
+
+            if (!isCertificateValid & certValidationResult is not null)
             {
-                var ticket = certValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(5, "Ошибка проверки сертификата"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(certValidationResult.ErrorCode, certValidationResult.ErrorMessage));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
-                await _redisCache.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
-                await _redisCache.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
+                await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
+                await _storageService.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
             if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, DlPutV3Scope))
             {
-                _logger.LogError("Запрос не доступен для абонента");
+                error = Error.Code22_AccessDenied();
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    22,
-                    "Запрос не доступен для абонента",
-                    ResolveDlPutAnswerStatusCodeByErrorCode(22));
-
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, ResolveDlPutAnswerStatusCodeByErrorCode(22));
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
-            if (!await _redisCache.KeyExists([DlPutV3Scope, id]))
+            if (!await _storageService.KeyExists([DlPutV3Scope, id]))
             {
-                _logger.LogError("Указан некорректный идентификатор ответа");
+                error = Error.Code16_InvalidRequestId();
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    16,
-                    "Указан некорректный идентификатор ответа",
-                    ResolveDlPutAnswerStatusCodeByErrorCode(16));
-
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, ResolveDlPutAnswerStatusCodeByErrorCode(16));
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
-            if (!await _redisCache.HashFieldExists(DlPutV3Scope, id, DlPutAnswerV3ExistsField))
+            if (!await _storageService.HashFieldExists(DlPutV3Scope, id, DlPutAnswerV3ExistsField))
             {
-                _logger.LogError("Указан некорректный идентификатор ответа");
+                error = Error.Code16_InvalidRequestId();
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    16,
-                    "Указан некорректный идентификатор ответа",
-                    ResolveDlPutAnswerStatusCodeByErrorCode(16));
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, ResolveDlPutAnswerStatusCodeByErrorCode(16));
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.TrySetKeyExpiration(DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
+            await _storageService.TrySetKeyExpiration(DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
             var nowUtc = DateTimeOffset.UtcNow;
             var firstPollAllowedAtUtc = await GetFirstPollAllowedAtUtcAsync(DlPutV3Scope, id);
 
@@ -744,71 +726,70 @@ public class QBCHIIIController(IMediator mediator,
             {
                 var minIntervalSec = _contractRules.MinAnswerPollingIntervalSeconds;
                 _logger.LogWarning("Нарушение polling-ограничения /dlputanswer v3 id={id}. Первый опрос разрешён с {firstPollAllowedAtUtc}, текущее UTC={nowUtc}.", id, firstPollAllowedAtUtc.Value, nowUtc);
-                await _redisCache.AddHash(DlPutV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
-                await _redisCache.AddHash(DlPutV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
+                await _storageService.AddHash(DlPutV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
+                await _storageService.AddHash(DlPutV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
             }
 
-            if (_redisCache.TryGetHashValue(DlPutV3Scope, id, LastPollUtcField, out var lastPollRaw) &&
+            if (_storageService.TryGetHashValue(DlPutV3Scope, id, LastPollUtcField, out var lastPollRaw) &&
                 DateTimeOffset.TryParse(lastPollRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var lastPollUtc) &&
                 !_contractRules.IsAnswerRetryAllowed(lastPollUtc, nowUtc))
             {
                 _logger.LogWarning("Нарушение polling-ограничения /dlputanswer v3 id={id}. Последний опрос={lastPollUtc}, текущий UTC={nowUtc}, min={interval} сек.", id, lastPollUtc, nowUtc, _contractRules.MinAnswerPollingIntervalSeconds);
-                await _redisCache.AddHash(DlPutV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
-                await _redisCache.AddHash(DlPutV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
+                await _storageService.AddHash(DlPutV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
+                await _storageService.AddHash(DlPutV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
             }
 
-            await _redisCache.AddHash(DlPutV3Scope, id, LastPollUtcField, nowUtc.ToString("O"));
-            await _redisCache.TrySetKeyExpiration(DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(DlPutV3Scope, id, LastPollUtcField, nowUtc.ToString("O"));
+            await _storageService.TrySetKeyExpiration(DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
 
-            if (_redisCache.TryGetHash(DlPutV3Scope, id, DlPutAnswerV3ReadyField, out responseXml))
+            if (_storageService.TryGetHash(DlPutV3Scope, id, DlPutAnswerV3ReadyField, out responseXml))
             {
                 // Ошибка 99: ответ уже был получен клиентом — повторная доставка запрещена протоколом v3.
                 // Код 17 по спецификации зарезервирован для ошибки соединения в режиме «одно окно».
-                if (await _redisCache.HashFieldExists(DlPutV3Scope, id, ResponseDeliveredUtcField))
+                if (await _storageService.HashFieldExists(DlPutV3Scope, id, ResponseDeliveredUtcField))
                 {
-                    var alreadyDeliveredResult = await BuildV3ErrorResponseAsync(serviceName, guid, 99, "Ответ уже получен", ResolveDlPutAnswerStatusCodeByErrorCode(99));
+                    error = Error.Code99_OtherError("Ответ уже получен");
+                    var alreadyDeliveredResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, ResolveDlPutAnswerStatusCodeByErrorCode(99));
 
                     responseXml = alreadyDeliveredResult.ResponseXml;
                     signedResponse = alreadyDeliveredResult.SignedResponse;
+
                     return alreadyDeliveredResult.ActionResult;
                 }
 
-                await _redisCache.AddHash(DlPutV3Scope, id, ResponseDeliveredUtcField, DateTimeOffset.UtcNow.ToString("O"));
+                await _storageService.AddHash(DlPutV3Scope, id, ResponseDeliveredUtcField, DateTimeOffset.UtcNow.ToString("O"));
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 return File(signedResponse, "application/octet-stream");
             }
 
-            var notReadyResult = await BuildV3ErrorResponseAsync(
-                serviceName,
-                guid,
-                12,
-                "Ответ не готов",
-                ResolveDlPutAnswerStatusCodeByErrorCode(12));
+            error = Error.Code12_ResponseIsIncomplete();
+            var notReadyResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, ResolveDlPutAnswerStatusCodeByErrorCode(12));
 
             responseXml = notReadyResult.ResponseXml;
             signedResponse = notReadyResult.SignedResponse;
+
             return notReadyResult.ActionResult;
         }
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /dlputanswer v3");
-            await _redisCache.AddHash(serviceName, guid, "error_code", "500");
-            await _redisCache.AddHash(serviceName, guid, "error_message", ex.ToString());
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             return StatusCode(500);
         }
         finally
         {
             if (signedResponse is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_signed_data", signedResponse);
+                await _storageService.AddHash(serviceName, guid, "response_signed_data", signedResponse);
 
             if (responseXml is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_xml", responseXml);
+                await _storageService.AddHash(serviceName, guid, "response_xml", responseXml);
 
-            if (!await _redisCache.HashFieldExists(serviceName, guid, "validation_date_time"))
-                await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            if (!await _storageService.HashFieldExists(serviceName, guid, "validation_date_time"))
+                await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-            await _redisCache.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _redisCache.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
         }
     }
 
@@ -824,26 +805,24 @@ public class QBCHIIIController(IMediator mediator,
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
 
-        await _redisCache.AddHash(serviceName, guid, "request_date_time", requestTime);
-        await _redisCache.AddHash(serviceName, guid, "temp_guid", guid);
-        await _redisCache.AddHash(serviceName, guid, "request_certificate_thumbprint", certificate?.Thumbprint ?? "-");
-        await _redisCache.AddHash(serviceName, guid, "request_certificate_data", certificate?.RawData ?? Array.Empty<byte>());
+        Error error = null;
+
+        await _storageService.AddHash(serviceName, guid, "request_date_time", requestTime);
+        await _storageService.AddHash(serviceName, guid, "temp_guid", guid);
+        await _storageService.AddHash(serviceName, guid, "request_certificate_thumbprint", certificate?.Thumbprint ?? "-");
+        await _storageService.AddHash(serviceName, guid, "request_certificate_data", certificate?.RawData ?? Array.Empty<byte>());
 
         if (!string.IsNullOrWhiteSpace(ipAddress))
-            await _redisCache.AddHash(serviceName, guid, "ip_address", ipAddress);
+            await _storageService.AddHash(serviceName, guid, "ip_address", ipAddress);
 
         try
         {
             if (!string.Equals(Request.Method, "POST", StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogError("Метод передачи запроса не соответствует ожидаемому");
+                error = Error.Code1_WrongRequestMethod();
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    1,
-                    "Метод передачи запроса не соответствует ожидаемому",
-                    StatusCodes.Status400BadRequest);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -852,80 +831,51 @@ public class QBCHIIIController(IMediator mediator,
 
             if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, serviceName))
             {
-                _logger.LogError("Запрос не доступен для абонента");
+                error = Error.Code22_AccessDenied();
+                _logger.LogError(error.Message);
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    22,
-                    "Запрос не доступен для абонента",
-                    StatusCodes.Status400BadRequest);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
             }
 
-            if (!_validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult))
+            var isCertificateValid = _validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult);
+
+            if (!isCertificateValid  & certValidationResult is not null)
             {
-                var ticket = certValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(5, "Ошибка проверки сертификата"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(certValidationResult.ErrorCode, certValidationResult.ErrorMessage));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
-                await _redisCache.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
-                await _redisCache.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
+                await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
+                await _storageService.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            if (string.IsNullOrWhiteSpace(form.id))
-            {
-                _logger.LogError("Запрос не содержит обязательных параметров: id");
+            var missingParameter = string.IsNullOrWhiteSpace(form.id)
+                ? nameof(form.id)
+                : form.sign is null || form.sign.Length == 0
+                ? nameof(form.sign)
+                : form.cert is null || form.cert.Length == 0
+                ? nameof(form.cert)
+                : null;
 
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    3,
-                    "Запрос не содержит обязательных параметров: id",
-                    StatusCodes.Status400BadRequest);
+            if (!string.IsNullOrWhiteSpace(missingParameter))
+            {
+                error = Error.Code3_EmptyRequiredParameters(missingParameter);
+                _logger.LogError(error.Message);
+
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
-            if (form.sign is null)
-            {
-                _logger.LogError("Запрос не содержит обязательных параметров: sign");
-
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    3,
-                    "Запрос не содержит обязательных параметров: sign",
-                    StatusCodes.Status400BadRequest);
-
-                responseXml = errorResult.ResponseXml;
-                signedResponse = errorResult.SignedResponse;
-                return errorResult.ActionResult;
-            }
-
-            if (form.cert is null)
-            {
-                _logger.LogError("Запрос не содержит обязательных параметров: cert");
-
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    3,
-                    "Запрос не содержит обязательных параметров: cert",
-                    StatusCodes.Status400BadRequest);
-
-                responseXml = errorResult.ResponseXml;
-                signedResponse = errorResult.SignedResponse;
-                return errorResult.ActionResult;
-            }
-
-            await _redisCache.AddHash(serviceName, guid, "request_id", form.id);
+            await _storageService.AddHash(serviceName, guid, "request_id", form.id);
 
             var signStream = new MemoryStream();
             var certStream = new MemoryStream();
@@ -936,41 +886,37 @@ public class QBCHIIIController(IMediator mediator,
             var certBytes = certStream.ToArray(); // DER
             var signBytes = signStream.ToArray();
 
-            await _redisCache.AddHash(serviceName, guid, "cert", certBytes);
-            await _redisCache.AddHash(serviceName, guid, "sign", signBytes);
+            await _storageService.AddHash(serviceName, guid, "cert", certBytes);
+            await _storageService.AddHash(serviceName, guid, "sign", signBytes);
 
             try
             {
                 X509Certificate2 certFromForm = new(certBytes);
-                await _redisCache.AddHash(serviceName, guid, "cert_thumbprint", certFromForm.Thumbprint ?? "-");
+                await _storageService.AddHash(serviceName, guid, "cert_thumbprint", certFromForm.Thumbprint ?? "-");
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "{serviceName} не удалось считать thumbprint сертификата из формы", serviceName);
             }
 
-            if (!_cryptoService.ValidateMsg(certBytes, certificate, out var validateMsgResult, signBytes))
+            var isMsgValid = _cryptoService.ValidateMsg(certBytes, certificate, out var validateMsgResult, signBytes);
+
+            if (!isMsgValid && validateMsgResult is not null)
             {
-                var errorCode = validateMsgResult.ErrorCode == 0 ? 99 : validateMsgResult.ErrorCode;
-                var errorMessage = string.IsNullOrWhiteSpace(validateMsgResult.Error) ? "Ошибка проверки подписи сертификата" : validateMsgResult.Error;
-                var ticket = _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(errorCode, errorMessage));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(validateMsgResult.ErrorCode, validateMsgResult.ErrorMessage));
 
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
-                await _redisCache.AddHash(serviceName, guid, "error_code", errorCode.ToString());
-                await _redisCache.AddHash(serviceName, guid, "error_message", errorMessage);
+                await _storageService.AddHash(serviceName, guid, "error_code", validateMsgResult.ErrorCode.ToString());
+                await _storageService.AddHash(serviceName, guid, "error_message", validateMsgResult.ErrorMessage);
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
             if (string.IsNullOrWhiteSpace(validateMsgResult.RequestOGRN))
             {
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    99,
-                    "Не удалось определить ОГРН абонента по действующему сертификату",
-                    StatusCodes.Status400BadRequest);
+                error = Error.Code99_OtherError("Не удалось определить ОГРН абонента по действующему сертификату");
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -979,43 +925,36 @@ public class QBCHIIIController(IMediator mediator,
 
             var (isUniqueId, uniqueValidationResult) = await _validationServiceV3.IsUniqueRequestIdV3Async(form.id, serviceName, validateMsgResult.RequestOGRN);
 
-            if (!isUniqueId)
+            if (!isUniqueId & uniqueValidationResult is not null)
             {
-                var ticket = uniqueValidationResult?.TicketV3 ?? _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(11, "Идентификатор запроса не уникален"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(uniqueValidationResult.ErrorCode, uniqueValidationResult.ErrorMessage));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
-                await _redisCache.AddHash(serviceName, guid, "error_code", uniqueValidationResult?.ErrorCode.ToString() ?? "11");
-                await _redisCache.AddHash(serviceName, guid, "error_message", uniqueValidationResult?.Error ?? "Идентификатор запроса не уникален");
+                await _storageService.AddHash(serviceName, guid, "error_code", uniqueValidationResult?.ErrorCode.ToString() ?? "11");
+                await _storageService.AddHash(serviceName, guid, "error_message", uniqueValidationResult?.Error ?? "Идентификатор запроса не уникален");
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            await _redisCache.AddUniqueRequestId(serviceName, form.id, validateMsgResult.RequestOGRN, DateTime.Now);
+            await _storageService.AddUniqueRequestId(serviceName, form.id, validateMsgResult.RequestOGRN, DateTime.Now);
 
             if (await _validationServiceV3.IsCertExistsV3(certBytes))
             {
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    99,
-                    "Такой сертификат уже существует.",
-                    StatusCodes.Status400BadRequest);
+                error = Error.Code99_OtherError("Такой сертификат уже существует.");
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
             if (!await _certManagement.AddCertificate(certBytes, validateMsgResult.RequestOGRN, guid))
             {
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    99,
-                    "Не удалось добавить сертификат.",
-                    StatusCodes.Status400BadRequest);
+                error = Error.Code99_OtherError("Не удалось добавить сертификат.");
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
@@ -1030,23 +969,23 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /certadd v3");
-            await _redisCache.AddHash(serviceName, guid, "error_code", "500");
-            await _redisCache.AddHash(serviceName, guid, "error_message", ex.ToString());
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             return StatusCode(500);
         }
         finally
         {
             if (signedResponse is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_signed_data", signedResponse);
+                await _storageService.AddHash(serviceName, guid, "response_signed_data", signedResponse);
 
             if (responseXml is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_xml", responseXml);
+                await _storageService.AddHash(serviceName, guid, "response_xml", responseXml);
 
-            if (!await _redisCache.HashFieldExists(serviceName, guid, "validation_date_time"))
-                await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            if (!await _storageService.HashFieldExists(serviceName, guid, "validation_date_time"))
+                await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-            await _redisCache.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _redisCache.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
         }
     }
 
@@ -1058,22 +997,23 @@ public class QBCHIIIController(IMediator mediator,
         var guid = Guid.NewGuid().ToString();
         const string serviceName = "certrevoke";
 
-        await _redisCache.AddHash(serviceName, guid, "request_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-        await _redisCache.AddHash(serviceName, guid, "temp_guid", guid);
+        await _storageService.AddHash(serviceName, guid, "request_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+        await _storageService.AddHash(serviceName, guid, "temp_guid", guid);
 
         var requestCertificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
-        await _redisCache.AddHash(serviceName, guid, "request_certificate_thumbprint", requestCertificate?.Thumbprint ?? "-");
-        await _redisCache.AddHash(serviceName, guid, "request_certificate_data", requestCertificate?.RawData ?? Encoding.UTF8.GetBytes("-"));
+        await _storageService.AddHash(serviceName, guid, "request_certificate_thumbprint", requestCertificate?.Thumbprint ?? "-");
+        await _storageService.AddHash(serviceName, guid, "request_certificate_data", requestCertificate?.RawData ?? Encoding.UTF8.GetBytes("-"));
         if (!string.IsNullOrWhiteSpace(ipAddress))
-            await _redisCache.AddHash(serviceName, guid, "ip_address", ipAddress);
+            await _storageService.AddHash(serviceName, guid, "ip_address", ipAddress);
 
         try
         {
             if (!await _validationServiceV3.ValidateRulesV3(requestCertificate?.Thumbprint, serviceName))
             {
-                _logger.LogError("Запрос не доступен для абонента");
-                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 22, "Запрос не доступен для абонента", StatusCodes.Status400BadRequest);
+                var error = Error.Code22_AccessDenied();
+                _logger.LogError(error.Message);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
@@ -1081,7 +1021,9 @@ public class QBCHIIIController(IMediator mediator,
 
             if (string.IsNullOrWhiteSpace(form.id))
             {
-                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 3, "Запрос не содержит обязательных параметров: id", StatusCodes.Status400BadRequest);
+                var error = Error.Code3_EmptyRequiredParameters(nameof(form.id));
+                _logger.LogError(error.Message);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
@@ -1089,7 +1031,9 @@ public class QBCHIIIController(IMediator mediator,
 
             if (form.sign is null)
             {
-                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 3, "Запрос не содержит обязательных параметров: sign", StatusCodes.Status400BadRequest);
+                var error = Error.Code3_EmptyRequiredParameters(nameof(form.sign));
+                _logger.LogError(error.Message);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
@@ -1097,13 +1041,14 @@ public class QBCHIIIController(IMediator mediator,
 
             if (form.cert is null)
             {
-                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 3, "Запрос не содержит обязательных параметров: cert", StatusCodes.Status400BadRequest);
+                var error = Error.Code3_EmptyRequiredParameters(nameof(form.cert));
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.AddHash(serviceName, guid, "request_guid", form.id);
+            await _storageService.AddHash(serviceName, guid, "request_guid", form.id);
 
             await using var certStream = new MemoryStream();
             await using var signStream = new MemoryStream();
@@ -1112,8 +1057,8 @@ public class QBCHIIIController(IMediator mediator,
 
             var certRaw = certStream.ToArray();
             var signRaw = signStream.ToArray();
-            await _redisCache.AddHash(serviceName, guid, "request_certificate_to_revoke", certRaw);
-            await _redisCache.AddHash(serviceName, guid, "request_sign", signRaw);
+            await _storageService.AddHash(serviceName, guid, "request_certificate_to_revoke", certRaw);
+            await _storageService.AddHash(serviceName, guid, "request_sign", signRaw);
 
             X509Certificate2 certToRevoke;
             try
@@ -1129,23 +1074,29 @@ public class QBCHIIIController(IMediator mediator,
                 return errorResult.ActionResult;
             }
 
-            await _redisCache.AddHash(serviceName, guid, "request_revoke_thumbprint", certToRevoke.Thumbprint ?? "-");
+            await _storageService.AddHash(serviceName, guid, "request_revoke_thumbprint", certToRevoke.Thumbprint ?? "-");
 
-            if (!_cryptoService.ValidateMsg(certRaw, requestCertificate, out var cryptoResult, signRaw))
+            var isMsgValid = _cryptoService.ValidateMsg(certRaw, requestCertificate, out var cryptoResult, signRaw);
+
+            if (!isMsgValid & cryptoResult is not null)
             {
-                var ticket = _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(cryptoResult.ErrorCode, cryptoResult.Error ?? "УЭП некорректна"));
+                var ticket = _ticketServiceV3.CreateResultV3Error(new Error(cryptoResult.ErrorCode, cryptoResult.Error));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
-                await _redisCache.AddHash(serviceName, guid, "error_code", cryptoResult.ErrorCode.ToString());
-                await _redisCache.AddHash(serviceName, guid, "error_message", cryptoResult.Error ?? "-");
+                await _storageService.AddHash(serviceName, guid, "error_code", cryptoResult.ErrorCode.ToString());
+                await _storageService.AddHash(serviceName, guid, "error_message", cryptoResult.Error ?? "-");
+
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
             if (!await _validationServiceV3.IsCertActiveV3(cryptoResult.SignThumbprint ?? string.Empty))
             {
-                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 99, "Сертификат подписи не является действующим", StatusCodes.Status400BadRequest);
+                var error = Error.Code99_OtherError("Сертификат подписи не является действующим");
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
+
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
@@ -1155,41 +1106,44 @@ public class QBCHIIIController(IMediator mediator,
             {
                 responseXml = _xmlServiceV3.SerializeAsByteV3(uniqueResult!.TicketV3!);
                 signedResponse = _cryptoService.SignMsg(responseXml);
-                await _redisCache.AddHash(serviceName, guid, "error_code", uniqueResult.ErrorCode.ToString());
-                await _redisCache.AddHash(serviceName, guid, "error_message", uniqueResult.Error ?? "-");
+                await _storageService.AddHash(serviceName, guid, "error_code", uniqueResult.ErrorCode.ToString());
+                await _storageService.AddHash(serviceName, guid, "error_message", uniqueResult.Error ?? "-");
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            await _redisCache.AddUniqueRequestId(serviceName, form.id, cryptoResult.RequestOGRN!, DateTime.Now);
+            await _storageService.AddUniqueRequestId(serviceName, form.id, cryptoResult.RequestOGRN!, DateTime.Now);
 
             if (!await _validationServiceV3.IsCertExistsV3(certRaw))
             {
-                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 99, "Сертификат не найден", StatusCodes.Status400BadRequest);
+                var error = Error.Code99_OtherError("Сертификат не найден");
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
+
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
             var activeCertsCount = await _validationServiceV3.GetActiveCertificatesCountV3(certRaw);
             if (activeCertsCount <= 1)
             {
-                var errorResult = await BuildV3ErrorResponseAsync(
-                    serviceName,
-                    guid,
-                    99,
-                    "Отзыв последнего действующего сертификата абонента запрещен Порядком 3.0",
-                    StatusCodes.Status400BadRequest);
+                var error = Error.Code99_OtherError("Отзыв последнего действующего сертификата абонента запрещен Порядком 3.0");
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
             if (!await _validationServiceV3.SetCertificateInactiveV3(certRaw))
             {
-                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 99, "Не удалось отозвать сертификат", StatusCodes.Status400BadRequest);
+                var error = Error.Code99_OtherError("Не удалось отозвать сертификат");
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, StatusCodes.Status400BadRequest);
+
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
                 return errorResult.ActionResult;
             }
 
@@ -1201,22 +1155,22 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /certrevoke v3");
-            await _redisCache.AddHash(serviceName, guid, "error_code", "500");
-            await _redisCache.AddHash(serviceName, guid, "error_message", ex.ToString());
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             return StatusCode(500);
         }
         finally
         {
             if (responseXml is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_xml", responseXml);
+                await _storageService.AddHash(serviceName, guid, "response_xml", responseXml);
             if (signedResponse is not null)
-                await _redisCache.AddHash(serviceName, guid, "response_signed_data", signedResponse);
+                await _storageService.AddHash(serviceName, guid, "response_signed_data", signedResponse);
 
-            if (!await _redisCache.HashFieldExists(serviceName, guid, "validation_date_time"))
-                await _redisCache.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            if (!await _storageService.HashFieldExists(serviceName, guid, "validation_date_time"))
+                await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-            await _redisCache.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _redisCache.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
         }
     }
 
@@ -1227,17 +1181,12 @@ public class QBCHIIIController(IMediator mediator,
         public IActionResult ActionResult { get; init; } = default!;
     }
 
-    private async Task<V3ErrorResponseBuildResult> BuildV3ErrorResponseAsync(
-    string serviceName,
-    string guid,
-    int code,
-    string message,
-    int statusCode)
+    private async Task<V3ErrorResponseBuildResult> BuildV3ErrorResponseAsync(string serviceName, string guid, int code, string message, int statusCode)
     {
-        await _redisCache.AddHash(serviceName, guid, "error_code", code.ToString());
-        await _redisCache.AddHash(serviceName, guid, "error_message", message);
+        await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
+        await _storageService.AddHash(serviceName, guid, "error_message", message);
 
-        var ticket = _ticketServiceV3.CreateResultV3Error(new QBCH_lib.core.Error(code, message));
+        var ticket = _ticketServiceV3.CreateResultV3Error(new Error(code, message));
         var responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
         var signedResponse = _cryptoService.SignMsg(responseXml);
 
@@ -1270,16 +1219,16 @@ public class QBCHIIIController(IMediator mediator,
 
     private async Task<DateTimeOffset?> GetFirstPollAllowedAtUtcAsync(string scope, string responseId)
     {
-        if (_redisCache.TryGetHashValue(scope, responseId, FirstPollAllowedAtUtcField, out var firstPollRaw) &&
+        if (_storageService.TryGetHashValue(scope, responseId, FirstPollAllowedAtUtcField, out var firstPollRaw) &&
             DateTimeOffset.TryParse(firstPollRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var firstPollAllowedAtUtc))
         {
             return firstPollAllowedAtUtc;
         }
 
-        if (_redisCache.TryGetHashValue(scope, responseId, ReadyAtUtcField, out var readyAtRaw) &&
+        if (_storageService.TryGetHashValue(scope, responseId, ReadyAtUtcField, out var readyAtRaw) &&
             DateTimeOffset.TryParse(readyAtRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var readyAtUtc))
         {
-            await _redisCache.AddHash(scope, responseId, FirstPollAllowedAtUtcField, readyAtUtc.ToString("O"));
+            await _storageService.AddHash(scope, responseId, FirstPollAllowedAtUtcField, readyAtUtc.ToString("O"));
             return readyAtUtc;
         }
 

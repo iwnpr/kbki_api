@@ -13,11 +13,11 @@ namespace QBCH_api.QBCHProcessing.V2.StoreProcessingData.Event;
 public class QBCHProcessingCompleteHandler : INotificationHandler<QBCHProcessingComplete>
 {
     private readonly ILogger<QBCHProcessingCompleteHandler> _logger;
-    private readonly ICacheService _redisCache;
+    private readonly IKeyValueStorageService _redisCache;
     private readonly IKafkaService _kafka;
     private readonly ApiV3ContractOptions _contractOptions;
 
-    public QBCHProcessingCompleteHandler(ILogger<QBCHProcessingCompleteHandler> logger, ICacheService redisCache, IKafkaService kafka, IOptions<ApiV3ContractOptions> contractOptions)
+    public QBCHProcessingCompleteHandler(ILogger<QBCHProcessingCompleteHandler> logger, IKeyValueStorageService redisCache, IKafkaService kafka, IOptions<ApiV3ContractOptions> contractOptions)
     {
         _logger = logger;
         _redisCache = redisCache;

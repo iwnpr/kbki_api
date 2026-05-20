@@ -3,8 +3,8 @@ using Crypto_lib.Model;
 using Crypto_lib.Service;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
+using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api.V3;
-using QBCH_lib.core;
 using QBCH_lib.Services.Interfaces.V3;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
@@ -16,7 +16,7 @@ namespace QBCH_api.Services.Implementations.V3;
 public class ValidationServiceV3(
     IXmlServiceV3 xmlService,
     ICryptoService cryptoService,
-    ICacheService cache,
+    IKeyValueStorageService cache,
     IRepositoryV3 repository,
     ITicketServiceV3 ticketService,
     ILogger<ValidationServiceV3> logger) : IValidationServiceV3
@@ -24,7 +24,7 @@ public class ValidationServiceV3(
     private static readonly TimeZoneInfo MoscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
     private readonly IXmlServiceV3 _xmlService = xmlService;
     private readonly ICryptoService _cryptoService = cryptoService;
-    private readonly ICacheService _cache = cache;
+    private readonly IKeyValueStorageService _cache = cache;
     private readonly IRepositoryV3 _repository = repository;
     private readonly ITicketServiceV3 _ticketService = ticketService;
     private readonly ILogger<ValidationServiceV3> _logger = logger;
@@ -33,14 +33,16 @@ public class ValidationServiceV3(
     {
         var isValid = _xmlService.ValidateXmlV3(memoryStream, nameOfController, out var xmlResult);
 
-        if (isValid)
+        if (!isValid)
         {
-            result = null;
-            return true;
+            var error = Error.Code9_InvalidRequestByScheme();
+            result = CreateErrorResult(new Error(xmlResult?.ErrorCode ?? 9, xmlResult?.Error ?? "Запрос не соответствует схеме"));
+            return false;
         }
+        
+        result = null;
+        return true;
 
-        result = CreateErrorResult(new Error(xmlResult?.ErrorCode ?? 9, xmlResult?.Error ?? "Запрос не соответствует схеме"));
-        return false;
     }
 
     public bool ValidateEncodingV3(byte[] message, [NotNullWhen(false)] out BaseResultV3? result)
@@ -52,8 +54,10 @@ public class ValidationServiceV3(
         }
         catch (DecoderFallbackException ex)
         {
-            _logger.LogError(ex, "Неподдерживаемая кодировка, файл не в кодировке Utf-8");
-            result = CreateErrorResult(new Error(8, "Неподдерживаемая кодировка, файл не в кодировке Utf-8"));
+            var error = Error.Code8_UnsupportedEncoding();
+            _logger.LogError(ex, error.Message);
+            result = CreateErrorResult(error);
+
             return false;
         }
 
@@ -64,11 +68,13 @@ public class ValidationServiceV3(
     public bool ValidateRequestDateV3(DateTime? requestDate, [NotNullWhen(false)] out BaseResultV3? result)
     {
         var currentMoscowDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, MoscowTimeZone).Date;
+
         if (requestDate?.Date != currentMoscowDate)
         {
-            _logger.LogError("Дата запроса указана некорректно. Передано: {requestDate}, текущая московская дата: {currentMoscowDate}",
-                requestDate?.ToString("dd.MM.yyyy"), currentMoscowDate.ToString("dd.MM.yyyy"));
-            result = CreateErrorResult(Error.Code23_InvalidRerquestDate());
+            var error = Error.Code23_InvalidRerquestDate();
+            _logger.LogError(error.Message);
+
+            result = CreateErrorResult(error);
             return false;
         }
 
@@ -76,35 +82,34 @@ public class ValidationServiceV3(
         return true;
     }
 
+    /// <summary>
+    /// Проверка сертификата
+    /// </summary>
+    /// <param name="requestCert"></param>
+    /// <param name="result"></param>
+    /// <returns></returns>
     public bool ValidateCertificateV3(X509Certificate2? requestCert, [NotNullWhen(false)] out BaseResultV3? result)
     {
         var isValid = _cryptoService.ValidateCertificate(requestCert, out CryptoServiceResult? certResult);
+
         if (!isValid)
         {
-            var code = certResult?.ErrorCode ?? 5;
-            var message = certResult?.Error ?? "Ошибка проверки сертификата";
+            var code = certResult.ErrorCode;
+            var message = certResult.Error;
+
             result = CreateErrorResult(new Error(code, message));
             return false;
         }
-
-        // Срок действия сертификата не должен превышать 5 лет.
-        // Код 5 — «Истёк срок сертификата УЭП» — ближайший по смыслу к ограничению срока.
-        if (requestCert != null && (requestCert.NotAfter - requestCert.NotBefore).TotalDays > 366 * 5)
-        {
-            result = CreateErrorResult(new Error(5, "Срок действия сертификата превышает допустимые 5 лет"));
-            return false;
-        }
-
         result = null;
         return true;
     }
 
-    public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
-       => await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
+    public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
 
     public async Task<(bool IsUnique, BaseResultV3? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
     {
         var isUnique = await _cache.IsUniqueRequestId(requestId, ogrn, methodName);
+
         if (isUnique)
             return (true, null);
 

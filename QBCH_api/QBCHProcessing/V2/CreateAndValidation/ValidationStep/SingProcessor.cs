@@ -1,4 +1,5 @@
 ﻿using Crypto_lib.Model;
+using qbch_lib.domain.errors;
 using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
 using System.Security.Cryptography.X509Certificates;

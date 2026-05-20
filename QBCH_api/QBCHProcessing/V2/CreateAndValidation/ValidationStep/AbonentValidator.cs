@@ -1,4 +1,4 @@
-﻿using QBCH_lib.core;
+﻿using qbch_lib.domain.errors;
 using QBCH_lib.domain.aggregate;
 using System.Xml.Linq;
 namespace QBCH_api.QBCHProcessing.V2.CreateAndValidation.ValidationStep;

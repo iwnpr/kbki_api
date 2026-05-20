@@ -8,12 +8,12 @@ using System.Text.Json;
 
 namespace QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 
-public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandlerV3> logger, ICacheService redisCache, IKafkaService kafka) : INotificationHandler<QBCHProcessingCompleteV3>
+public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandlerV3> logger, IKeyValueStorageService storageService, IKafkaService kafka) : INotificationHandler<QBCHProcessingCompleteV3>
 {
     private const string ApiVersion = "3.0";
 
     private readonly ILogger<QBCHProcessingCompleteHandlerV3> _logger = logger;
-    private readonly ICacheService _redisCache = redisCache;
+    private readonly IKeyValueStorageService _storageService = storageService;
     private readonly IKafkaService _kafka = kafka;
 
     public async Task Handle(QBCHProcessingCompleteV3 notification, CancellationToken cancellationToken)
@@ -23,7 +23,7 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
         try
         {
             var resultData = await ConstructResultData(transaction);
-            await _redisCache.AddHashArray(transaction.ServiceName, transaction.Id.ToString(), resultData);
+            await _storageService.AddHashArray(transaction.ServiceName, transaction.Id.ToString(), resultData);
 
             var (responseKind, schemaFamily) = ResolveResponseShape(transaction);
             var kafkaPayload = JsonSerializer.Serialize(new
@@ -39,7 +39,7 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
 
             if (!await _kafka.Produce(new Message<Null, string> { Value = kafkaPayload }))
             {
-                _logger.LogCritical("Lost V3 kafka payload for key QBCH:{service}:{id}", transaction.ServiceName, transaction.Id);
+                _logger.LogCritical("Потеряно содержимое Kafka-сообщения версии 3.0 для ключа QBCH:{serviceName}:{Transactionid}", transaction.ServiceName, transaction.Id);
             }
         }
         catch (Exception ex)
@@ -102,7 +102,7 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
                 dict.Add("response_xml", transaction.Response.ResponseXML);
         }
 
-        if (!await _redisCache.HashFieldExists(transaction.ServiceName, transaction.Id.ToString(), "ValidationTime"))
+        if (!await _storageService.HashFieldExists(transaction.ServiceName, transaction.Id.ToString(), "ValidationTime"))
             dict.Add("validation_date_time", Encoding.UTF8.GetBytes(transaction.ValidateTime ?? DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff")));
 
         return dict;

@@ -1,6 +1,5 @@
 using QBCH_api.Services.Interfaces.V3;
 using QBCH_lib.Configuration;
-using QBCH_lib.core;
 using QBCH_lib.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
 using XmlService_lib.Services.Interfaces.V3;
@@ -18,6 +17,7 @@ using РезультатПредставленияСведенийV3 = QBCH.Lib.
 using СправочникОперацииV3 = QBCH.Lib.qcb_xml.v3_0.СправочникОперации;
 using ТипДоговорV3 = QBCH.Lib.qcb_xml.v3_0.ТипДоговор;
 using ТипОбращениеV3 = QBCH.Lib.qcb_xml.v3_0.ТипОбращениеОбязательство;
+using qbch_lib.domain.errors;
 
 namespace QBCH_api.Services.Implementations.V3;
 
@@ -134,7 +134,8 @@ public class DlPutServiceV3(
 
                 var contractSubjectXml = _xmlService.SerializeAsStringV3(source.Субъект);
                 var contractSubjectIds = await _repository.SearchContractSubjectsForDlPutV3(contractSubjectXml);
-                if (contractSubjectIds is not null && contractSubjectIds.Count == 0)
+
+                if (contractSubjectIds is null || contractSubjectIds.Count == 0)
                 {
                     SetError(deal, Error.Code29_SubjectNotFound());
                     break;
@@ -145,7 +146,7 @@ public class DlPutServiceV3(
                     var contractUidExists = await _repository.ContractUidExistsForSubjectsV3(contractSubjectIds, delete.УИД);
                     if (contractUidExists is false)
                     {
-                        SetError(deal, Error.Code20_ContractNotFound());
+                        SetError(deal, Error.Code20_ContractNotFound_V3());
                         break;
                     }
 
@@ -215,11 +216,16 @@ public class DlPutServiceV3(
                 appeal.СтадияРассмотренияSpecified = true;
 
                 var inn = source.Субъект?.ИНН?.Value;
-                var appealSubjectIds = string.IsNullOrWhiteSpace(inn)
-                    ? null
-                    : await _repository.SearchAppealSubjectsByInnForDlPutV3(inn);
 
-                if (appealSubjectIds is not null && appealSubjectIds.Count == 0)
+                if (string.IsNullOrWhiteSpace(inn))
+                {
+                    SetError(appeal, Error.Code29_SubjectNotFound());
+                    break;
+                }
+
+                var appealSubjectIds = await _repository.SearchAppealSubjectsByInnForDlPutV3(inn);
+
+                if (appealSubjectIds is null || appealSubjectIds.Count == 0)
                 {
                     SetError(appeal, Error.Code29_SubjectNotFound());
                     break;
@@ -228,15 +234,16 @@ public class DlPutServiceV3(
                 if (appealSubjectIds is { Count: > 0 })
                 {
                     var appealUidExists = await _repository.AppealUidExistsForSubjectsV3(appealSubjectIds, delete.УИД);
+
                     if (appealUidExists is false)
                     {
                         SetError(appeal, Error.Code30_AppealObligationNotFound());
                         break;
                     }
-
-                    if (appealUidExists is true)
+                    else
                     {
                         var stageExists = await _repository.AppealStageExistsForSubjectsV3(appealSubjectIds, delete.УИД, delete.СтадияРассмотрения);
+
                         if (stageExists is false)
                         {
                             SetError(appeal, Error.Code31_AntiFraudDataNotFound());

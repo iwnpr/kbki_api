@@ -5,8 +5,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.X509;
-using QBCH_lib.core;
-using QBCH_lib.qcb_xml.v1_3.Enums;
+using qbch_lib.domain.errors;
+using QBCH_lib.qcb_xml.v2_0.Enums;
 using QBCH_lib.Services.Interfaces;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.Pkcs;
@@ -22,10 +22,7 @@ namespace Crypto_lib.Service
     /// Конструктор
     /// </remarks>
     /// <param name="config">Конфигурация</param>
-    public class CryptoService(
-        IConfiguration config,
-        ILogger<CryptoService> logger,
-        ITicketService ticketService) : ICryptoService
+    public class CryptoService(IConfiguration config, ILogger<CryptoService> logger, ITicketService ticketService) : ICryptoService
     {
         private readonly string? _storeLocation = config.GetValue<string>("Signer:StoreLocation");
         private readonly string? _storeName = config.GetValue<string>("Signer:StoreName");
@@ -43,13 +40,17 @@ namespace Crypto_lib.Service
         public QBCH_lib.core.Result<CryptoServiceResult> ValidateMsg(byte[] msg, X509Certificate2? requestCert, byte[]? encodedSignature = null)
         {
             var result = new CryptoServiceResult();
+
             if (requestCert is null)
             {
-                _logger.LogError("Сертификат запроса не найден");
-                var processingError = Error.Code99_CertificateIsNotFound();
+                var errorMessage = "Отсутствует сертификат запроса";
+                _logger.LogError(errorMessage);
+
+                var processingError = Error.Code99_OtherError(errorMessage);
                 result.Error = processingError.Message;
                 result.ErrorCode = processingError.Code;
-                result.Ticket = _ticketService.CreateResult(ResultType.Error, "99", "Сертификат не найден");
+                result.Ticket_v2 = _ticketService.CreateResultV2Error(new Error(processingError.Code, processingError.Message));
+
                 return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingError);
             }
 
@@ -62,29 +63,17 @@ namespace Crypto_lib.Service
             result.RequestOGRN = requestSubject.InnLE is not null ? requestSubject.Ogrn : requestSubject.OgrnIP ?? requestSubject.Ogrn;
             result.RequestThumbprint = requestCert.Thumbprint;
 
-            /* 5. Истек срок действия сертификата УЭП.
-             * Дату сертификата необходимо проверять заранее, 
-             * Т.к. метод validate у серфиса криптографии
-             * Возвращает любые ошибки в виде exception
-             * Это влечет за собой невозможность определния
-             * Типа ошибки.
-             */
-
-            if (requestCert?.NotAfter != null)
+            if (requestCert.NotAfter <= DateTime.Now)
             {
-                if (requestCert.NotAfter <= DateTime.Now)
-                {
 
-                    var processingError = Error.Code5_TheCertificateIsExpired();
-                    _logger.LogError(processingError.Message);
-                    result.ErrorCode = processingError.Code;
-                    result.Ticket = _ticketService.CreateResult(ResultType.Error, "5", "Истек срок сертификата УЭП");
-                    return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingError);
-                }
-            }
-            else
-            {
-                _logger.LogWarning("Не удалось проверить срок действия сертификата в запросе.");
+                var processingError = Error.Code5_TheCertificateIsExpired();
+                _logger.LogError(processingError.Message);
+
+                result.ErrorCode = processingError.Code;
+                result.ErrorMessage = processingError.Message;
+                result.Ticket_v2 = _ticketService.CreateResultV2Error(new Error(processingError.Code, processingError.Message));
+
+                return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingError);
             }
 
             // Создаем SignedCms для декодирования и проверки.
@@ -107,11 +96,11 @@ namespace Crypto_lib.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError("Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
-                var processingMessage = new Error(7, ex.Message);
+                _logger.LogError(ex.Message);
+                var processingMessage = Error.Code7_IncorrectRequestFormat();
                 result.Error = processingMessage.Message;
                 result.ErrorCode = processingMessage.Code;
-                result.Ticket = _ticketService.CreateResult(ResultType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
+                result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
                 return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingMessage);
             }
 
@@ -120,6 +109,7 @@ namespace Crypto_lib.Service
 
 
             List<Error> errors = [];
+
             while (enumerator.MoveNext()) //TODO нужно понять что тут происходит
             {
                 var current = enumerator.Current;
@@ -136,7 +126,7 @@ namespace Crypto_lib.Service
                         {
                             ErrorCode = processingError.Code,
                             Error = processingError.Message,
-                            Ticket = _ticketService.CreateResult(ResultType.Error, "6", $"УЭП не соответствует абоненту:  {result.CertCompareResult}")
+                            Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "6", $"УЭП не соответствует абоненту:  {result.CertCompareResult}")
                         };
                         errors.Add(processingError);
                         continue;
@@ -153,7 +143,7 @@ namespace Crypto_lib.Service
                         _logger.LogError("УЭП некорректна {Error}", ex.Message); // TODO странно 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
-                        result.Ticket = _ticketService.CreateResult(ResultType.Error, "4", $"УЭП некорректна: {ex.Message}");
+                        result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");
                         continue;
                     }
                 }
@@ -167,6 +157,7 @@ namespace Crypto_lib.Service
 
             return QBCH_lib.core.Result<CryptoServiceResult>.Success(result);
         }
+
         /// <summary>
         /// Проверка подписи файла
         /// </summary>
@@ -179,10 +170,12 @@ namespace Crypto_lib.Service
 
             if (requestCert is null)
             {
-                _logger.LogError("Сертификат запроса не найден");
-                result.Error = "УЭП некорректна";
-                result.ErrorCode = 5;
-                result.Ticket = _ticketService.CreateResult(ResultType.Error, "4", "УЭП некорректна");
+                var error = Error.Code4_SignatureIsNotCorrect();
+                result.Error = error.Message;
+                result.ErrorCode = error.Code;
+                result.ErrorMessage = error.Message;
+                result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, error.Code.ToString(), error.Message);
+
                 return false;
             }
 
@@ -209,7 +202,7 @@ namespace Crypto_lib.Service
                     _logger.LogError("Истек срок сертификата УЭП");
                     result.Error = "Истек срок сертификата УЭП";
                     result.ErrorCode = 5;
-                    result.Ticket = _ticketService.CreateResult(ResultType.Error, "5", "Истек срок сертификата УЭП");
+                    result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "5", "Истек срок сертификата УЭП");
                     return false;
                 }
             }
@@ -241,7 +234,7 @@ namespace Crypto_lib.Service
                 _logger.LogError("Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
                 result.Error = ex.Message;
                 result.ErrorCode = 7;
-                result.Ticket = _ticketService.CreateResult(ResultType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
+                result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
                 return false;
             }
 
@@ -262,7 +255,7 @@ namespace Crypto_lib.Service
                         {
                             ErrorCode = 6,
                             Error = "Реквизиты абонента не совпадают",
-                            Ticket = _ticketService.CreateResult(ResultType.Error, "6", $"УЭП не соответствует абоненту:  {result.CertCompareResult}")
+                            Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "6", $"УЭП не соответствует абоненту:  {result.CertCompareResult}")
                         };
                         continue;
                     }
@@ -277,7 +270,7 @@ namespace Crypto_lib.Service
                         _logger.LogError("УЭП некорректна {Error}", ex.Message);
                         result.Error = ex.Message;
                         result.ErrorCode = 4;
-                        result.Ticket = _ticketService.CreateResult(ResultType.Error, "4", $"УЭП некорректна: {ex.Message}");
+                        result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");
                         continue;
                     }
                 }
@@ -305,6 +298,7 @@ namespace Crypto_lib.Service
 
             // Создаем SignedCms для декодирования и проверки.
             CpSignedCms signedCms = new();
+
             try
             {
                 signedCms.Decode(msg);
@@ -327,14 +321,7 @@ namespace Crypto_lib.Service
                 var current = enumerator.Current;
 
                 if (!IsValidCert)
-                {
-                    /* 5. Истек срок действия сертификата УЭП.
-                        * Дату сертификата необходимо проверять заранее, 
-                        * Т.к. метод validate у серфиса криптографии
-                        * Возвращает любые ошибки в виде exception
-                        * Это влечет за собой невозможность определния
-                        * Типа ошибки.
-                        */
+                {    
                     if (current.Certificate?.NotAfter != null)
                     {
                         if (current.Certificate.NotAfter <= DateTime.Now)
@@ -344,7 +331,7 @@ namespace Crypto_lib.Service
                             {
                                 Error = "Истек срок сертификата УЭП",
                                 ErrorCode = 5,
-                                Ticket = _ticketService.CreateResult(ResultType.Error, "5", "Истек срок сертификата УЭП")
+                                Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "5", "Истек срок сертификата УЭП")
                             };
                             return false;
                         }
@@ -364,7 +351,7 @@ namespace Crypto_lib.Service
                         _logger.LogError("УЭП некорректна {Error}", ex.Message);
                         result.Error = ex.Message;
                         result.ErrorCode = 4;
-                        result.Ticket = _ticketService.CreateResult(ResultType.Error, "4", $"УЭП некорректна: {ex.Message}");
+                        result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");
                         continue;
                     }
                 }
@@ -387,42 +374,33 @@ namespace Crypto_lib.Service
         /// <returns></returns>
         public bool ValidateCertificate(X509Certificate2? requestCert, [NotNullWhen(false)] out CryptoServiceResult? result)
         {
-            /* 5. Истек срок действия сертификата УЭП.
-             * Дату сертификата необходимо проверять заранее, 
-             * Т.к. метод validate у серфиса криптографии
-             * Возвращает любые ошибки в виде exception
-             * Это влечет за собой невозможность определния
-             * Типа ошибки.
-             */
-            if (requestCert?.NotAfter != null)
-            {
-                if (requestCert.NotAfter <= DateTime.Today)
-                {
-                    _logger.LogError("Истек срок сертификата УЭП");
-                    result = new CryptoServiceResult()
-                    {
-                        ErrorCode = 5,
-                        Error = "Истек срок сертификата УЭП",
-                        Ticket = _ticketService.CreateResult(ResultType.Error, "5", "Истек срок сертификата УЭП")
-                    };
-                    return false;
-                }
-            }
-            else
-            {
-                _logger.LogWarning("Не удалось проверить срок действия сертификата в запросе.");
-            }
-
-            // Если сертифкат не найден
             if (requestCert is null)
             {
-                _logger.LogError("УЭП отсутствует.");
+                var error = Error.Code99_OtherError("Отсутствует сертификат запроса");
+                _logger.LogError(error.Message);
+
                 result = new CryptoServiceResult
                 {
-                    ErrorCode = 4,
-                    Error = "УЭП некорректна: УЭП отсутствует.",
-                    Ticket = _ticketService.CreateResult(ResultType.Error, "4", "УЭП некорректна: УЭП отсутствует.")
+                    ErrorCode = error.Code,
+                    Error = error.Message,
+                    Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, error.Code.ToString(), error.Message)
                 };
+
+                return false;
+            }
+
+            if (requestCert.NotAfter <= DateTime.Today)
+            {
+                var error = Error.Code5_TheCertificateIsExpired();
+                _logger.LogError(error.Message);
+
+                result = new CryptoServiceResult()
+                {
+                    ErrorCode = error.Code,
+                    Error = error.Message,
+                    Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, error.Code.ToString(), error.Message)
+                };
+
                 return false;
             }
 

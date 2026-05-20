@@ -1,4 +1,5 @@
-﻿using QBCH_lib.CommonTypes.Api;
+﻿using qbch_lib.domain.errors;
+using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.core;
 using QBCH_lib.domain.DTOs;
 using QBCH_lib.domain.entities;
@@ -32,7 +33,7 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     /// <summary>
     /// Ошибки процессинга
     /// </summary>
-    public List<core.Error> ProcessingErrors { get; private set; }
+    public List<Error> ProcessingErrors { get; private set; }
     /// <summary>
     /// Ошибки пакетного запроса
     /// </summary>
@@ -119,7 +120,7 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     /// 
     /// </summary>
     /// <param name="error"></param>
-    public void RiseCriticalError(core.Error error)
+    public void RiseCriticalError(Error error)
     {
         ProcessingErrors.Add(error);
         Status = QBCHProcessingStatus.Failure;
@@ -131,7 +132,7 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     /// </summary>
     /// <param name="requestNumber"></param>
     /// <param name="error"></param>
-    public void SetPacakgeValidationError(int requestNumber, core.Error error)
+    public void SetPacakgeValidationError(int requestNumber, Error error)
     {
         PackageValidationErrors.Add(new PackageError(requestNumber, error.Code, error.Message));
     }

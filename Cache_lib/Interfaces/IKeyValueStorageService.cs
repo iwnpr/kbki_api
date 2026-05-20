@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Cache_lib.Interfaces
 {
-    public interface ICacheService
+    public interface IKeyValueStorageService
     {
         /// <summary>
         /// 

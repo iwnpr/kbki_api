@@ -63,12 +63,4 @@ public interface IXmlServiceV3
     /// <param name="nameOfController">Имя контроллера для поиска Xsd в MemoryCache</param>
     /// <returns></returns>
     bool ValidateXmlV3(MemoryStream memStream, string nameOfController, [NotNullWhen(false)] out BaseResult? result);
-
-    /// <summary>
-    /// Валидация xml (перегрузка Result)
-    /// </summary>
-    /// <param name="memStream">Поток XDocument</param>
-    /// <param name="nameOfController">Имя контроллера для поиска Xsd в MemoryCache</param>
-    /// <returns></returns>
-    Result ValidateXmlV3(MemoryStream memStream, string nameOfController);
 }

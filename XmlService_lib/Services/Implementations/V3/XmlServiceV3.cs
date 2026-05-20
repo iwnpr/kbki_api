@@ -11,28 +11,15 @@ using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
 using XmlService_lib.Services.Interfaces.V3;
+using qbch_lib.domain.errors;
 
 namespace XmlService_lib.Services.Implementations.V3;
 
-public class XmlServiceV3(
-    IMemoryCache memoryCache,
-    IConfiguration config,
-    ILogger<XmlServiceV3> logger)
-    : IXmlServiceV3
+public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogger<XmlServiceV3> logger) : IXmlServiceV3
 {
-    private const int SchemaValidationErrorCode = 9;
     private readonly IMemoryCache _cache = memoryCache;
     private readonly IConfiguration _config = config;
     private readonly ILogger<XmlServiceV3> _logger = logger;
-
-    private static readonly Type[] V3KnownTypes =
-    [
-        typeof(ЗапросСведений),
-        typeof(ОтветНаЗапросСведений),
-        typeof(ПредставлениеСведений),
-        typeof(РезультатПредставленияСведений),
-        typeof(Результат)
-    ];
 
     private static readonly IReadOnlyDictionary<string, string[]> V3Schemas = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
@@ -124,16 +111,8 @@ public class XmlServiceV3(
     {
         var schemaSet = GetXmlSchemaSetV3(nameOfController);
         result = ValidateAgainstSchemaSet(memStream, schemaSet);
-        return result is null;
-    }
 
-    public Result ValidateXmlV3(MemoryStream memStream, string nameOfController)
-    {
-        var schemaSet = GetXmlSchemaSetV3(nameOfController);
-        var validationError = ValidateAgainstSchemaSet(memStream, schemaSet);
-        return validationError is null
-            ? Result.Success()
-            : Result.Failure(new QBCH_lib.core.Error(SchemaValidationErrorCode, $"Запрос не соответствует схеме: {validationError.Error}"));
+        return result is null;
     }
 
     private XmlSchemaSet GetXmlSchemaSetV3(string nameOfController)
@@ -175,30 +154,36 @@ public class XmlServiceV3(
         try
         {
             memStream.Position = 0;
+
             var xDoc = XDocument.Load(memStream);
             BaseResult? xsdError = null;
 
-            xDoc.Validate(schemaSet, (_, e) =>
+            xDoc.Validate(schemaSet, (sender, e) =>
             {
+                var error = Error.Code9_InvalidRequestByScheme();
                 var reason = string.Concat(e.Severity, ": ", e.Message);
-                _logger.LogError("Запрос не соответствует схеме:\r\n{error}", reason);
-                xsdError = CreateSchemaError(reason);
+
+                _logger.LogError($"{error.Message}:\r\n{reason}");
+
+                xsdError = CreateSchemaError(error);
             });
 
             return xsdError;
         }
         catch (Exception ex)
         {
-            return CreateSchemaError(ex.Message);
+            var error = Error.Code99_OtherError(ex.Message);
+            return CreateSchemaError(error);
         }
     }
 
-    private BaseResult CreateSchemaError(string reason) =>
+    private BaseResult CreateSchemaError(Error error) =>
         new()
         {
-            ErrorCode = SchemaValidationErrorCode,
-            Error = reason,
-            ErrorMessage = reason
+            IsError = true,
+            ErrorCode = error.Code,
+            Error = error.Message,
+            ErrorMessage = error.Message,
         };
 
     private static XmlSerializer CreateSerializerV3<T>() where T : class

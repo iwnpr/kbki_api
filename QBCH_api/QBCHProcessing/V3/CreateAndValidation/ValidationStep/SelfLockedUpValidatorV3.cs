@@ -1,10 +1,10 @@
-﻿using QBCH_lib.core;
-using QBCH_lib.domain.aggregate;
+﻿using QBCH_lib.domain.aggregate;
 using СправочникВидыСведенийV3 = QBCH.Lib.qcb_xml.v3_0.СправочникВидыСведений;
 using СправочникРежимыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 using ТипИННФЛсПризнакомПризнакПроверкиV3 = QBCH.Lib.qcb_xml.v3_0.ТипИННФЛсПризнакомПризнакПроверки;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using ЗапросСведенийЗапросV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийЗапрос;
+using qbch_lib.domain.errors;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 
@@ -82,11 +82,11 @@ public static class SelfLockedUpValidatorV3
     {
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {
-            transaction.SetPacakgeValidationError(orderNumber, Error.Code25_SelfLockedUpError());
+            transaction.SetPacakgeValidationError(orderNumber, Error.Code25_SelfLockedUpError_V3());
             return;
         }
 
-        transaction.RiseCriticalError(Error.Code25_SelfLockedUpError());
+        transaction.RiseCriticalError(Error.Code25_SelfLockedUpError_V3());
     }
 
     private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)
