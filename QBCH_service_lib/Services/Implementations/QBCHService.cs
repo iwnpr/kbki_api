@@ -28,7 +28,7 @@ public partial class QBCHService : IQBCHService
     private readonly IXmlService _xmlService;
     private readonly ILogger<QBCHService> _logger;
     private readonly IRepository _qbchDb;
-    private readonly ICacheService _redisCache;
+    private readonly IKeyValueStorageService _redisCache;
     private readonly IConfiguration _config;
     private readonly string? _OurBureauPSRN;
     private readonly string? _OurBureauITN;
@@ -46,7 +46,7 @@ public partial class QBCHService : IQBCHService
     /// <param name="qbchDb"></param>
     /// <param name="redisCache"></param>
     /// <param name="config"></param>
-    public QBCHService(ICryptoService cryptoService, IXmlService xmlService, ILogger<QBCHService> logger, IRepository qbchDb, ICacheService redisCache, IConfiguration config)
+    public QBCHService(ICryptoService cryptoService, IXmlService xmlService, ILogger<QBCHService> logger, IRepository qbchDb, IKeyValueStorageService redisCache, IConfiguration config)
     {
         _cryptoService = cryptoService;
         _xmlService = xmlService;

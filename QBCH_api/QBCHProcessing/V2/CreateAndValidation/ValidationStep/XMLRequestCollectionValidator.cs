@@ -1,4 +1,4 @@
-﻿using QBCH_lib.core;
+﻿using qbch_lib.domain.errors;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.qcb_xml.v2_0.Enums;
 namespace QBCH_api.QBCHProcessing.V2.CreateAndValidation.ValidationStep;
@@ -35,18 +35,12 @@ public static class XMLRequestCollectionValidator
 
                 case СправочникРежимыЗапроса.Single:
                     if (requestCollection?.Count != 1)
-                    {
-                        var er = "Количество блоков \"Запрос\" не соответствует режиму запроса";
-                        transaction.RiseCriticalError(Error.Code26_WrongBlockCount(er));
-                    }
+                        transaction.RiseCriticalError(Error.Code26_WrongBlockCount());
                     break;
                 case СправочникРежимыЗапроса.Package:
                     {
                         if (requestCollection?.Count > 10)
-                        {
-                            var er = "Количество блоков \"Запрос\" не соответствует режиму запроса";
-                            transaction.RiseCriticalError(Error.Code26_WrongBlockCount(er));
-                        }
+                            transaction.RiseCriticalError(Error.Code26_WrongBlockCount());
                         break;
                     }
             }
@@ -68,8 +62,8 @@ public static class XMLRequestCollectionValidator
 
             if (requestIdsCollection?.First() != 1)
             {
-                var er = "Порядкове номера запросов должны начинаться c \"1\"";
-                transaction.RiseCriticalError(Error.Code26_WrongBlockCount(er));
+                var errorMessage = "Порядкове номера запросов должны начинаться c \"1\"";
+                transaction.RiseCriticalError(Error.Code99_OtherError(errorMessage));
             }
 
             if (!requestIdsCollection.Count.Equals(requestIdsCollection.Distinct().Count()))
@@ -80,10 +74,9 @@ public static class XMLRequestCollectionValidator
                     .SelectMany(i => i)
                     .ToList();
 
-                var er = $"Порядковый номер запроса в пакете должен быть уникальным, повторяющиеся значения: {doubleId!.First().ПорядковыйНомер}";
-                transaction.RiseCriticalError(Error.Code26_WrongBlockCount(er));
+                var errorMessage = $"Порядковый номер запроса в пакете должен быть уникальным, повторяющиеся значения: {doubleId!.First().ПорядковыйНомер}";
+                transaction.RiseCriticalError(Error.Code99_OtherError(errorMessage));
             }
-
         }
         return transaction;
     }

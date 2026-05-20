@@ -1,6 +1,6 @@
 ﻿using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.Services.Interfaces.V3;
-using QBCH_lib.core;
+using qbch_lib.domain.errors;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.domain.aggregate.V3;
 using XmlService_lib.Services.Interfaces.V3;

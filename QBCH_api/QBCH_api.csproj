@@ -28,6 +28,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<None Remove="Controllers\QBCHIIIController.cs~RF1682b75f.TMP" />
 		<None Remove="xsd\qcb_common.xsd" />
 		<None Remove="xsd\qcb_put.xsd" />
 		<None Remove="xsd\qcb_request.xsd" />
@@ -101,6 +102,10 @@
 	  <Content Include="xsd/**">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Compile Include="..\XmlService_lib\Services\Implementations\V3\XmlServiceV3.cs" Link="XmlServiceV3.cs" />
 	</ItemGroup>
 
 </Project>

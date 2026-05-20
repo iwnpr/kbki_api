@@ -17,7 +17,7 @@ namespace Qbch_db_lib.Services.Implementations
     {
         private readonly IConfiguration _config;
         private readonly ILogger<Repository> _logger;
-        private readonly ICacheService _cacheService;
+        private readonly IKeyValueStorageService _cacheService;
 
         private readonly string[] _QBCHDB_ConnectionPool;
         private readonly string[] _CalcOfAmp_ConnectionPool;
@@ -54,7 +54,7 @@ namespace Qbch_db_lib.Services.Implementations
         /// <param name="config"></param>
         /// <param name="logger"></param>
         /// <param name="cacheService"></param>
-        public Repository(IConfiguration config, ILogger<Repository> logger, ICacheService cacheService)
+        public Repository(IConfiguration config, ILogger<Repository> logger, IKeyValueStorageService cacheService)
         {
             _config = config;
             _logger = logger;

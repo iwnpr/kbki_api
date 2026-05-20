@@ -19,14 +19,14 @@ namespace Qbch_db_lib.Services.Implementations.V3;
 public class RepositoryV3(
     IConfiguration config,
     ILogger<RepositoryV3> logger,
-    ICacheService cacheService,
+    IKeyValueStorageService cacheService,
     ApiV3ContractOptions contractOptions,
     ApiV3ContractRules contractRules)
     : IRepositoryV3
 {
     private readonly IConfiguration _config = config;
     private readonly ILogger<RepositoryV3> _logger = logger;
-    private readonly ICacheService _cacheService = cacheService;
+    private readonly IKeyValueStorageService _cacheService = cacheService;
 
     private readonly ApiV3ContractOptions _contractOptions = contractOptions;
     private readonly ApiV3ContractRules _contractRules = contractRules;
@@ -334,6 +334,7 @@ public class RepositoryV3(
     public async Task<List<long>?> SearchContractSubjectsForDlPutV3(string subjectXml, long? timeLeftMs = null)
     {
         var procName = _config.GetValue<string>("QbchSearchSubjectsV3:Procedures:SearchContractSubjectsForDlPut");
+
         if (string.IsNullOrWhiteSpace(subjectXml) || string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchSearchSubjectsV3))
         {
             return null;

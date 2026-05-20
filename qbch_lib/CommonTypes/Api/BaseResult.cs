@@ -27,11 +27,6 @@ namespace QBCH_lib.CommonTypes.Api
         public int ErrorCode { get; set; }
 
         /// <summary>
-        /// Тикет
-        /// </summary>
-        public qcb_xml.v1_3.qcb_result.Результат? Ticket { get; set; }
-
-        /// <summary>
         /// 
         /// </summary>
         public qcb_xml.v2_0.qcb_result.Результат? Ticket_v2 { get; set; }

@@ -85,7 +85,7 @@ builder.Services.AddTransient<ICryptoService, CryptoService>();
 builder.Services.AddTransient<ICertManagementService, CertManagementService>();
 builder.Services.AddSingleton<ICompressService, CompressService>();
 ThreadPool.SetMinThreads(200, 200);
-builder.Services.AddTransient<ICacheService, CacheService>();
+builder.Services.AddTransient<IKeyValueStorageService, KeyValueStorageService>();
 builder.Services.AddSingleton<IBKIRequisitsHandler, BKIRequsits>();
 builder.Services.AddSingleton<IKafkaService, KafkaService>();
 

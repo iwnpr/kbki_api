@@ -1,9 +1,10 @@
 ﻿using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.core;
-using QBCH_lib.qcb_xml.v1_3.Enums;
+using QBCH_lib.qcb_xml.v2_0.Enums;
 using QBCH_lib.Services.Interfaces;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
@@ -228,6 +229,8 @@ namespace XmlService_lib.Services.Implementations
         /// <returns>Результат проверки</returns>
         public BaseResult? ValidateXml(MemoryStream memoryStream, string[] xsdFullPaths)
         {
+            var standatError = Error.Code9_InvalidRequestByScheme();
+
             XmlSchemaSet schemaSet = new()
             {
                 XmlResolver = new XmlUrlResolver()
@@ -245,24 +248,27 @@ namespace XmlService_lib.Services.Implementations
                 var xDoc = XDocument.Load(memoryStream);
                 xDoc.Validate(schemaSet, (sender, e) =>
                 {
-                    var error = string.Concat(e.Severity, ": ", e.Message);
-                    _logger.LogError("Запрос не соответствует схеме:\r\n{error}", error);
+                    
+                    var validateErrorMessage = string.Concat(e.Severity, ": ", e.Message);
+                    _logger.LogError(standatError.Message + validateErrorMessage);
+
                     xsdError = new()
                     {
-                        Error = error,
-                        ErrorCode = 9,
-                        Ticket = _ticketService.CreateResult(ResultType.Error, "9", $"Запрос не соответствует схеме:\r\n{error}")
+                        Error = standatError.Message,
+                        ErrorCode = standatError.Code,
+                        Ticket_v2 = ticketService.CreateResultV2(ResponseType.Error, standatError.Code.ToString(), standatError.Message)
                     };
                 });
                 return xsdError;
             }
             catch (Exception ex)
             {
+                _logger.LogError(standatError.Message + ex.Message);
                 return new()
                 {
-                    Error = $"Запрос не соответствует схеме:\r\n{ex.Message}",
-                    ErrorMessage = ex.Message,
-                    Ticket = _ticketService.CreateResult(ResultType.Error, "9", $"Запрос не соответствует схеме:\r\n{ex.Message}")
+                    Error = standatError.Message,
+                    ErrorCode = standatError.Code,
+                    Ticket_v2 = ticketService.CreateResultV2(ResponseType.Error, standatError.Code.ToString(), standatError.Message)
                 };
             }
         }
@@ -333,7 +339,7 @@ namespace XmlService_lib.Services.Implementations
                     {
                         Error = error,
                         ErrorCode = 9,
-                        Ticket = _ticketService.CreateResult(ResultType.Error, "9", $"Запрос не соответствует схеме:\r\n{error}")
+                        Ticket_v2 = ticketService.CreateResultV2(ResponseType.Error, "9", $"Запрос не соответствует схеме:\r\n{error}")
                     };
                 });
                 result = xsdError;
@@ -344,7 +350,7 @@ namespace XmlService_lib.Services.Implementations
                 {
                     Error = $"Запрос не соответствует схеме:\r\n{ex.Message}",
                     ErrorMessage = ex.Message,
-                    Ticket = _ticketService.CreateResult(ResultType.Error, "9", $"Запрос не соответствует схеме:\r\n{ex.Message}")
+                    Ticket_v2 = ticketService.CreateResultV2(ResponseType.Error, "9", $"Запрос не соответствует схеме:\r\n{ex.Message}")
                 };
             }
 
@@ -368,14 +374,14 @@ namespace XmlService_lib.Services.Implementations
                     {
                         Error = error,
                         ErrorCode = 9,
-                        Ticket = _ticketService.CreateResult(ResultType.Error, "9", $"Запрос не соответствует схеме: {error}")
+                        Ticket_v2 = ticketService.CreateResultV2(ResponseType.Error, "9", $"Запрос не соответствует схеме: {error}")
                     };
                 });
-                return xsdError is not null ? Result.Failure(new QBCH_lib.core.Error(9, $"Запрос не соответствует схеме: {xsdError.Error}")) : Result.Success();
+                return xsdError is not null ? Result.Failure(new Error(9, $"Запрос не соответствует схеме: {xsdError.Error}")) : Result.Success();
             }
             catch (Exception ex)
             {
-                return Result.Failure(new QBCH_lib.core.Error(9, $"Запрос не соответствует схеме: {ex.Message}"));
+                return Result.Failure(new Error(9, $"Запрос не соответствует схеме: {ex.Message}"));
             }
         }
     }

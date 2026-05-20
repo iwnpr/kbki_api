@@ -26,7 +26,7 @@ public class QBCHServiceV3(
     IXmlServiceV3 xmlService,
     ILogger<QBCHServiceV3> logger,
     IRepositoryV3 qbchDb,
-    ICacheService redisCache,
+    IKeyValueStorageService redisCache,
     IConfiguration config,
     ApiV3ContractOptions contractOptions,
     ApiV3ContractRules contractRules)
@@ -36,7 +36,7 @@ public class QBCHServiceV3(
     private readonly IXmlServiceV3 _xmlService = xmlService;
     private readonly ILogger<QBCHServiceV3> _logger = logger;
     private readonly IRepositoryV3 _qbchDb = qbchDb;
-    private readonly ICacheService _redisCache = redisCache;
+    private readonly IKeyValueStorageService _storageService = redisCache;
     private readonly IConfiguration _config = config;
     private readonly ApiV3ContractOptions _contractOptions = contractOptions;
     private readonly ApiV3ContractRules _contractRules = contractRules;
@@ -50,11 +50,11 @@ public class QBCHServiceV3(
     /// <summary>
     /// Выполняет обработку запроса на основе данных, полученных из внутренней базы.
     /// </summary>
-    /// <param name="processing">Транзакция с телом запроса и техническим контекстом обработки.</param>
+    /// <param name="processing ">Транзакция с телом запроса и техническим контекстом обработки.</param>
     /// <returns>Результат обработки с ответом <c>ОтветНаЗапросСведений</c>.</returns>
     public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransaction processing)
     {
-        await _redisCache.AddHash("dlrequest", $"{processing.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+        await _storageService.AddHash("dlrequest", $"{processing.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
         var package = processing.GetRequest<ЗапросСведений>();
 
@@ -115,7 +115,7 @@ public class QBCHServiceV3(
 
             var xml = _xmlService.SerializeAsStringV3(template);
             var timer = Stopwatch.StartNew();
-            var subjectKeys = new List<long>(); //await _qbchDb.GetSearchAllSubjectsV3(xml, timeLeft);
+            var subjectKeys = await _qbchDb.GetSearchAllSubjectsV3(xml, timeLeft);
             timer.Stop();
             timeLeft -= timer.ElapsedMilliseconds;
 
@@ -159,22 +159,22 @@ public class QBCHServiceV3(
     /// <summary>
     /// Отправляет запрос во внешнее бюро и возвращает итоговый ответ.
     /// </summary>
-    /// <param name="processing">Транзакция обработки с данными запроса.</param>
+    /// <param name="transaction ">Транзакция обработки с данными запроса.</param>
     /// <param name="client">HTTP-клиент для взаимодействия с внешним сервисом бюро.</param>
     /// <param name="bureau">Реквизиты целевого бюро кредитных историй.</param>
     /// <returns>Результат обработки, содержащий ответ бюро или информацию об ошибке.</returns>
-    public async Task<QBCHTaskResult> RequestFromExternalBureau(QBCHProcessingTransaction processing, HttpClient client, QBCHRequisite bureau)
+    public async Task<QBCHTaskResult> RequestFromExternalBureau(QBCHProcessingTransaction transaction, HttpClient client, QBCHRequisite bureau)
     {
-        var request = processing.GetRequest<ЗапросСведений>();
+        var request = transaction.GetRequest<ЗапросСведений>();
         if (request is null)
         {
             return new QBCHTaskResult(bureau.ogrn);
         }
 
-        var guid = processing.Id.ToString();
+        var guid = transaction.Id.ToString();
         var orderNumbers = request.Запрос?.Select(x => x.ПорядковыйНомер).ToArray() ?? [];
 
-        await _redisCache.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+        await _storageService.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
         request.ИдентификаторЗапроса = guid;
         request.Абонент = new ЗапросСведенийАбонент
@@ -223,7 +223,7 @@ public class QBCHServiceV3(
                             }
 
                             dlrequestResult = _xmlService.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body);
-                            await _redisCache.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "response_id", dlrequestResult?.ИдентификаторОтвета ?? "-");
+                            await _storageService.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "response_id", dlrequestResult?.ИдентификаторОтвета ?? "-");
                             break;
 
                         case HttpStatusCode.BadRequest:
@@ -268,7 +268,7 @@ public class QBCHServiceV3(
                 }
                 finally
                 {
-                    await _redisCache.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
+                    await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                 }
 
                 if (dlrequestResult is null && ticket is null)
@@ -294,11 +294,11 @@ public class QBCHServiceV3(
             return new QBCHTaskResult(bureau.ogrn!, answer3: invalidTicket);
         }
 
-        await _redisCache.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "response_id", responseId);
+        await _storageService.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "response_id", responseId);
 
         var timeLeftMs = _qbchResponseTimeoutMs * (request.Запрос?.Length ?? 1)
             - ticketTimer.ElapsedMilliseconds
-            - processing.TimeElapsedForValidation.ElapsedMilliseconds;
+            - transaction.TimeElapsedForValidation.ElapsedMilliseconds;
 
         using var resendCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(Math.Max(100, timeLeftMs)));
 
@@ -379,7 +379,7 @@ public class QBCHServiceV3(
             }
             finally
             {
-                await _redisCache.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
+                await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
             }
         }
     }

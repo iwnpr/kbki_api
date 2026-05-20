@@ -1,6 +1,7 @@
 ﻿using Asp.Versioning;
 using Crypto_lib.Model;
 using QBCH_api.QBCHProcessing.V2.CreateAndValidation.ValidationStep;
+using qbch_lib.domain.errors;
 using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.qcb_xml.v2_0.qcb_request;

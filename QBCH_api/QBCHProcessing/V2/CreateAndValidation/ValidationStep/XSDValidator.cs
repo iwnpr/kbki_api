@@ -1,4 +1,5 @@
-﻿using QBCH_lib.core;
+﻿using qbch_lib.domain.errors;
+using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.qcb_xml.v2_0.qcb_request;
 using System.Xml.Serialization;

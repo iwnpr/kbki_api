@@ -1,6 +1,5 @@
 ﻿using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using QBCH_lib.core;
 using QBCH_lib.domain.aggregate;
 using СправочникРежимыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 using СправочникДУЛV3 = QBCH.Lib.qcb_xml.v3_0.СправочникДУЛ;
@@ -10,6 +9,7 @@ using ТипЦельКодЦелиV3 = QBCH.Lib.qcb_xml.v3_0.ТипЦельКо�
 using ТипИПV3 = QBCH.Lib.qcb_xml.v3_0.ТипИП;
 using ТипИностранныйПредпринимательV3 = QBCH.Lib.qcb_xml.v3_0.ТипИностранныйПредприниматель;
 using QBCH.Lib.qcb_xml.v3_0;
+using qbch_lib.domain.errors;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 

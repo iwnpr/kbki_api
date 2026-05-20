@@ -1,19 +1,19 @@
-﻿using QBCH_lib.core;
-using QBCH_lib.domain.aggregate;
+﻿using QBCH_lib.domain.aggregate;
 using СправочникВидыСведенийV3 = QBCH.Lib.qcb_xml.v3_0.СправочникВидыСведений;
 using СправочникРежимыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 using СправочникСрокиСогласияV3 = QBCH.Lib.qcb_xml.v3_0.СправочникСрокиСогласия;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using ЗапросСведенийЗапросV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийЗапрос;
+using qbch_lib.domain.errors;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 
 /// <summary>
 /// Валидация блока "Согласие" для API 3.0.
 /// </summary>
-public static class AgreementValidatorV3
+public static class ConsentValidatorV3
 {
-    public static QBCHProcessingTransaction ValidateAgreementV3(
+    public static QBCHProcessingTransaction ValidateConsentV3(
         this QBCHProcessingTransaction transaction,
         ЗапросСведенийV3? requestV3)
     {
@@ -22,7 +22,7 @@ public static class AgreementValidatorV3
             return transaction;
         }
 
-        var requiresAgreement = RequiresAgreement(requestV3.КодСведений);
+        var requiresConsent = RequiresConsent(requestV3.КодСведений);
         var requests = requestV3.Запрос ?? [];
 
         for (var i = 0; i < requests.Length; i++)
@@ -36,7 +36,7 @@ public static class AgreementValidatorV3
                 continue;
             }
 
-            ValidateRequestAgreement(transaction, requestV3, requestItem, requiresAgreement, orderNumber);
+            ValidateRequestConsent(transaction, requestV3, requestItem, requiresConsent, orderNumber);
 
             if (requestV3.РежимЗапроса == СправочникРежимыЗапросаV3.Item1 &&
                 transaction.Status.Equals(QBCHProcessingStatus.Failure))
@@ -48,7 +48,7 @@ public static class AgreementValidatorV3
         return transaction;
     }
 
-    private static void ValidateRequestAgreement(
+    private static void ValidateRequestConsent(
         QBCHProcessingTransaction transaction,
         ЗапросСведенийV3 requestV3,
         ЗапросСведенийЗапросV3 requestItem,
@@ -132,7 +132,7 @@ public static class AgreementValidatorV3
         transaction.RiseCriticalError(error);
     }
 
-    private static bool RequiresAgreement(СправочникВидыСведенийV3 infoCode)
+    private static bool RequiresConsent(СправочникВидыСведенийV3 infoCode)
     {
         // Матрица кодов сведений 3.0:
         // 6 — запрет/снятие запрета (согласие не требуется)

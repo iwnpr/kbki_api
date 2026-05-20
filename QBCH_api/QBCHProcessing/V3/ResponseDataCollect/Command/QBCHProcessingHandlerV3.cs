@@ -2,6 +2,7 @@
 using Crypto_lib.Service;
 using MediatR;
 using QBCH.Lib.qcb_xml.v3_0;
+using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
 using QBCH_lib.domain.aggregate;
@@ -19,7 +20,7 @@ namespace QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
 public class QBCHProcessingHandlerV3(
     ILogger<QBCHProcessingHandlerV3> logger,
     IQBCHServiceV3 qbchService,
-    ICacheService redisCache,
+    IKeyValueStorageService storageService,
     ICryptoService cryptoService,
     ITicketServiceV3 ticketService,
     IXmlServiceV3 xmlService,
@@ -37,7 +38,7 @@ public class QBCHProcessingHandlerV3(
     private const string ResponseGuidField = "response_guid";
     private readonly ILogger<QBCHProcessingHandlerV3> _logger = logger;
     private readonly IQBCHServiceV3 _qbchService = qbchService;
-    private readonly ICacheService _redisCache = redisCache;
+    private readonly IKeyValueStorageService _storageService = storageService;
     private readonly ICryptoService _cryptoService = cryptoService;
     private readonly ITicketServiceV3 _ticketService = ticketService;
     private readonly IXmlServiceV3 _xmlService = xmlService;
@@ -52,7 +53,8 @@ public class QBCHProcessingHandlerV3(
 
         if (input is null)
         {
-            var nullRequestTicket = _ticketService.CreateResultV3Error(new QBCH_lib.core.Error(99, "Не удалось получить данные запроса API 3.0"));
+            var error = Error.Code99_OtherError("Не удалось получить данные запроса API 3.0");
+            var nullRequestTicket = _ticketService.CreateResultV3Error(error);
             var nullRequestTicketBytes = _xmlService.SerializeAsByteV3(nullRequestTicket);
 
             transaction.Complete(nullRequestTicketBytes, _cryptoService.SignMsg(nullRequestTicketBytes));
@@ -70,10 +72,7 @@ public class QBCHProcessingHandlerV3(
         {
             _qbchList.ForEach(qbch =>
             {
-                tasks.Add(_qbchService.RequestFromExternalBureau(
-                    processing: transaction,
-                    client: _httpClientFactory.CreateClient($"{qbch.Name}v3"),
-                    bureau: qbch));
+                tasks.Add(_qbchService.RequestFromExternalBureau(transaction, _httpClientFactory.CreateClient($"{qbch.Name}v3"), qbch));
             });
         }
 
@@ -133,8 +132,8 @@ public class QBCHProcessingHandlerV3(
             }
 
             var responseXml = _xmlService.SerializeAsByteV3(response);
-            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
-            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
             processingTimer.Stop();
 
@@ -171,11 +170,11 @@ public class QBCHProcessingHandlerV3(
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "QBCH API 3.0 exception");
-            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
-            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", "99");
-            await _redisCache.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", ex.Message);
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", "99");
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", ex.Message);
 
-            var failedTicket = _ticketService.CreateResultV3Error(new QBCH_lib.core.Error(99, ex.Message));
+            var failedTicket = _ticketService.CreateResultV3Error(new Error(99, ex.Message));
             var failedTicketBytes = _xmlService.SerializeAsByteV3(failedTicket);
             transaction.Complete(failedTicketBytes, _cryptoService.SignMsg(failedTicketBytes));
             return transaction;
@@ -188,12 +187,12 @@ public class QBCHProcessingHandlerV3(
         DateTimeOffset firstPollAllowedAtUtc,
         DateTimeOffset responseExpireAtUtc)
     {
-        await _redisCache.AddHash(DlRequestV3Scope, responseId, ReadyAtUtcField, readyAtUtc.ToString("O"));
-        await _redisCache.AddHash(DlRequestV3Scope, responseId, ReadyAtMskField, readyAtUtc.ToOffset(TimeSpan.FromHours(3)).ToString("O"));
-        await _redisCache.AddHash(DlRequestV3Scope, responseId, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
-        await _redisCache.AddHash(DlRequestV3Scope, responseId, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
-        await _redisCache.AddHash(DlRequestV3Scope, responseId, ResponseGuidField, responseId);
-        await _redisCache.AddHash(DlRequestV3Scope, responseId, LastPollUtcField, string.Empty);
-        await _redisCache.TrySetKeyExpiration(DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
+        await _storageService.AddHash(DlRequestV3Scope, responseId, ReadyAtUtcField, readyAtUtc.ToString("O"));
+        await _storageService.AddHash(DlRequestV3Scope, responseId, ReadyAtMskField, readyAtUtc.ToOffset(TimeSpan.FromHours(3)).ToString("O"));
+        await _storageService.AddHash(DlRequestV3Scope, responseId, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
+        await _storageService.AddHash(DlRequestV3Scope, responseId, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
+        await _storageService.AddHash(DlRequestV3Scope, responseId, ResponseGuidField, responseId);
+        await _storageService.AddHash(DlRequestV3Scope, responseId, LastPollUtcField, string.Empty);
+        await _storageService.TrySetKeyExpiration(DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Cache_lib.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using qbch_lib.domain.errors;
 using QBCH_lib.core;
 using StackExchange.Redis;
 using System.Diagnostics.CodeAnalysis;
@@ -11,10 +12,10 @@ namespace Cache_lib.Implementations
     /// <summary>
     /// 
     /// </summary>
-    public class CacheService : ICacheService
+    public class KeyValueStorageService : IKeyValueStorageService
     {
         private readonly IConfiguration _config;
-        private readonly ILogger<CacheService> _logger;
+        private readonly ILogger<KeyValueStorageService> _logger;
         private readonly IConnectionMultiplexer _connectionMultiplexer;
         private readonly IDatabase _redisDb;
         private readonly int _uniqueIdExpirityDays;
@@ -27,7 +28,7 @@ namespace Cache_lib.Implementations
         /// </summary>
         /// <param name="config"></param>
         /// <param name="logger"></param>
-        public CacheService(IConfiguration config, ILogger<CacheService> logger, IConnectionMultiplexer connectionMultiplexer)
+        public KeyValueStorageService(IConfiguration config, ILogger<KeyValueStorageService> logger, IConnectionMultiplexer connectionMultiplexer)
         {
             _config = config;
             _logger = logger;
