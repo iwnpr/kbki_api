@@ -30,6 +30,7 @@ public sealed class CreateAndValidateHandlerV3(
 
     public async Task<QBCHProcessingTransaction> Handle(CreateToValidateCommandV3 request, CancellationToken cancellationToken)
     {
+        _logger.LogDebug("Начало создания и валидации транзакции v3. Method={Method}, Path={Path}", request.Request.Method, request.Request.Path);
         request.Request.EnableBuffering();
         if (request.Request.Body.CanSeek)
         {
@@ -54,11 +55,19 @@ public sealed class CreateAndValidateHandlerV3(
         attachement.SetRequestBody(requestBody);
         var transaction = QBCHProcessingTransaction.Create(DateTime.Now, clientRequest, attachement, _bKIRequisits.GetBureaList());
 
-        return await transaction.ValidateV3(
+        var result = await transaction.ValidateV3(
             validationService: _validationService,
             xmlService: _xmlService,
             repository: _repository,
             cacheService: _storageService,
             cancellationToken: cancellationToken);
+
+        _logger.LogDebug(
+            "Окончание создания и валидации транзакции v3 {TransactionId}. Ошибок обработки={ProcessingErrorsCount}, пакетных ошибок={PackageErrorsCount}",
+            result.Id,
+            result.ProcessingErrors.Count,
+            result.PackageValidationErrors.Count);
+
+        return result;
     }
 }

@@ -104,8 +104,4 @@
 	  </Content>
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Compile Include="..\XmlService_lib\Services\Implementations\V3\XmlServiceV3.cs" Link="XmlServiceV3.cs" />
-	</ItemGroup>
-
 </Project>

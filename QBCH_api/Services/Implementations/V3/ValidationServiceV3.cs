@@ -36,7 +36,7 @@ public class ValidationServiceV3(
         if (!isValid)
         {
             var error = Error.Code9_InvalidRequestByScheme();
-            result = CreateErrorResult(new Error(xmlResult?.ErrorCode ?? 9, xmlResult?.Error ?? "Запрос не соответствует схеме"));
+            result = CreateErrorResult(error);
             return false;
         }
         
@@ -124,6 +124,7 @@ public class ValidationServiceV3(
     {
         if (cert.Length == 0)
         {
+            _logger.LogError("Невозможно получить количество активных сертификатов v3: cert пустой");
             return 0;
         }
 
@@ -135,6 +136,7 @@ public class ValidationServiceV3(
     {
         if (cert.Length == 0)
         {
+            _logger.LogError("Невозможно деактивировать сертификат v3: cert пустой");
             return false;
         }
 

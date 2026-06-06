@@ -50,13 +50,13 @@ public class QBCHServiceV3(
     /// <summary>
     /// Выполняет обработку запроса на основе данных, полученных из внутренней базы.
     /// </summary>
-    /// <param name="processing ">Транзакция с телом запроса и техническим контекстом обработки.</param>
+    /// <param name="transaction">Транзакция с телом запроса и техническим контекстом обработки.</param>
     /// <returns>Результат обработки с ответом <c>ОтветНаЗапросСведений</c>.</returns>
-    public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransaction processing)
+    public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransaction transaction)
     {
-        await _storageService.AddHash("dlrequest", $"{processing.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+        await _storageService.AddHash("dlrequest", $"{transaction.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-        var package = processing.GetRequest<ЗапросСведений>();
+        var package = transaction.GetRequest<ЗапросСведений>();
 
         if (package is null)
             return new QBCHTaskResult(_ourBureauPsrn);
@@ -64,7 +64,7 @@ public class QBCHServiceV3(
         var answer = new ОтветНаЗапросСведений
         {
             ИдентификаторЗапроса = package.ИдентификаторЗапроса,
-            ИдентификаторОтвета = processing.Id.ToString(),
+            ИдентификаторОтвета = transaction.Id.ToString(),
             ОГРН = _ourBureauPsrn,
             ТипОтвета = package.ТипЗапроса,
             РежимЗапроса = package.РежимЗапроса,
@@ -72,8 +72,8 @@ public class QBCHServiceV3(
         };
 
         var requests = package.Запрос ?? [];
-        var timeLeft = _qbchResponseTimeoutMs * requests.Length - processing.TimeElapsedForValidation.ElapsedMilliseconds;
-        _logger.LogDebug("{guid} {bureau}: Таймаут для запросов {timeLeft} ms", processing.Id, _ourBureauPsrn, timeLeft);
+        var timeLeft = _qbchResponseTimeoutMs * requests.Length - transaction.TimeElapsedForValidation.ElapsedMilliseconds;
+        _logger.LogDebug("{guid} {bureau}: Таймаут для запросов {timeLeft} ms", transaction.Id, _ourBureauPsrn, timeLeft);
 
         var responseRows = new List<ОтветНаЗапросСведенийСведения>(requests.Length);
 
@@ -89,10 +89,10 @@ public class QBCHServiceV3(
             {
                 ОГРН = _ourBureauPsrn,
                 ПоСостояниюНа = DateTime.Now,
-                ИдентификаторОтвета = processing.Id.ToString()
+                ИдентификаторОтвета = transaction.Id.ToString()
             };
 
-            var error = processing.PackageValidationErrors.FirstOrDefault(x => x.Id.ToString() == requestItem.ПорядковыйНомер);
+            var error = transaction.PackageValidationErrors.FirstOrDefault(x => x.Id.ToString() == requestItem.ПорядковыйНомер);
             if (error is not null)
             {
                 kbki.УстановитьОшибку(error.error_code, error.error_message ?? string.Empty);

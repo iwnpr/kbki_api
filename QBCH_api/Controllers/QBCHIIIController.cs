@@ -92,6 +92,8 @@ public class QBCHIIIController(IMediator mediator,
     public async Task<IActionResult> DlRequest_v_3(ApiVersion apiVersion)
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
+        var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _logger.LogInformation("Начало = {Action} v{Version} в {RequestTime}", nameof(DlRequest_v_3), apiVersion, requestTime);
 
         var transaction = await _mediator.Send(new CreateToValidateCommandV3(apiVersion, Request));
         _logger.LogDebug("{guid} Request: {dt}", transaction.Id, requestTime);
@@ -106,6 +108,8 @@ public class QBCHIIIController(IMediator mediator,
             transaction.Complete(errorResult, signedResp);
 
             await _mediator.Publish(new QBCHProcessingCompleteV3(transaction));
+
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status400BadRequest, actionStopwatch.Elapsed);
 
             return BadRequest(new MemoryStream(transaction.Response.SignedTicket!));
         }
@@ -150,15 +154,17 @@ public class QBCHIIIController(IMediator mediator,
             {
                 var statusCode = DetermineTicketStatusCode(processingResult.Response.TicketXML);
                 Response.StatusCode = statusCode;
+                LogActionEnd(nameof(DlRequest_v_3), transaction.Id, statusCode, actionStopwatch.Elapsed);
                 return File(processingResult.Response.SignedTicket, "application/octet-stream");
             }
 
             Response.StatusCode = StatusCodes.Status200OK;
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status200OK, actionStopwatch.Elapsed);
             return File(processingResult.Response.SignedResponse!, "application/octet-stream");
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Возникла критическая ошибка");
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
             return StatusCode(500);
         }
     }
@@ -169,6 +175,8 @@ public class QBCHIIIController(IMediator mediator,
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
         var serviceName = DlAnswerV3Scope;
+        var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _logger.LogInformation("Начало действия {Action} service={ServiceName} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, guid, requestTime);
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
         Error standartError;
@@ -340,6 +348,7 @@ public class QBCHIIIController(IMediator mediator,
 
             await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
             await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            LogActionEnd(nameof(DlAnswer_v_3), guid, Response.StatusCode, actionStopwatch.Elapsed);
         }
     }
 
@@ -349,6 +358,8 @@ public class QBCHIIIController(IMediator mediator,
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
         const string serviceName = DlPutV3Scope;
+        var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _logger.LogInformation("Начало действия {Action} service={ServiceName} guid={Guid} в {RequestTime}", nameof(DlPut_v_3), serviceName, guid, requestTime);
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
 
@@ -615,6 +626,7 @@ public class QBCHIIIController(IMediator mediator,
 
             await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
             await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            LogActionEnd(nameof(DlPut_v_3), guid, Response.StatusCode, actionStopwatch.Elapsed);
         }
     }
 
@@ -624,6 +636,8 @@ public class QBCHIIIController(IMediator mediator,
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
         const string serviceName = DlPutAnswerV3Scope;
+        var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _logger.LogInformation("Начало действия {Action} service={ServiceName} guid={Guid} в {RequestTime}", nameof(DlPutAnswer_v_3), serviceName, guid, requestTime);
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
 
@@ -790,6 +804,7 @@ public class QBCHIIIController(IMediator mediator,
 
             await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
             await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            LogActionEnd(nameof(DlPutAnswer_v_3), guid, Response.StatusCode, actionStopwatch.Elapsed);
         }
     }
 
@@ -799,6 +814,8 @@ public class QBCHIIIController(IMediator mediator,
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
         var serviceName = "certadd";
+        var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _logger.LogInformation("Начало действия {Action} service={ServiceName} guid={Guid} в {RequestTime}", nameof(CertAdd_v_3), serviceName, guid, requestTime);
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
 
@@ -986,6 +1003,7 @@ public class QBCHIIIController(IMediator mediator,
 
             await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
             await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
+            LogActionEnd(nameof(CertAdd_v_3), guid, Response.StatusCode, actionStopwatch.Elapsed);
         }
     }
 
@@ -996,8 +1014,11 @@ public class QBCHIIIController(IMediator mediator,
         byte[]? signedResponse = null;
         var guid = Guid.NewGuid().ToString();
         const string serviceName = "certrevoke";
+        var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
+        var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _logger.LogInformation("Начало действия {Action} service={ServiceName} guid={Guid} в {RequestTime}", nameof(CertRevoke_v_3), serviceName, guid, requestTime);
 
-        await _storageService.AddHash(serviceName, guid, "request_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+        await _storageService.AddHash(serviceName, guid, "request_date_time", requestTime);
         await _storageService.AddHash(serviceName, guid, "temp_guid", guid);
 
         var requestCertificate = Request.HttpContext.Connection.ClientCertificate;
@@ -1183,6 +1204,7 @@ public class QBCHIIIController(IMediator mediator,
 
     private async Task<V3ErrorResponseBuildResult> BuildV3ErrorResponseAsync(string serviceName, string guid, int code, string message, int statusCode)
     {
+        _logger.LogError( "Ошибка обработки v3 service={ServiceName} guid={Guid} code={ErrorCode} status={StatusCode}: {ErrorMessage}", serviceName, guid, code, statusCode, message);
         await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
         await _storageService.AddHash(serviceName, guid, "error_message", message);
 
@@ -1233,5 +1255,15 @@ public class QBCHIIIController(IMediator mediator,
         }
 
         return null;
+    }
+
+    private void LogActionEnd(string action, object guid, int statusCode, TimeSpan elapsed)
+    {
+        _logger.LogInformation(
+            "Окончание действия {Action} guid={Guid} status={StatusCode} elapsed={ElapsedMs}ms",
+            action,
+            guid,
+            statusCode,
+            elapsed.TotalMilliseconds);
     }
 }
