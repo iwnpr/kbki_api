@@ -1,7 +1,8 @@
 ﻿using Cache_lib.Interfaces;
+using Crypto_lib.Service;
 using MediatR;
-using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_api.Services.Interfaces.V3;
+using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.domain.entities;
@@ -14,6 +15,7 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 /// </summary>
 public sealed class CreateAndValidateHandlerV3(
     IValidationServiceV3 validationService,
+    ICryptoService cryptoService,
     IXmlServiceV3 xmlService,
     IRepositoryV3 repository,
     IKeyValueStorageService storageService,
@@ -22,6 +24,7 @@ public sealed class CreateAndValidateHandlerV3(
     : IRequestHandler<CreateToValidateCommandV3, QBCHProcessingTransaction>
 {
     private readonly IValidationServiceV3 _validationService = validationService;
+    private readonly ICryptoService _cryptoService = cryptoService;
     private readonly IXmlServiceV3 _xmlService = xmlService;
     private readonly IRepositoryV3 _repository = repository;
     private readonly IKeyValueStorageService _storageService = storageService;
@@ -52,11 +55,11 @@ public sealed class CreateAndValidateHandlerV3(
 
         var requestBody = memoryStream.ToArray();
         var attachement = Attachment.Create(signedRequest: requestBody);
-        attachement.SetRequestBody(requestBody);
         var transaction = QBCHProcessingTransaction.Create(DateTime.Now, clientRequest, attachement, _bKIRequisits.GetBureaList());
 
         var result = await transaction.ValidateV3(
             validationService: _validationService,
+            cryptoService: _cryptoService,
             xmlService: _xmlService,
             repository: _repository,
             cacheService: _storageService,

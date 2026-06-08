@@ -1,15 +1,16 @@
 ﻿using Cache_lib.Interfaces;
+using Crypto_lib.Service;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
+using qbch_lib.domain.errors;
 using QBCH_lib.domain.aggregate;
 using XmlService_lib.Services.Interfaces.V3;
-using СправочникСпособыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникСпособыЗапроса;
+using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
 using АбонентИПV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
 using АбонентИЮЛV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентЮридическоеЛицо;
-using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
-using qbch_lib.domain.errors;
+using СправочникСпособыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникСпособыЗапроса;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation;
 
@@ -23,6 +24,7 @@ public static class QBCHValidationDispatcherV3
     public static async Task<QBCHProcessingTransaction> ValidateV3(
         this QBCHProcessingTransaction transaction,
         IValidationServiceV3 validationService,
+        ICryptoService cryptoService,
         IXmlServiceV3 xmlService,
         IRepositoryV3 repository,
         IKeyValueStorageService cacheService,
@@ -36,6 +38,7 @@ public static class QBCHValidationDispatcherV3
 
         // 3) sign
         //ValidateSignatureEnvelopeV3(transaction, validationService);
+        ProcessSignV3(transaction, cryptoService, validationService);
 
         // 4) xsd
         transaction.ValidateXmlV3(validationService, xmlService);
@@ -49,7 +52,7 @@ public static class QBCHValidationDispatcherV3
         transaction.ValidateXmlRequestCollectionV3(requestV3);
 
         // 7) rights
-        //await ValidateRightsV3(transaction, repository, cancellationToken);
+        await ValidateRightsV3(transaction, repository, cancellationToken);
 
         // 8) one-window
         ValidateOneWindowV3(transaction);
@@ -81,20 +84,50 @@ public static class QBCHValidationDispatcherV3
 
     private static void ValidateRequestBodyV3(QBCHProcessingTransaction transaction)
     {
-        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && (transaction.Attachment.RequestBody is null || transaction.Attachment.RequestBody.Length == 0))
+        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && (transaction.Attachment.SignedRequestBody is null || transaction.Attachment.SignedRequestBody.Length == 0))
             transaction.RiseCriticalError(Error.Code2_EmptyRequestBody());
     }
 
-    private static void ValidateSignatureEnvelopeV3(QBCHProcessingTransaction transaction, IValidationServiceV3 validationService)
+    private static void ProcessSignV3(
+       QBCHProcessingTransaction transaction,
+       ICryptoService cryptoService,
+       IValidationServiceV3 validationService)
     {
-        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && !validationService.ValidateCertificateV3(transaction.ClentRequest.Certificate, out var certValidationResult))
+        if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
+        {
+            return;
+        }
+
+        if (!validationService.ValidateCertificateV3(transaction.ClentRequest.Certificate, out var certValidationResult))
         {
             transaction.RiseCriticalError(new Error(certValidationResult!.ErrorCode, certValidationResult.Error ?? "Ошибка проверки сертификата"));
             return;
         }
 
-        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && transaction.Attachment.RequestBody is not null && !validationService.ValidateEncodingV3(transaction.Attachment.RequestBody, out var encodingValidationResult))
+        var signValidationResult = cryptoService.ValidateMsg(
+            transaction.Attachment.SignedRequestBody!,
+            transaction.ClentRequest.Certificate);
+
+        if (!signValidationResult.IsSuccess)
+        {
+            transaction.RiseCriticalError(new Error(signValidationResult.Error!.Code, signValidationResult.Error.Message));
+            return;
+        }
+
+        transaction.Attachment.SetRequestBody(signValidationResult.Value.Body);
+        transaction.Attachment.SetSignCertificateData(
+            signValidationResult.Value.SignThumbprint,
+            signValidationResult.Value.SignINN,
+            signValidationResult.Value.SignOGRN);
+        transaction.ClentRequest.SetRequestCertificateData(
+            signValidationResult.Value.RequestThumbprint,
+            signValidationResult.Value.RequestINN,
+            signValidationResult.Value.RequestOGRN);
+
+        if (!validationService.ValidateEncodingV3(transaction.Attachment.RequestBody!, out var encodingValidationResult))
+        {
             transaction.RiseCriticalError(new Error(encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка"));
+        }
     }
 
     private static async Task ValidateAbonentV3(QBCHProcessingTransaction transaction, IRepositoryV3 repository, ЗапросСведенийV3? requestV3)
@@ -103,11 +136,9 @@ public static class QBCHValidationDispatcherV3
             return;
 
         var (requestInn, requestOgrn) = GetAbonentRequisitesV3(requestV3);
-        //var dbRequisites = await repository.GetInnOgrnByThumbprintV3(transaction.ClentRequest.Certificate?.Thumbprint);
-        //var dbInn = dbRequisites?.Element("inn")?.Value;
-        //var dbOgrn = dbRequisites?.Element("ogrn")?.Value;
-        var dbInn = requestInn;
-        var dbOgrn = requestOgrn;
+        var dbRequisites = await repository.GetInnOgrnByThumbprintV3(transaction.ClentRequest.Certificate?.Thumbprint);
+        var dbInn = dbRequisites?.Element("inn")?.Value;
+        var dbOgrn = dbRequisites?.Element("ogrn")?.Value;
 
         transaction.ClentRequest.SetRequestCertificateData(transaction.ClentRequest.Certificate?.Thumbprint, dbInn, dbOgrn);
 

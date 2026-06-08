@@ -7,8 +7,8 @@ namespace QBCH.Lib.qcb_xml.v3_0
     {
         public decimal ЗначениеДесятичное
         {
-            get => Convert.ToDecimal(Value, CultureInfo.InvariantCulture);
-            set => Value = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+            get => decimal.Parse(Value, CultureInfo.InvariantCulture);
+            set => Value = value.ToString(CultureInfo.InvariantCulture);
         }
 
         public static ТипСумма Создать(decimal значение, string валюта)
