@@ -158,7 +158,7 @@ namespace KafkaService_lib.Services.Implementation
 
         public Message<string, string>? Consume()
         {
-            _logger.LogInformation("Начало получения сообщения из Kafka");
+            _logger.LogDebug("Начало получения сообщения из Kafka");
             _consumer ??= new ConsumerBuilder<string, string>(new ConsumerConfig
             {
                 GroupId = _groupId,
@@ -173,17 +173,17 @@ namespace KafkaService_lib.Services.Implementation
             try
             {
                 var cr = _consumer.Consume();
-                _logger.LogInformation("Offset =  {crOffset}, Partition = {crTopicPartitionOffset}, Topic = {crTopic}", cr.Offset, cr.TopicPartitionOffset.Partition.Value, cr.Topic);
+                _logger.LogDebug("Offset =  {crOffset}, Partition = {crTopicPartitionOffset}, Topic = {crTopic}", cr.Offset, cr.TopicPartitionOffset.Partition.Value, cr.Topic);
                 return cr.Message;
             }
             catch (ConsumeException e)
             {
-                _logger.LogCritical("Consume error occured: {eErrorReason}", e.Error.Reason);
+                _logger.LogError("Ошибка получения сообщения: {eErrorReason}", e.Error.Reason);
                 return null;
             }
             finally
             {
-                _logger.LogInformation("Завершение получения сообщения из Kafka");
+                _logger.LogDebug("Завершение получения сообщения из Kafka");
             }
         }
 

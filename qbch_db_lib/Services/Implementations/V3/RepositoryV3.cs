@@ -16,13 +16,7 @@ namespace Qbch_db_lib.Services.Implementations.V3;
 /// Репозиторий версии 3.0 для доступа к данным КБКИ
 /// Работает только с V3-конфигурацией
 /// </summary>
-public class RepositoryV3(
-    IConfiguration config,
-    ILogger<RepositoryV3> logger,
-    IKeyValueStorageService cacheService,
-    ApiV3ContractOptions contractOptions,
-    ApiV3ContractRules contractRules)
-    : IRepositoryV3
+public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, IKeyValueStorageService cacheService, ApiV3ContractOptions contractOptions, ApiV3ContractRules contractRules) : IRepositoryV3
 {
     private readonly IConfiguration _config = config;
     private readonly ILogger<RepositoryV3> _logger = logger;
@@ -36,21 +30,22 @@ public class RepositoryV3(
     private readonly string[] _calcOfAmpConnectionPool = config.GetSection("ConnectionPoolV3:QbchCalcOfAmp").Get<string[]>() ?? [];
     private readonly string[] _selfProhibitionConnectionPool = config.GetSection("ConnectionPoolV3:QbchSelfProhibition").Get<string[]>() ?? [];
     private readonly string[] _antifraudConnectionPool = config.GetSection("ConnectionPoolV3:QbchAntifraud").Get<string[]>() ?? [];
-    private readonly string[] _creditHistoryPresenceFlagConnectionPool = config.GetSection("ConnectionPoolV3:QbchCreditHistoryPresenceFlag").Get<string[]>() ?? [];
 
     private readonly int _qbchDbTimeout = config.GetValue<int>("APIConfiguration:QbchDBreconnectCancelTimeoutMs");
     private readonly int _searchSubjectsTimeout = config.GetValue<int>("APIConfiguration:SearchSubjectsCancelTimeoutMs");
     private readonly int _calcOfAmpTimeout = config.GetValue<int>("APIConfiguration:QbchCalcOfAmpCancelTimeoutMs");
     private readonly int _selfProhibitionTimeout = config.GetValue<int>("APIConfiguration:SelfProhibitionCancelTimeoutMs");
     private readonly int _antifraudTimeout = config.GetValue<int>("APIConfiguration:AntifraudCancelTimeoutMs", 5000);
-    private readonly int _creditHistoryPresenceFlagTimeout = config.GetValue<int>("APIConfiguration:CreditHistoryPresenceFlagCancelTimeoutMs", 5000);
     private readonly int _dbConnectDelayMs = config.GetValue<int>("APIConfiguration:DBConnectDelayMs");
+    private readonly long _permissionsLifeTime = config.GetValue<long>("RedisCache:PermissionsLifeTimeMinutes");
 
     private readonly string? _schemaQbchDbV3 = config.GetValue<string>("QbchDbV3:Schema");
     private readonly string? _schemaQbchSearchSubjectsV3 = config.GetValue<string>("QbchSearchSubjectsV3:Schema");
     private readonly string? _schemaQbchCalcOfAmpV3 = config.GetValue<string>("QbchCalcOfAmpV3:Schema");
     private readonly string? _schemaQbchSelfProhibitionV3 = config.GetValue<string>("QbchSelfProhibitionV3:Schema");
     private readonly string? _schemaQbchAntifraudV3 = config.GetValue<string>("QbchAntifraudV3:Schema");
+
+    private const string PermissionsCacheName = "permissionsv3";
 
     /// <summary>
     /// Возвращает список идентификаторов субъектов
@@ -138,20 +133,26 @@ public class RepositoryV3(
     public async Task<bool> IsPermissionGrantedV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
     {
         if (string.IsNullOrWhiteSpace(thumbprint) || string.IsNullOrWhiteSpace(serviceName) || string.IsNullOrWhiteSpace(_schemaQbchDbV3))
-        {
             return false;
-        }
 
         var procName = _config.GetValue<string>("QbchDbV3:Procedures:IsPermissionGranted");
+
         if (string.IsNullOrWhiteSpace(procName))
-        {
             return false;
-        }
 
         var normalizedServiceName = NormalizeServiceNameForAccessCheck(serviceName);
+
         if (string.IsNullOrWhiteSpace(normalizedServiceName))
-        {
             return false;
+
+        try
+        {
+            if (_cacheService.TryGetHashValue(PermissionsCacheName, thumbprint, normalizedServiceName, out var cachedValue) && bool.TryParse(cachedValue.Value, out var cachedResult))
+                return cachedResult;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex, "При проверке кэша прав V3 из redis возникла ошибка.");
         }
 
         var sql = $"SELECT {_schemaQbchDbV3}.{procName}(@thumbprint, @serviceName)";
@@ -161,7 +162,20 @@ public class RepositoryV3(
             cmd.Parameters.AddWithValue("serviceName", normalizedServiceName);
         }, "IsPermissionGrantedV3", ct);
 
-        return value is bool boolValue && boolValue;
+        if (value is not bool result)
+            return false;
+
+        try
+        {
+            await _cacheService.AddHash(PermissionsCacheName, thumbprint, normalizedServiceName, result.ToString(), ct);
+            await _cacheService.TrySetKeyExpiration(PermissionsCacheName, thumbprint, _permissionsLifeTime, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex, "При установке кэша прав V3 в redis возникла ошибка.");
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -584,6 +598,8 @@ public class RepositoryV3(
     private static string? NormalizeServiceNameForAccessCheck(string serviceName)
     {
         var normalized = serviceName.Split('?', 2)[0].Trim().Trim('/').ToLowerInvariant();
+        normalized = normalized.Split(':', 2)[0];
+
         if (normalized.StartsWith("v3.0/"))
         {
             normalized = normalized["v3.0/".Length..];

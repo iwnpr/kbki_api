@@ -100,7 +100,7 @@ public class Error : BaseError
     /// <summary>
     /// Запрос не доступен для абонента
     /// </summary>
-    public static Error Code14_SingleWindowDenied() => new(14, "Запрос не доступен для абонента");
+    public static Error Code14_SingleWindowDenied() => new(14, "Взаимодействие с абонентом в режиме «одно окно» не предусмотрено договором");
 
     /// <summary>
     /// 

@@ -103,7 +103,7 @@ public static class QBCHValidationDispatcherV3
             transaction.RiseCriticalError(new Error(certValidationResult!.ErrorCode, certValidationResult.Error ?? "Ошибка проверки сертификата"));
             return;
         }
-
+        
         var signValidationResult = cryptoService.ValidateMsg(
             transaction.Attachment.SignedRequestBody!,
             transaction.ClentRequest.Certificate);
@@ -129,6 +129,7 @@ public static class QBCHValidationDispatcherV3
             transaction.RiseCriticalError(new Error(encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка"));
         }
     }
+
 
     private static async Task ValidateAbonentV3(QBCHProcessingTransaction transaction, IRepositoryV3 repository, ЗапросСведенийV3? requestV3)
     {

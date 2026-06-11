@@ -82,6 +82,11 @@ public class ValidationServiceV3(
         return true;
     }
 
+    public bool ValidateMsgV3(byte[] msg, X509Certificate2? requestCert, [NotNullWhen(false)] out CryptoServiceResult result, byte[]? encodedSignature = null)
+    {
+        return _cryptoService.ValidateMsg(msg, requestCert, out result, encodedSignature);
+    }
+
     /// <summary>
     /// Проверка сертификата
     /// </summary>

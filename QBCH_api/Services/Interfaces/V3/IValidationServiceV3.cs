@@ -1,4 +1,5 @@
-﻿using QBCH_lib.CommonTypes.Api.V3;
+﻿using Crypto_lib.Model;
+using QBCH_lib.CommonTypes.Api.V3;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 
@@ -13,6 +14,8 @@ public interface IValidationServiceV3
     bool ValidateRequestDateV3(DateTime? requestDate, [NotNullWhen(false)] out BaseResultV3? result);
 
     bool ValidateCertificateV3(X509Certificate2? requestCert, [NotNullWhen(false)] out BaseResultV3? result);
+
+    bool ValidateMsgV3(byte[] msg, X509Certificate2? requestCert, [NotNullWhen(false)] out CryptoServiceResult result, byte[]? encodedSignature = null);
 
     Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null);
 

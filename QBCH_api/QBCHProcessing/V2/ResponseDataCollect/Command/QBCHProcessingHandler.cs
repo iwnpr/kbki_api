@@ -145,10 +145,10 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
                     }
 
                     responseXml = _xmlService.SerializeAsByte(response);
-                    _logger.LogInformation("Данные по задачам были добавлены в Redis");
+                    _logger.LogDebug("Данные по задачам были добавлены в Redis");
 
                     await _redisСache.AddHash(transaction.ServiceName, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
-                    _logger.LogInformation("Данные о времени окончания задач добавлены в Redis");
+                    _logger.LogDebug("Данные о времени окончания задач добавлены в Redis");
 
                     await _redisСache.AddHash(transaction.ServiceName, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
                 }

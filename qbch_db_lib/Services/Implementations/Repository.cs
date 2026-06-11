@@ -83,11 +83,6 @@ namespace Qbch_db_lib.Services.Implementations
             _schema_QbchCalcOfAmp = _config.GetValue<string>("QbchCalcOfAmp:Schema");
             _schema_QbchSelfProhibition = _config.GetValue<string>("QbchSelfProhibition:Schema");
 
-            _schema_QbchDb_old = _config.GetValue<string>("Old:QbchDb:Schema");
-            _schema_QbchSearchSubjects_old = _config.GetValue<string>("Old:QbchSearchSubjects:Schema");
-            _schema_QbchCalcOfAmp_old = _config.GetValue<string>("Old:QbchCalcOfAmp:Schema");
-
-
             _permissionsLifeTime = _config.GetValue<long>("RedisCache:PermissionsLifeTimeMinutes");
             _requisitesLifeTime = _config.GetValue<long>("RedisCache:RequisitesLifeTimeMinutes");
             _DBConnectDelayMs = _config.GetValue<int>("APIConfiguration:DBConnectDelayMs");
@@ -426,41 +421,41 @@ namespace Qbch_db_lib.Services.Implementations
             string pgcmd = $"SELECT {_schema_QbchDb}.{_procname}(@thumbprint,@serviceName)";
             var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
-            while (!cts.Token.IsCancellationRequested)
+            for (int i = 0; i < _QBCHDB_ConnectionPool.Length; i++)
             {
-                _logger.LogDebug("Loop connection IsPermissionGranted retry");
+                _logger.LogDebug(" | Connection string {i} from pool", i);
 
-                for (int i = 0; i < _QBCHDB_ConnectionPool.Length; i++)
+                using var connection = GetDbConnection(i, _QBCHDB_ConnectionPool);
+                try
                 {
-                    _logger.LogDebug(" | Connection string {i} from pool", i);
+                    await connection.OpenAsync(ct.GetValueOrDefault(cts.Token));
+                    using var cmd = new NpgsqlCommand(pgcmd, connection);
+                    cmd.Parameters.Add(new("thumbprint", thumbprint));
+                    cmd.Parameters.Add(new("serviceName", serviceName));
+                    using var reader = cmd.ExecuteReader();
 
-                    using var connection = GetDbConnection(i, _QBCHDB_ConnectionPool);
-                    try
+                    while (await reader.ReadAsync(ct.GetValueOrDefault(cts.Token)))
                     {
-                        await connection.OpenAsync(ct.GetValueOrDefault(cts.Token));
-                        using var cmd = new NpgsqlCommand(pgcmd, connection);
-                        cmd.Parameters.Add(new("thumbprint", thumbprint));
-                        cmd.Parameters.Add(new("serviceName", serviceName));
-                        using var reader = cmd.ExecuteReader();
+                        result = !await reader.IsDBNullAsync(reader.GetOrdinal(_procname)) && reader.GetBoolean(reader.GetOrdinal(_procname));
+                        dbError = false;
+                        break;
+                    }
 
-                        while (await reader.ReadAsync(ct.GetValueOrDefault(cts.Token)))
-                        {
-                            result = !await reader.IsDBNullAsync(reader.GetOrdinal(_procname)) && reader.GetBoolean(reader.GetOrdinal(_procname));
-                            dbError = false;
-                            break;
-                        }
-
-                        cts.Cancel();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogCritical(ex, "Ошибка процедуры IsPermissionGranted.");
-                    }
-                    finally
-                    {
-                        if (connection.State != ConnectionState.Closed)
-                            await connection.CloseAsync();
-                    }
+                    break;
+                }
+                catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.SyntaxError)
+                {
+                    _logger.LogCritical(ex, "Синтаксическая ошибка процедуры IsPermissionGranted.");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogCritical(ex, "Ошибка процедуры IsPermissionGranted.");
+                }
+                finally
+                {
+                    if (connection.State != ConnectionState.Closed)
+                        await connection.CloseAsync();
                 }
             }
 

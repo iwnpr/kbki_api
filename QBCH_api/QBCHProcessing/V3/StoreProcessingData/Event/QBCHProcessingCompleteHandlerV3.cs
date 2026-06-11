@@ -37,14 +37,16 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
                 schema_family = schemaFamily
             });
 
-            if (!await _kafka.Produce(new Message<Null, string> { Value = kafkaPayload }))
-            {
-                _logger.LogCritical("Потеряно содержимое Kafka-сообщения версии 3.0 для ключа QBCH:{serviceName}:{Transactionid}", transaction.ServiceName, transaction.Id);
-            }
+            var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaPayload });
+
+            if (!isProduce)
+                _logger.LogError("Потеряно содержимое Kafka-сообщения для ключа QBCH:{serviceName}:{Transactionid}", transaction.ServiceName, transaction.Id);
+
+            _logger.LogDebug("Добавлено Kafka-сообщение для ключа QBCH:{serviceName}:{Transactionid}", transaction.ServiceName, transaction.Id);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Критическая ошибка при сохранении API 3.0 результата в redis/kafka");
+            _logger.LogError(ex, "Критическая ошибка при сохранении результата в redis/kafka");
         }
     }
 

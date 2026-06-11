@@ -1071,7 +1071,7 @@ namespace QBCH_api.Services.Implementations
         /// <param name="ct"></param>
         /// <param name="thumbprint"></param>
         /// <returns></returns>
-        public async Task<bool> ValidateRules(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await repository.IsPermissionGranted(thumbprint, serviceName, ct);
+        public async Task<bool> ValidateRules(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await repository.IsPermissionGrantedv2(thumbprint, serviceName, ct);
 
         /// <summary>
         /// 

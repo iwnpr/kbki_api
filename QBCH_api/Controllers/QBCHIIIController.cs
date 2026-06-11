@@ -78,22 +78,12 @@ public class QBCHIIIController(IMediator mediator,
     private const string ResponseExpireAtUtcField = "response_expire_at_utc";
     private const string LastPollUtcField = "last_poll_utc";
 
-    [HttpGet("healthz")]
-    public IActionResult Healthz(ApiVersion apiVersion)
-    {
-        return Ok(new
-        {
-            status = "ok",
-            version = apiVersion.ToString()
-        });
-    }
-
     [HttpPost("dlrequest")]
     public async Task<IActionResult> DlRequest_v_3(ApiVersion apiVersion)
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
-        _logger.LogInformation("Начало = {Action} v{Version} в {RequestTime}", nameof(DlRequest_v_3), apiVersion, requestTime);
+        _logger.LogDebug("Начало = {Action} v{Version} в {RequestTime}", nameof(DlRequest_v_3), apiVersion, requestTime);
 
         var transaction = await _mediator.Send(new CreateToValidateCommandV3(apiVersion, Request));
         _logger.LogDebug("{guid} Request: {dt}", transaction.Id, requestTime);
@@ -102,8 +92,7 @@ public class QBCHIIIController(IMediator mediator,
         {
             var errorTicket = _ticketServiceV3.CreateResultV3Error(transaction.ProcessingErrors.First());
             var errorResult = _xmlServiceV3.SerializeAsByteV3(errorTicket);
-            // var signedResp = _cryptoService.SignMsg(errorResult);
-            var signedResp = errorResult;
+            var signedResp = _cryptoService.SignMsg(errorResult);
 
             transaction.Complete(errorResult, signedResp);
 
@@ -137,10 +126,11 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ошибка записи уникальнго requestId в redis");
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
         }
 
         transaction.TimeElapsedForValidation.Stop();
-        _logger.LogDebug("{guid} Validation time elapsed: {elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
+        _logger.LogDebug("{guid} Время проверки истекло: {elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
 
         // Основной processing и формирование HTTP-ответа
         try
@@ -164,6 +154,7 @@ public class QBCHIIIController(IMediator mediator,
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Ошибка формирования HTTP-ответа для идентификатора {Id}", transaction.Id);
             LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
             return StatusCode(500);
         }
@@ -176,13 +167,14 @@ public class QBCHIIIController(IMediator mediator,
         var guid = Guid.NewGuid().ToString();
         var serviceName = DlAnswerV3Scope;
         var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
-        _logger.LogInformation("Начало действия {Action} service={ServiceName} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, guid, requestTime);
         var certificate = Request.HttpContext.Connection.ClientCertificate;
         var ipAddress = Request.HttpContext.Connection.RemoteIpAddress?.ToString();
         Error standartError;
 
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
+
+        _logger.LogDebug("Начало действия {Action} service={ServiceName} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, guid, requestTime);
 
         try
         {
@@ -205,6 +197,8 @@ public class QBCHIIIController(IMediator mediator,
                 responseXml = methodError.ResponseXml;
                 signedResponse = methodError.SignedResponse;
 
+                LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
+
                 return methodError.ActionResult;
             }
 
@@ -217,6 +211,8 @@ public class QBCHIIIController(IMediator mediator,
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
+                LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
                 return errorResult.ActionResult;
             }
 
@@ -231,6 +227,8 @@ public class QBCHIIIController(IMediator mediator,
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
+                LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
                 return errorResult.ActionResult;
             }
 
@@ -245,6 +243,8 @@ public class QBCHIIIController(IMediator mediator,
 
                 await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult?.ErrorCode.ToString() ?? "5");
                 await _storageService.AddHash(serviceName, guid, "error_message", certValidationResult?.Error ?? "Ошибка проверки сертификата");
+
+                LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
@@ -261,6 +261,8 @@ public class QBCHIIIController(IMediator mediator,
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
+                LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
                 return errorResult.ActionResult;
             }
 
@@ -283,6 +285,8 @@ public class QBCHIIIController(IMediator mediator,
 
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
+
+                LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
                 return errorResult.ActionResult;
             }
 
@@ -313,6 +317,8 @@ public class QBCHIIIController(IMediator mediator,
                     responseXml = alreadyDeliveredResult.ResponseXml;
                     signedResponse = alreadyDeliveredResult.SignedResponse;
 
+
+                    LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
                     return alreadyDeliveredResult.ActionResult;
                 }
 
@@ -333,6 +339,7 @@ public class QBCHIIIController(IMediator mediator,
             _logger.LogCritical(ex, "Возникла критическая ошибка в /dlanswer v3");
             await _storageService.AddHash(serviceName, guid, "error_code", "500");
             await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
+            LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
             return StatusCode(500);
         }
         finally
@@ -860,7 +867,7 @@ public class QBCHIIIController(IMediator mediator,
 
             var isCertificateValid = _validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult);
 
-            if (!isCertificateValid  & certValidationResult is not null)
+            if (!isCertificateValid & certValidationResult is not null)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new Error(certValidationResult.ErrorCode, certValidationResult.ErrorMessage));
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
@@ -1204,7 +1211,7 @@ public class QBCHIIIController(IMediator mediator,
 
     private async Task<V3ErrorResponseBuildResult> BuildV3ErrorResponseAsync(string serviceName, string guid, int code, string message, int statusCode)
     {
-        _logger.LogError( "Ошибка обработки v3 service={ServiceName} guid={Guid} code={ErrorCode} status={StatusCode}: {ErrorMessage}", serviceName, guid, code, statusCode, message);
+        _logger.LogError("Ошибка обработки v3 service={ServiceName} guid={Guid} code={ErrorCode} status={StatusCode}: {ErrorMessage}", serviceName, guid, code, statusCode, message);
         await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
         await _storageService.AddHash(serviceName, guid, "error_message", message);
 
@@ -1260,7 +1267,7 @@ public class QBCHIIIController(IMediator mediator,
     private void LogActionEnd(string action, object guid, int statusCode, TimeSpan elapsed)
     {
         _logger.LogInformation(
-            "Окончание действия {Action} guid={Guid} status={StatusCode} elapsed={ElapsedMs}ms",
+            "Выполнен запрос {Action} guid={Guid} status={StatusCode} elapsed={ElapsedMs}ms",
             action,
             guid,
             statusCode,
