@@ -190,7 +190,7 @@ public partial class QBCHService : IQBCHService
                     await _redisCache.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "TicketResendCount", tickerResendCount++.ToString());
                     try
                     {
-                        _logger.LogInformation("Send request for ticket {BureaName}", bureau.Name);
+                        _logger.LogDebug("Запрос тикета {BureaName}", bureau.Name);
                         responseMessage = await client.PostAsync("dlrequest", content, ticketCts.Token);
                         await responseMessage.Content.CopyToAsync(ms);
 
@@ -474,7 +474,7 @@ public partial class QBCHService : IQBCHService
                     {
                         if (error.Value == "Ответ не готов")
                         {
-                            _logger.LogInformation("Запрос в бюро {bureauName} по адресу {baseAddress}. Переотправка через 1 секунду.", bureau.Name, $"/dlanswer?id={responseId}");
+                            _logger.LogDebug("Запрос в бюро {bureauName} по адресу {baseAddress}. Переотправка через 1 секунду.", bureau.Name, $"/dlanswer?id={responseId}");
                         }
                         else
                         {

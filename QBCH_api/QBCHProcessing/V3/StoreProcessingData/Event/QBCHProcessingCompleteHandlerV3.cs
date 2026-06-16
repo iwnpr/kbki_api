@@ -25,19 +25,8 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
             var resultData = await ConstructResultData(transaction);
             await _storageService.AddHashArray(transaction.ServiceName, transaction.Id.ToString(), resultData);
 
-            var (responseKind, schemaFamily) = ResolveResponseShape(transaction);
-            var kafkaPayload = JsonSerializer.Serialize(new
-            {
-                api_version = ApiVersion,
-                service = transaction.ServiceName,
-                id = transaction.Id,
-                redis_key = $"QBCH:{transaction.ServiceName}:{transaction.Id}",
-                versioned_key = $"QBCH:v{ApiVersion}:{transaction.ServiceName}:{transaction.Id}",
-                response_kind = responseKind,
-                schema_family = schemaFamily
-            });
-
-            var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaPayload });
+            var kafkaKey = $"QBCH:{transaction.ServiceName}:{transaction.Id}";
+            var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaKey });
 
             if (!isProduce)
                 _logger.LogError("Потеряно содержимое Kafka-сообщения для ключа QBCH:{serviceName}:{Transactionid}", transaction.ServiceName, transaction.Id);

@@ -4,6 +4,7 @@ using Cache_lib.Interfaces;
 using CertManagement.Services.Implementations;
 using CertManagement.Services.Interfaces;
 using Crypto_lib.Service;
+using Elastic.CommonSchema;
 using KafkaService_lib.Services.Implementation;
 using KafkaService_lib.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Certificate;
@@ -32,10 +33,10 @@ using Serilog.Core;
 using StackExchange.Redis;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
-using XmlService_lib.Services.Implementations.V3;
-using XmlService_lib.Services.Interfaces.V3;
 using XmlService_lib.Services.Implementations;
+using XmlService_lib.Services.Implementations.V3;
 using XmlService_lib.Services.Interfaces;
+using XmlService_lib.Services.Interfaces.V3;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -210,6 +211,7 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
     var clientName = section.GetValue<string>("Name");
     var url = section.GetValue<string>("Url");
     var urlv2 = section.GetValue<string>("Urlv2");
+    var urlv3 = section.GetValue<string>("Urlv3");
 
     if (string.IsNullOrWhiteSpace(clientName))
     {
@@ -235,9 +237,15 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
         client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
     });
 
-    var httpClientBuilderV3 = builder.Services.AddHttpClient($"{clientName}v3", client =>
+    var httpClientBuilderV2 = builder.Services.AddHttpClient($"{clientName}v2", client =>
     {
         client.BaseAddress = new Uri(urlv2);
+        client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
+    });
+
+    var httpClientBuilderV3 = builder.Services.AddHttpClient($"{clientName}v3", client =>
+    {
+        client.BaseAddress = new Uri(urlv3);
         client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
     });
 
@@ -247,7 +255,7 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
         return;
     }
 
-    httpClientBuilder.ConfigurePrimaryHttpMessageHandler(() =>
+    HttpClientHandler CreateCertificateHandler()
     {
         return new HttpClientHandler
         {
@@ -255,15 +263,9 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
             ClientCertificates = { certificate },
             ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
         };
-    });
+    }
 
-    httpClientBuilderV3.ConfigurePrimaryHttpMessageHandler(() =>
-    {
-        return new HttpClientHandler
-        {
-            ClientCertificateOptions = ClientCertificateOption.Manual,
-            ClientCertificates = { certificate },
-            ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
-        };
-    });
+    httpClientBuilder.ConfigurePrimaryHttpMessageHandler(CreateCertificateHandler);
+    httpClientBuilderV2.ConfigurePrimaryHttpMessageHandler(CreateCertificateHandler);
+    httpClientBuilderV3.ConfigurePrimaryHttpMessageHandler(CreateCertificateHandler);
 }

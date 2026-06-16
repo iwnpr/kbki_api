@@ -36,7 +36,18 @@ public static class XSDValidatorV3
             return transaction;
         }
 
-        var requestV3 = xmlService.DeserializeV3<ЗапросСведенийV3>(transaction.Attachment.RequestBody);
+        ЗапросСведенийV3? requestV3;
+
+        try
+        {
+            requestV3 = xmlService.DeserializeV3<ЗапросСведенийV3>(transaction.Attachment.RequestBody);
+        }
+        catch
+        {
+            transaction.RiseCriticalError(Error.Code9_InvalidRequestByScheme());
+            return transaction;
+        }
+
         if (requestV3 is null)
         {
             transaction.RiseCriticalError(Error.Code9_InvalidRequestByScheme());

@@ -37,7 +37,6 @@ public static class QBCHValidationDispatcherV3
         ValidateRequestBodyV3(transaction);
 
         // 3) sign
-        //ValidateSignatureEnvelopeV3(transaction, validationService);
         ProcessSignV3(transaction, cryptoService, validationService);
 
         // 4) xsd

@@ -145,22 +145,19 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         if (string.IsNullOrWhiteSpace(normalizedServiceName))
             return false;
 
-        try
-        {
-            if (_cacheService.TryGetHashValue(PermissionsCacheName, thumbprint, normalizedServiceName, out var cachedValue) && bool.TryParse(cachedValue.Value, out var cachedResult))
-                return cachedResult;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogCritical(ex, "При проверке кэша прав V3 из redis возникла ошибка.");
-        }
+        var foundInCache = _cacheService.TryGetHashValue(PermissionsCacheName, thumbprint, normalizedServiceName, out var cachedValue);
+
+        if (foundInCache && bool.TryParse(cachedValue.Value, out var cachedResult))
+            return cachedResult;
+
+        _logger.LogDebug("В Redis не найдены права доступа для сертификата с отпечатком {thumbprint}", thumbprint);
 
         var sql = $"SELECT {_schemaQbchDbV3}.{procName}(@thumbprint, @serviceName)";
         var value = await ExecuteScalarAsync(sql, procName, _qbchDbConnectionPool, _qbchDbTimeout, cmd =>
         {
             cmd.Parameters.AddWithValue("thumbprint", thumbprint);
             cmd.Parameters.AddWithValue("serviceName", normalizedServiceName);
-        }, "IsPermissionGrantedV3", ct);
+        }, nameof(IsPermissionGrantedV3), ct);
 
         if (value is not bool result)
             return false;
@@ -172,7 +169,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "При установке кэша прав V3 в redis возникла ошибка.");
+            _logger.LogError(ex, "При установке прав V3 в redis возникла ошибка.");
         }
 
         return result;

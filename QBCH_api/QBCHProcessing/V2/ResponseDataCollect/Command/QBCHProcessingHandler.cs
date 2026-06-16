@@ -69,6 +69,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
     public async Task<QBCHProcessingTransaction> Handle(QBCHProcessedStart request, CancellationToken cancellationToken)
     {
         var transaction = request.Transaction;
+        var requestDate = transaction.ClentRequest.Request!.ДатаЗапроса;
         ОтветНаЗапросСведений response = new();
         byte[]? responseXml = null;
 
@@ -93,7 +94,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
                     {
                         ИдентификаторЗапроса = transaction.ClentRequest.RequestId!,
                         ИдентификаторОтвета = transaction.Id.ToString(),
-                        ДатаЗапроса = DateTime.Today.ToString("yyyy-MM-dd"),
+                        ДатаЗапроса = requestDate.ToString("yyyy-MM-dd"),
                         РежимЗапроса = transaction.ClentRequest.Request.РежимЗапроса,
                         ТипОтвета = transaction.ClentRequest.Request.ТипЗапроса,
                         ОГРН = request.OurBureauPSRN,
@@ -176,7 +177,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
             _logger.LogError(ex, "Ошибка времени ожидания выполнения запроса. Время проверки превысило {TicketTimeout} миллисекунд.", request.TicketTimeout);
         }
 
-        var commonTicket = _ticketService.CreateResultV2(ResponseType.Ticket, requestId: transaction.ClentRequest.RequestId!, guid: transaction.Id.ToString());
+        var commonTicket = _ticketService.CreateResultV2Ticket(requestId: transaction.ClentRequest.RequestId!, guid: transaction.Id.ToString(), dateTime: requestDate);
         var commonTicketBytes = _xmlService.SerializeAsByte(commonTicket);
         transaction.Accepted();
         transaction.Complete(commonTicketBytes, _cryptoService.SignMsg(commonTicketBytes));

@@ -166,10 +166,9 @@ public class QBCHServiceV3(
     public async Task<QBCHTaskResult> RequestFromExternalBureau(QBCHProcessingTransaction transaction, HttpClient client, QBCHRequisite bureau)
     {
         var request = transaction.GetRequest<ЗапросСведений>();
+
         if (request is null)
-        {
             return new QBCHTaskResult(bureau.ogrn);
-        }
 
         var guid = transaction.Id.ToString();
         var orderNumbers = request.Запрос?.Select(x => x.ПорядковыйНомер).ToArray() ?? [];
@@ -208,6 +207,7 @@ public class QBCHServiceV3(
                 try
                 {
                     responseMessage = await client.PostAsync("dlrequest", dlrequestContent, ticketCts.Token);
+
                     using var ms = new MemoryStream();
                     await responseMessage.Content.CopyToAsync(ms, ticketCts.Token);
                     redisMsg.SetResponseCode(responseMessage.StatusCode).SetResponseTime(DateTime.Now);
