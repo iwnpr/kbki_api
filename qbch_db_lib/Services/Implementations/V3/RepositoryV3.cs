@@ -5,9 +5,10 @@ using Npgsql;
 using NpgsqlTypes;
 using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.Configuration;
+using System.Collections;
 using System.Data;
-using System.Security.Cryptography.X509Certificates;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 
 namespace Qbch_db_lib.Services.Implementations.V3;
@@ -56,10 +57,9 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
     public async Task<List<long>> GetSearchAllSubjectsV3(string request, long? timeLeftMs = null)
     {
         var procName = _config.GetValue<string>("QbchSearchSubjectsV3:Procedures:SearchAllSubjects");
+
         if (string.IsNullOrWhiteSpace(request) || string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchSearchSubjectsV3))
-        {
             return [];
-        }
 
         var sql = $"SELECT {_schemaQbchSearchSubjectsV3}.{procName}(@request)";
         var value = await ExecuteScalarAsync(sql, procName, _searchSubjectsConnectionPool, timeLeftMs ?? _searchSubjectsTimeout, cmd =>
@@ -67,7 +67,43 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
             cmd.Parameters.AddWithValue("request", NpgsqlDbType.Xml, request);
         });
 
-        return value as List<long> ?? [];
+
+
+        //return value as List<long> ?? [];
+
+        var subjects = ReadSubjectIds(value);
+
+        _logger.LogInformation($"Кол-во субъектов - {subjects.Count}");
+
+        return ReadSubjectIds(value);
+    }
+
+    private static List<long> ReadSubjectIds(object? value)
+    {
+        if (value is null || value is DBNull)
+        {
+            return [];
+        }
+
+        if (value is long[] longArray)
+        {
+            return longArray.ToList();
+        }
+
+        if (value is int[] intArray)
+        {
+            return intArray.Select(Convert.ToInt64).ToList();
+        }
+
+        if (value is IEnumerable enumerable and not string)
+        {
+            return enumerable.Cast<object>()
+                .Where(item => item is not null && item is not DBNull)
+                .Select(Convert.ToInt64)
+                .ToList();
+        }
+
+        return [Convert.ToInt64(value)];
     }
 
     /// <summary>

@@ -81,6 +81,7 @@ public class QBCHProcessingHandler : IRequestHandler<QBCHProcessedStart, QBCHPro
                 {
                     // Запрос ССП в БД
                     _tasksList.Add(_qBCHService.AmpFromDBv2(transaction));
+
                     if (transaction.ClentRequest.Request!.ТипЗапроса.Equals(СправочникСпособыЗапроса.All))
                     {
                         // Запросы в КБКИ

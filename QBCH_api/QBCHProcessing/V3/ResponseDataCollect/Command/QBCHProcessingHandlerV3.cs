@@ -62,6 +62,7 @@ public class QBCHProcessingHandlerV3(
         }
 
         var processingTimer = Stopwatch.StartNew();
+
         var tasks = new List<Task<QBCHTaskResult>>
         {
             _qbchService.RequestFromDB(transaction)

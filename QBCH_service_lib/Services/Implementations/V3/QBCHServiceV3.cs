@@ -116,6 +116,7 @@ public class QBCHServiceV3(
             var xml = _xmlService.SerializeAsStringV3(template);
             var timer = Stopwatch.StartNew();
             var subjectKeys = await _qbchDb.GetSearchAllSubjectsV3(xml, timeLeft);
+
             timer.Stop();
             timeLeft -= timer.ElapsedMilliseconds;
 

@@ -102,6 +102,7 @@ public class QBCHIIController(IMediator mediator,
 
         // Создание и валидация объекта transaction
         var transaction = await _mediator.Send(new CreateToValidateCommand(apiVersion, Request));
+
         _logger.LogDebug("{guid} Request: {dt}", transaction.Id, RequestTime);
         if (transaction.ProcessingErrors.Count != 0)
         {
