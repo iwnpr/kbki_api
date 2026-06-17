@@ -36,7 +36,7 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
             return null;
 
         var serializer = CreateSerializerV3<T>();
-        using var reader = xml.CreateReader();
+        using var reader = new StringReader(xml.ToString());
         return serializer.Deserialize(reader) as T;
     }
 

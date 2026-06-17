@@ -472,14 +472,38 @@ public class QBCHServiceV3(
             return;
         }
 
-        var amp = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ToDocument(ampXml));
-        if (amp?.БКИ is { Length: > 0 })
+        if (ampXml is null)
         {
-            kbki.ДобавитьОбязательства(amp);
+            kbki.ДобавитьПризнакОтсутствияОбязательств();
             return;
         }
 
-        kbki.ДобавитьПризнакОтсутствияОбязательств();
+        switch (ampXml.Name.LocalName)
+        {
+            case "ОбязательствНет":
+                kbki.ДобавитьПризнакОтсутствияОбязательств();
+                return;
+
+            case "Обязательства":
+                {
+                    var amp = _xmlService.DeserializeV3<
+                        ОтветНаЗапросСведенийСведенияКБКИОбязательства>(
+                            ToDocument(ampXml));
+
+                    if (amp?.БКИ is { Length: > 0 })
+                    {
+                        kbki.ДобавитьОбязательства(amp);
+                        return;
+                    }
+
+                    kbki.ДобавитьПризнакОтсутствияОбязательств();
+                    return;
+                }
+
+            default:
+                throw new InvalidOperationException(
+                    $"Неожиданный XML-блок сведений об обязательствах: {ampXml.Name.LocalName}");
+        }
     }
 
     private void FillSelfProhibitionSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, XElement? prohibitionXml, ТипИННФЛсПризнаком? inn)

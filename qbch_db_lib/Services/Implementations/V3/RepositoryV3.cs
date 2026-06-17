@@ -61,22 +61,103 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         if (string.IsNullOrWhiteSpace(request) || string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchSearchSubjectsV3))
             return [];
 
+        _logger.LogDebug("XML для поиска субъектов ({Proc}): {Xml}", procName, request);
+
         var sql = $"SELECT {_schemaQbchSearchSubjectsV3}.{procName}(@request)";
-        var value = await ExecuteScalarAsync(sql, procName, _searchSubjectsConnectionPool, timeLeftMs ?? _searchSubjectsTimeout, cmd =>
+
+        var subjects = await ExecuteSubjectIdsAsync(sql, procName, _searchSubjectsConnectionPool, timeLeftMs ?? _searchSubjectsTimeout, cmd =>
         {
             cmd.Parameters.AddWithValue("request", NpgsqlDbType.Xml, request);
         });
 
+        _logger.LogDebug("Кол-во субъектов - {SubjectCount}. Запрос: ({Proc}): {Xml}", subjects.Count, procName, request);
 
-
-        //return value as List<long> ?? [];
-
-        var subjects = ReadSubjectIds(value);
-
-        _logger.LogInformation($"Кол-во субъектов - {subjects.Count}");
-
-        return ReadSubjectIds(value);
+        return subjects;
     }
+
+    private async Task<List<long>> ExecuteSubjectIdsAsync(string sql, string resultColumn, string[] connectionPool, long timeoutMs, Action<NpgsqlCommand> addParams)
+    {
+        var result = new List<long>();
+
+        if (connectionPool.Length == 0)
+        {
+            return result;
+        }
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+
+        while (!cts.Token.IsCancellationRequested)
+        {
+            for (var i = 0; i < connectionPool.Length; i++)
+            {
+                using var connection = new NpgsqlConnection(connectionPool[i]);
+                try
+                {
+                    await connection.OpenAsync(cts.Token);
+                    using var cmd = new NpgsqlCommand(sql, connection);
+                    addParams(cmd);
+
+                    _logger.LogInformation("Выполняется процедура поиска субъектов. PoolIndex={PoolIndex}, ResultColumn={ResultColumn}", i, resultColumn);
+
+                    using var reader = await cmd.ExecuteReaderAsync(cts.Token);
+
+                    while (await reader.ReadAsync(cts.Token))
+                    {
+                        var ordinal = reader.GetOrdinal(resultColumn);
+                        if (await reader.IsDBNullAsync(ordinal, cts.Token))
+                        {
+                            _logger.LogInformation("Процедура вернула NULL в колонке {ResultColumn}.", resultColumn);
+                            continue;
+                        }
+
+
+                        var rawValue = reader.GetValue(ordinal);
+                        var subjectIds = ReadSubjectIds(rawValue).ToList();
+
+                        _logger.LogInformation(
+                            "Результат процедуры. Column={ResultColumn}, RawValue={@RawValue}, ParsedSubjectIds={@SubjectIds}, Count={Count}",
+                            resultColumn,
+                            rawValue,
+                            subjectIds,
+                            subjectIds.Count);
+
+                        result.AddRange(ReadSubjectIds(reader.GetValue(ordinal)));
+                    }
+
+                    var distinctResult = result.Distinct().ToList();
+
+                    _logger.LogInformation(
+                        "Итоговый результат процедуры поиска субъектов. SubjectIds={@SubjectIds}, Count={Count}",
+                        distinctResult,
+                        distinctResult.Count);
+
+
+                    return distinctResult;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogCritical(ex, "Ошибка процедуры {OperationName}.", nameof(GetSearchAllSubjectsV3));
+                    await Task.Delay(_dbConnectDelayMs);
+                }
+                finally
+                {
+                    if (connection.State != ConnectionState.Closed)
+                    {
+                        await connection.CloseAsync();
+                    }
+                }
+            }
+        }
+        var timeoutResult = result.Distinct().ToList();
+
+        _logger.LogWarning(
+            "Таймаут выполнения процедуры поиска субъектов. Частичный результат: SubjectIds={@SubjectIds}, Count={Count}",
+            timeoutResult,
+            timeoutResult.Count);
+
+        return timeoutResult;
+    }
+
 
     private static List<long> ReadSubjectIds(object? value)
     {
