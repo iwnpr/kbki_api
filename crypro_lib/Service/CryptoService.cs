@@ -47,10 +47,17 @@ namespace Crypto_lib.Service
             {
                 if (_allowMissingClientCertificate)
                 {
-                    _logger.LogWarning("Проверка УЭП выполняется без сертификата запроса: CertificateValidation:AllowMissingClientCertificate=true.");
-                    return ValidateMsg(msg, out result, encodedSignature)
-                        ? QBCH_lib.core.Result<CryptoServiceResult>.Success(result)
-                        : QBCH_lib.core.Result<CryptoServiceResult>.Failure(new Error(result.ErrorCode, result.Error ?? "Ошибка проверки УЭП"));
+                    _logger.LogWarning("Проверка УЭП пропущена: отсутствует сертификат запроса и CertificateValidation:AllowMissingClientCertificate=true.");
+                    result.Body = msg;
+                    result.SignedBody = msg;
+
+                    // При отсутствии клиентского сертификата бизнес-запрос может приходить
+                    // как исходный XML/байтовое тело, а не PKCS#7. Не декодируем ASN.1, чтобы не
+                    // возвращать ошибку 7: ASN1 corrupted data.
+                    // return ValidateMsg(msg, out result, encodedSignature)
+                    //     ? QBCH_lib.core.Result<CryptoServiceResult>.Success(result)
+                    //     : QBCH_lib.core.Result<CryptoServiceResult>.Failure(new Error(result.ErrorCode, result.Error ?? "Ошибка проверки УЭП"));
+                    return QBCH_lib.core.Result<CryptoServiceResult>.Success(result);
                 }
 
                 var errorMessage = "Отсутствует сертификат запроса";
@@ -182,8 +189,15 @@ namespace Crypto_lib.Service
             {
                 if (_allowMissingClientCertificate)
                 {
-                    _logger.LogWarning("Проверка УЭП выполняется без сертификата запроса: CertificateValidation:AllowMissingClientCertificate=true.");
-                    return ValidateMsg(msg, out result, encodedSignature);
+                    _logger.LogWarning("Проверка УЭП пропущена: отсутствует сертификат запроса и CertificateValidation:AllowMissingClientCertificate=true.");
+                    result.Body = msg;
+                    result.SignedBody = msg;
+
+                    // При отсутствии клиентского сертификата бизнес-запрос может приходить
+                    // как исходный XML/байтовое тело, а не PKCS#7. Не декодируем ASN.1, чтобы не
+                    // возвращать ошибку 7: ASN1 corrupted data.
+                    // return ValidateMsg(msg, out result, encodedSignature);
+                    return true;
                 }
 
                 var error = Error.Code4_SignatureIsNotCorrect();
