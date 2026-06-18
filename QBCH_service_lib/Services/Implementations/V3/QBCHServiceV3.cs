@@ -151,7 +151,7 @@ public class QBCHServiceV3(
 
             FillObligationsSection(kbki, includeAmp, getAmpTask?.Result);
             FillSelfProhibitionSection(kbki, getSelfProhibitionTask.Result, isInnVerified);
-            FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result);
+            FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result, isInnVerified);
 
             response.КБКИ = [kbki];
             responseRows.Add(response);
@@ -505,10 +505,16 @@ public class QBCHServiceV3(
         kbki.ДобавитьПризнакОтсутствияСведенийОЗапрете();
     }
 
-    private void FillAntifraudSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAntifraud, XElement? antifraudXml)
+    private void FillAntifraudSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAntifraud, XElement? antifraudXml, bool isInnVerified)
     {
         if (!includeAntifraud)
         {
+            return;
+        }
+
+        if (!isInnVerified)
+        {
+            kbki.ДобавитьПризнакНепредоставленияАнтифродСведений();
             return;
         }
 
