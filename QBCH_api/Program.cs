@@ -227,6 +227,12 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
 
     if (string.IsNullOrEmpty(urlv2))
     {
+        serilog.Fatal("Отсутствует BaseAddress для http-клиента v2: {clientName}.", clientName);
+        throw new NullReferenceException();
+    }
+
+    if (string.IsNullOrEmpty(urlv3))
+    {
         serilog.Fatal("Отсутствует BaseAddress для http-клиента v3: {clientName}.", clientName);
         throw new NullReferenceException();
     }
