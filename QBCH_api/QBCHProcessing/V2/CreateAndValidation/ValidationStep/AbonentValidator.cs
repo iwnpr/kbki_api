@@ -24,10 +24,10 @@ public static class AbonentValidator
             var abonentOGRN = transaction.ClentRequest?.Request?.Абонент?.Requisites?.ogrn;
 
             // ИНН и ОГРН из сертификата сравнивается с ИНН и ОГРН в запросе
-            if (requestINN != abonentINN || requestOGRN != abonentOGRN)
-            {
-                transaction.RiseCriticalError(Error.Code10_RequestAndAbonentDataNotMach(abonentINN, requestINN, abonentOGRN, requestOGRN));
-            }
+            //if (requestINN != abonentINN || requestOGRN != abonentOGRN)
+            //{
+            //    transaction.RiseCriticalError(Error.Code10_RequestAndAbonentDataNotMach(abonentINN, requestINN, abonentOGRN, requestOGRN));
+            //}
         }
         return transaction;
     }

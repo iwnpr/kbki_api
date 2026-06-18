@@ -132,7 +132,9 @@ public class QBCHServiceV3(
             var getSelfProhibitionTask = _qbchDb.GetSelfProhibitionV3(subjectKeys, timeLeft);
 
             var includeAmp = package.КодСведений == СправочникВидыСведений.Item7;
+            var isInnVerified = IsInnVerified(requestItem.Субъект?.ИНН);
             var includeAntifraud = package.КодСведений is СправочникВидыСведений.Item7 or СправочникВидыСведений.Item8;
+
             var getAmpTask = includeAmp ? _qbchDb.GetCalculationOfAmpV3(subjectKeys, timeLeft) : null;
             var getAntifraudTask = includeAntifraud ? _qbchDb.GetAntifraudV3(subjectKeys, timeLeft) : null;
 
@@ -146,8 +148,9 @@ public class QBCHServiceV3(
 
             await Task.WhenAll(pendingTasks);
 
+
             FillObligationsSection(kbki, includeAmp, getAmpTask?.Result);
-            FillSelfProhibitionSection(kbki, getSelfProhibitionTask.Result, requestItem.Субъект?.ИНН);
+            FillSelfProhibitionSection(kbki, getSelfProhibitionTask.Result, isInnVerified);
             FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result);
 
             response.КБКИ = [kbki];
@@ -473,47 +476,25 @@ public class QBCHServiceV3(
             return;
         }
 
-        if (ampXml is null)
+        var amp = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml);
+
+        if (amp?.БКИ is { Length: > 0 })
         {
-            kbki.ДобавитьПризнакОтсутствияОбязательств();
+            kbki.ДобавитьОбязательства(amp);
             return;
         }
 
-        switch (ampXml.Name.LocalName)
-        {
-            case "ОбязательствНет":
-                kbki.ДобавитьПризнакОтсутствияОбязательств();
-                return;
-
-            case "Обязательства":
-                {
-                    var amp = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ToDocument(ampXml), new XmlRootAttribute("Обязательства"));
-
-                    if (amp?.БКИ is { Length: > 0 })
-                    {
-                        kbki.ДобавитьОбязательства(amp);
-                        return;
-                    }
-
-                    kbki.ДобавитьПризнакОтсутствияОбязательств();
-                    return;
-                }
-
-            default:
-                throw new InvalidOperationException(
-                    $"Неожиданный XML-блок сведений об обязательствах: {ampXml.Name.LocalName}");
-        }
+        kbki.ДобавитьПризнакОтсутствияОбязательств();
     }
-
-    private void FillSelfProhibitionSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, XElement? prohibitionXml, ТипИННФЛсПризнаком? inn)
+    private void FillSelfProhibitionSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, XElement? prohibitionXml, bool isInnVerified)
     {
-        if (!IsInnVerified(inn))
+        if (!isInnVerified)
         {
             kbki.ДобавитьПризнакНепредоставленияСведенийОЗапрете();
             return;
         }
 
-        var prohibition = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(ToDocument(prohibitionXml), new XmlRootAttribute("УсловияЗапрета"));
+        var prohibition = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(prohibitionXml);
 
         if (prohibition?.Условие is { Length: > 0 })
         {
@@ -531,7 +512,8 @@ public class QBCHServiceV3(
             return;
         }
 
-        var antifraud = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(ToDocument(antifraudXml), new XmlRootAttribute("СведенияДляПредупреждения"));
+        var antifraud = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(antifraudXml);
+
         if (antifraud?.БКИ is { Length: > 0 })
         {
             kbki.ДобавитьСведенияДляПредупреждения(antifraud);
@@ -540,8 +522,6 @@ public class QBCHServiceV3(
 
         kbki.ДобавитьПризнакОтсутствияАнтифродСведений();
     }
-
-    private static XDocument? ToDocument(XElement? xml) => xml is null ? null : new XDocument(xml);
 
     private static bool IsInnVerified(ТипИННФЛсПризнаком? inn) =>
         inn is not null &&

@@ -9,33 +9,14 @@ namespace XmlService_lib.Services.Interfaces.V3;
 
 public interface IXmlServiceV3
 {
+
     /// <summary>
     /// Десериализация из xDocument
     /// </summary>
     /// <typeparam name="T">Тип</typeparam>
     /// <param name="stream">Поток</param>
     /// <returns>Десериалиованный объект класса</returns>
-    //T? DeserializeV3<T>(XDocument? xml) where T : class;
-
-
-
-    /// <summary>
-    /// Десериализация из xDocument с указанием имени корневого XML-элемента.
-    /// </summary>
-    /// <typeparam name="T">Тип</typeparam>
-    /// <param name="xml">XML-документ</param>
-    /// <param name="rootElementName">Имя корневого XML-элемента</param>
-    /// <returns>Десериализованный объект класса</returns>
-    //T? DeserializeV3<T>(XDocument? xml, string rootElementName) where T : class;
-
-    /// <summary>
-    /// Десериализация из xDocument с указанием атрибута корневого XML-элемента.
-    /// </summary>
-    /// <typeparam name="T">Тип</typeparam>
-    /// <param name="xml">XML-документ</param>
-    /// <param name="rootElementName">Имя корневого XML-элемента</param>
-    /// <returns>Десериализованный объект класса</returns>
-    T? DeserializeV3<T>(XDocument? xml, XmlRootAttribute rootAttribute) where T : class;
+    T? DeserializeV3<T>(XElement? xml) where T : class;
 
     /// <summary>
     /// Десериализация из xDocument

@@ -30,35 +30,26 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
         ["qcb_putanswer"] = ["qcb_putanswer.xsd", "qcb_common.xsd"]
     };
 
-    //public T? DeserializeV3<T>(XDocument? xml) where T : class
-    //{
-    //    if (xml is null)
-    //        return null;
-
-    //    var serializer = CreateSerializerV3<T>();
-    //    using var reader = new StringReader(xml.ToString());
-    //    return serializer.Deserialize(reader) as T;
-    //}
-
-    //public T? DeserializeV3<T>(XDocument? xml, string rootElementName) where T : class
-    //{
-    //    if (xml is null)
-    //        return null;
-
-    //    var serializer = CreateSerializerV3<T>(rootElementName);
-    //    using var reader = new StringReader(xml.ToString());
-    //    return serializer.Deserialize(reader) as T;
-    //}
-
-    public T? DeserializeV3<T>(byte[]? bytes) where T : class
+    public T? DeserializeV3<T>(XElement? xml) where T : class
     {
-        if (bytes is null)
+        if (xml is null)
             return null;
 
-        using var ms = new MemoryStream(bytes);
-        var serializer = CreateSerializerV3<T>();
-        return serializer.Deserialize(ms) as T;
+        var serializer = CreateSerializerV3<T>(xml.Name);
+        using var reader = xml.CreateReader();
+
+        try
+        {
+            return serializer.Deserialize(reader) as T;
+        }
+        catch
+        {
+            return default;
+        }
     }
+
+    private static XmlSerializer CreateSerializerV3<T>(XName rootName) where T : class
+        => new(typeof(T), new XmlRootAttribute(rootName.LocalName) { Namespace = rootName.NamespaceName });
 
     public byte[] SerializeAsByteV3<T>(T? item) where T : class
     {
@@ -199,16 +190,13 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
     private static XmlSerializer CreateSerializerV3<T>() where T : class
         => new(typeof(T));
 
-    private static XmlSerializer CreateSerializerV3<T>(string rootElementName) where T : class
-        => new(typeof(T), new XmlRootAttribute(rootElementName));
-
-    public T? DeserializeV3<T>(XDocument? xml, XmlRootAttribute rootAttribute) where T : class
+    public T? DeserializeV3<T>(byte[]? bytes) where T : class
     {
-        if (xml is null)
+        if (bytes is null)
             return null;
 
-        var serializer = new XmlSerializer(typeof(T), rootAttribute);
-        using var reader = xml.CreateReader();
-        return serializer.Deserialize(reader) as T;
+        using var ms = new MemoryStream(bytes);
+        var serializer = CreateSerializerV3<T>();
+        return serializer.Deserialize(ms) as T;
     }
 }

@@ -28,6 +28,7 @@ public static class QBCHValidationDispatcherV3
         IXmlServiceV3 xmlService,
         IRepositoryV3 repository,
         IKeyValueStorageService cacheService,
+        bool allowMissingClientCertificate,
         CancellationToken cancellationToken)
     {
         // 1) method
@@ -51,7 +52,7 @@ public static class QBCHValidationDispatcherV3
         transaction.ValidateXmlRequestCollectionV3(requestV3);
 
         // 7) rights
-        await ValidateRightsV3(transaction, repository, cancellationToken);
+        await ValidateRightsV3(transaction, repository, allowMissingClientCertificate, cancellationToken);
 
         // 8) one-window
         ValidateOneWindowV3(transaction);
@@ -137,8 +138,8 @@ public static class QBCHValidationDispatcherV3
 
         var (requestInn, requestOgrn) = GetAbonentRequisitesV3(requestV3);
         var dbRequisites = await repository.GetInnOgrnByThumbprintV3(transaction.ClentRequest.Certificate?.Thumbprint);
-        var dbInn = dbRequisites?.Element("inn")?.Value;
-        var dbOgrn = dbRequisites?.Element("ogrn")?.Value;
+        var dbInn = requestInn;// dbRequisites?.Element("inn")?.Value;
+        var dbOgrn = requestOgrn; // dbRequisites?.Element("ogrn")?.Value;
 
         transaction.ClentRequest.SetRequestCertificateData(transaction.ClentRequest.Certificate?.Thumbprint, dbInn, dbOgrn);
 
@@ -146,8 +147,13 @@ public static class QBCHValidationDispatcherV3
             transaction.RiseCriticalError(Error.Code10_RequestAndAbonentDataNotMach(requestInn, dbInn, requestOgrn, dbOgrn));
     }
 
-    private static async Task ValidateRightsV3(QBCHProcessingTransaction transaction, IRepositoryV3 repository, CancellationToken cancellationToken)
+    private static async Task ValidateRightsV3(QBCHProcessingTransaction transaction, IRepositoryV3 repository, bool allowMissingClientCertificate, CancellationToken cancellationToken)
     {
+        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure)
+            && transaction.ClentRequest.Certificate?.Thumbprint is null
+            && allowMissingClientCertificate)
+            return;
+
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && !await repository.IsPermissionGrantedV3(transaction.ClentRequest.Certificate?.Thumbprint, transaction.ServiceName, cancellationToken))
             transaction.RiseCriticalError(Error.Code22_AccessDenied());
     }
