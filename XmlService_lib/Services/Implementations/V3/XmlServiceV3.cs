@@ -30,25 +30,25 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
         ["qcb_putanswer"] = ["qcb_putanswer.xsd", "qcb_common.xsd"]
     };
 
-    public T? DeserializeV3<T>(XDocument? xml) where T : class
-    {
-        if (xml is null)
-            return null;
+    //public T? DeserializeV3<T>(XDocument? xml) where T : class
+    //{
+    //    if (xml is null)
+    //        return null;
 
-        var serializer = CreateSerializerV3<T>();
-        using var reader = new StringReader(xml.ToString());
-        return serializer.Deserialize(reader) as T;
-    }
+    //    var serializer = CreateSerializerV3<T>();
+    //    using var reader = new StringReader(xml.ToString());
+    //    return serializer.Deserialize(reader) as T;
+    //}
 
-    public T? DeserializeV3<T>(XDocument? xml, string rootElementName) where T : class
-    {
-        if (xml is null)
-            return null;
+    //public T? DeserializeV3<T>(XDocument? xml, string rootElementName) where T : class
+    //{
+    //    if (xml is null)
+    //        return null;
 
-        var serializer = CreateSerializerV3<T>(rootElementName);
-        using var reader = new StringReader(xml.ToString());
-        return serializer.Deserialize(reader) as T;
-    }
+    //    var serializer = CreateSerializerV3<T>(rootElementName);
+    //    using var reader = new StringReader(xml.ToString());
+    //    return serializer.Deserialize(reader) as T;
+    //}
 
     public T? DeserializeV3<T>(byte[]? bytes) where T : class
     {

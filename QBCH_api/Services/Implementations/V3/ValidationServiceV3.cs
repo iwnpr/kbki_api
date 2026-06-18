@@ -19,7 +19,8 @@ public class ValidationServiceV3(
     IKeyValueStorageService cache,
     IRepositoryV3 repository,
     ITicketServiceV3 ticketService,
-    ILogger<ValidationServiceV3> logger) : IValidationServiceV3
+    ILogger<ValidationServiceV3> logger,
+    IConfiguration configuration) : IValidationServiceV3
 {
     private static readonly TimeZoneInfo MoscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
     private readonly IXmlServiceV3 _xmlService = xmlService;
@@ -109,7 +110,17 @@ public class ValidationServiceV3(
         return true;
     }
 
-    public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
+    //public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
+    public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
+    {
+        if (thumbprint is null && configuration.GetValue("CertificateValidation:AllowMissingClientCertificate", false))
+        {
+            _logger.LogWarning("Проверка прав доступа v3 пропущена для {ServiceName}: отсутствует сертификат запроса и CertificateValidation:AllowMissingClientCertificate=true.", serviceName);
+            return true;
+        }
+
+        return await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
+    }
 
     public async Task<(bool IsUnique, BaseResultV3? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
     {

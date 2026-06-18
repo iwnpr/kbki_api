@@ -15,7 +15,7 @@ public interface IXmlServiceV3
     /// <typeparam name="T">Тип</typeparam>
     /// <param name="stream">Поток</param>
     /// <returns>Десериалиованный объект класса</returns>
-    T? DeserializeV3<T>(XDocument? xml) where T : class;
+    //T? DeserializeV3<T>(XDocument? xml) where T : class;
 
 
 
@@ -26,7 +26,7 @@ public interface IXmlServiceV3
     /// <param name="xml">XML-документ</param>
     /// <param name="rootElementName">Имя корневого XML-элемента</param>
     /// <returns>Десериализованный объект класса</returns>
-    T? DeserializeV3<T>(XDocument? xml, string rootElementName) where T : class;
+    //T? DeserializeV3<T>(XDocument? xml, string rootElementName) where T : class;
 
     /// <summary>
     /// Десериализация из xDocument с указанием атрибута корневого XML-элемента.

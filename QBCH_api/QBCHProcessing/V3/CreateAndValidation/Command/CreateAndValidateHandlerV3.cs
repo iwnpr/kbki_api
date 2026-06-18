@@ -35,6 +35,7 @@ public sealed class CreateAndValidateHandlerV3(
     {
         _logger.LogDebug("Начало создания и валидации транзакции v3. Method={Method}, Path={Path}", request.Request.Method, request.Request.Path);
         request.Request.EnableBuffering();
+
         if (request.Request.Body.CanSeek)
         {
             request.Request.Body.Position = 0;
@@ -42,6 +43,7 @@ public sealed class CreateAndValidateHandlerV3(
 
         using var memoryStream = new MemoryStream();
         await request.Request.Body.CopyToAsync(memoryStream, cancellationToken);
+
         if (request.Request.Body.CanSeek)
         {
             request.Request.Body.Position = 0;

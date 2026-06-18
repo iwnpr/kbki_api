@@ -28,6 +28,8 @@ namespace Crypto_lib.Service
         private readonly string? _storeName = config.GetValue<string>("Signer:StoreName");
         private readonly string? _findType = config.GetValue<string>("Signer:FindType");
         private readonly string? _searchValue = config.GetValue<string>("Signer:SearchValue");
+        private readonly bool _allowMissingClientCertificate = config.GetValue("CertificateValidation:AllowMissingClientCertificate", false);
+        private readonly bool _requireSignerCertificate = config.GetValue("Signer:RequireCertificate", true);
         private readonly ILogger<CryptoService> _logger = logger;
         private readonly ITicketService _ticketService = ticketService;
 
@@ -43,6 +45,14 @@ namespace Crypto_lib.Service
 
             if (requestCert is null)
             {
+                if (_allowMissingClientCertificate)
+                {
+                    _logger.LogWarning("Проверка УЭП выполняется без сертификата запроса: CertificateValidation:AllowMissingClientCertificate=true.");
+                    return ValidateMsg(msg, out result, encodedSignature)
+                        ? QBCH_lib.core.Result<CryptoServiceResult>.Success(result)
+                        : QBCH_lib.core.Result<CryptoServiceResult>.Failure(new Error(result.ErrorCode, result.Error ?? "Ошибка проверки УЭП"));
+                }
+
                 var errorMessage = "Отсутствует сертификат запроса";
                 _logger.LogError(errorMessage);
 
@@ -170,6 +180,12 @@ namespace Crypto_lib.Service
 
             if (requestCert is null)
             {
+                if (_allowMissingClientCertificate)
+                {
+                    _logger.LogWarning("Проверка УЭП выполняется без сертификата запроса: CertificateValidation:AllowMissingClientCertificate=true.");
+                    return ValidateMsg(msg, out result, encodedSignature);
+                }
+
                 var error = Error.Code4_SignatureIsNotCorrect();
                 result.Error = error.Message;
                 result.ErrorCode = error.Code;
@@ -376,6 +392,12 @@ namespace Crypto_lib.Service
         {
             if (requestCert is null)
             {
+                if (_allowMissingClientCertificate)
+                {
+                    _logger.LogWarning("Проверка сертификата запроса пропущена: CertificateValidation:AllowMissingClientCertificate=true.");
+                    result = null;
+                    return true;
+                }
                 var error = Error.Code99_OtherError("Отсутствует сертификат запроса");
                 _logger.LogError(error.Message);
 
@@ -416,6 +438,11 @@ namespace Crypto_lib.Service
         /// <returns>Подписанный файл</returns>
         public byte[] SignMsg(byte[] msg)
         {
+            if (!_requireSignerCertificate)
+            {
+                _logger.LogWarning("Подписание сообщения пропущено: Signer:RequireCertificate=false.");
+                return msg;
+            }
             // Создаем объект ContentInfo по сообщению.
             // Это необходимо для создания объекта SignedCms.
             ContentInfo contentInfo = new(msg);
