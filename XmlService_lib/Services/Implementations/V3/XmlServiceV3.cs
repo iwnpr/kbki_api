@@ -40,6 +40,16 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
         return serializer.Deserialize(reader) as T;
     }
 
+    public T? DeserializeV3<T>(XDocument? xml, string rootElementName) where T : class
+    {
+        if (xml is null)
+            return null;
+
+        var serializer = CreateSerializerV3<T>(rootElementName);
+        using var reader = new StringReader(xml.ToString());
+        return serializer.Deserialize(reader) as T;
+    }
+
     public T? DeserializeV3<T>(byte[]? bytes) where T : class
     {
         if (bytes is null)
@@ -188,4 +198,17 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
 
     private static XmlSerializer CreateSerializerV3<T>() where T : class
         => new(typeof(T));
+
+    private static XmlSerializer CreateSerializerV3<T>(string rootElementName) where T : class
+        => new(typeof(T), new XmlRootAttribute(rootElementName));
+
+    public T? DeserializeV3<T>(XDocument? xml, XmlRootAttribute rootAttribute) where T : class
+    {
+        if (xml is null)
+            return null;
+
+        var serializer = new XmlSerializer(typeof(T), rootAttribute);
+        using var reader = xml.CreateReader();
+        return serializer.Deserialize(reader) as T;
+    }
 }

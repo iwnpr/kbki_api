@@ -2,18 +2,19 @@
 using Crypto_lib.Service;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH.Lib.qcb_xml.v3_0;
+using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
 using QBCH_lib.domain.aggregate;
 using QBCHService_lib.Models;
 using QBCHService_lib.Services.Interfaces.V3;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Text.Json;
-using System.Linq;
 using System.Xml.Linq;
+using System.Xml.Serialization;
 using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCHService_lib.Services.Implementations.V3;
@@ -486,9 +487,7 @@ public class QBCHServiceV3(
 
             case "Обязательства":
                 {
-                    var amp = _xmlService.DeserializeV3<
-                        ОтветНаЗапросСведенийСведенияКБКИОбязательства>(
-                            ToDocument(ampXml));
+                    var amp = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ToDocument(ampXml), new XmlRootAttribute("Обязательства"));
 
                     if (amp?.БКИ is { Length: > 0 })
                     {
@@ -514,7 +513,8 @@ public class QBCHServiceV3(
             return;
         }
 
-        var prohibition = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(ToDocument(prohibitionXml));
+        var prohibition = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(ToDocument(prohibitionXml), new XmlRootAttribute("УсловияЗапрета"));
+
         if (prohibition?.Условие is { Length: > 0 })
         {
             kbki.ДобавитьУсловияЗапрета(prohibition);
@@ -531,7 +531,7 @@ public class QBCHServiceV3(
             return;
         }
 
-        var antifraud = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(ToDocument(antifraudXml));
+        var antifraud = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(ToDocument(antifraudXml), new XmlRootAttribute("СведенияДляПредупреждения"));
         if (antifraud?.БКИ is { Length: > 0 })
         {
             kbki.ДобавитьСведенияДляПредупреждения(antifraud);
