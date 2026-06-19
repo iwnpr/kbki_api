@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
 using Qbch_db_lib.Services.Interfaces.V3;
+using qbch_lib.domain.errors;
 using QBCH_lib.Configuration;
 using System.Collections;
 using System.Data;
@@ -222,20 +223,35 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
             "GetSelfProhibitionV3");
 
     /// <summary>
-    /// Возвращает антифрод-записи по списку субъектов.
+    /// Возвращает антифрод-записи по дате рождения и ИНН субъекта.
     /// </summary>
-    /// <param name="subjectIds">Идентификаторы субъектов.</param>
+    /// <param name="birthDate">Дата рождения субъекта.</param>
+    /// <param name="inn">ИНН субъекта.</param>
     /// <param name="timeLeftMs">Оставшееся время выполнения, мс.</param>
     /// <returns>XML с антифрод-записями для прямого маппинга в ответ 3.0.</returns>
-    public async Task<XElement?> GetAntifraudV3(List<long> subjectIds, long? timeLeftMs = null)
+    public async Task<XElement?> GetAntifraudV3(DateTime birthDate, string inn, long? timeLeftMs = null)
     {
-        var xml = await ExecuteXmlProcedureV3(
-            _config.GetValue<string>("QbchAntifraudV3:Procedures:GetAntifraud"),
-            _schemaQbchAntifraudV3,
-            _antifraudConnectionPool,
-            subjectIds,
-            timeLeftMs ?? _antifraudTimeout,
-            "GetAntifraudV3");
+        var procName = _config.GetValue<string>("QbchAntifraudV3:Procedures:GetAntifraud");
+
+        if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(inn))
+        {
+            return null;
+        }
+
+        var procedureFullName = procName.Contains('.') || string.IsNullOrWhiteSpace(_schemaQbchAntifraudV3)
+            ? procName
+            : $"{_schemaQbchAntifraudV3}.{procName}";
+
+        var sql = $"SELECT {procedureFullName}(@birth_date, @inn)";
+        var value = await ExecuteScalarAsync(sql, procName, _antifraudConnectionPool, timeLeftMs ?? _antifraudTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("birth_date", NpgsqlDbType.Date, birthDate.Date);
+            cmd.Parameters.AddWithValue("inn", NpgsqlDbType.Text, inn);
+        }, "GetAntifraudV3");
+
+        var xml = value is string xmlString && !string.IsNullOrWhiteSpace(xmlString)
+            ? XElement.Parse(xmlString)
+            : null;
 
         return SelectAntifraudFields(xml);
     }
@@ -786,7 +802,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                 catch (Exception ex)
                 {
                     _logger.LogCritical(ex, "Ошибка процедуры {OperationName}.", operationName ?? resultColumn);
-                    await Task.Delay(_dbConnectDelayMs, cts.Token);
+                    await Task.Delay(_dbConnectDelayMs);
                 }
                 finally
                 {
@@ -837,7 +853,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                 catch (Exception ex)
                 {
                     _logger.LogCritical(ex, "Ошибка запроса {OperationName}.", operationName);
-                    await Task.Delay(_dbConnectDelayMs, cts.Token);
+                    await Task.Delay(_dbConnectDelayMs);
                 }
                 finally
                 {
@@ -881,7 +897,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                 catch (Exception ex)
                 {
                     _logger.LogCritical(ex, "Ошибка запроса {OperationName}.", operationName);
-                    await Task.Delay(_dbConnectDelayMs, cts.Token);
+                    await Task.Delay(_dbConnectDelayMs);
                 }
                 finally
                 {

@@ -1,5 +1,6 @@
 ﻿using Cache_lib.Interfaces;
 using Crypto_lib.Service;
+using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
@@ -31,45 +32,48 @@ public static class QBCHValidationDispatcherV3
         bool allowMissingClientCertificate,
         CancellationToken cancellationToken)
     {
-        // 1) method
+        // method
         ValidateRequestMethodV3(transaction);
 
-        // 2) body
+        // body
         ValidateRequestBodyV3(transaction);
 
-        // 3) sign
+        // sign
         ProcessSignV3(transaction, cryptoService, validationService);
 
-        // 4) xsd
+        // xsd
         transaction.ValidateXmlV3(validationService, xmlService);
 
         var requestV3 = transaction.GetRequest<ЗапросСведенийV3>();
 
-        // 5) abonent
+        // abonent
         await ValidateAbonentV3(transaction, repository, requestV3);
 
-        // 6) packet
+        // packet
         transaction.ValidateXmlRequestCollectionV3(requestV3);
 
-        // 7) rights
+        // rights
         await ValidateRightsV3(transaction, repository, allowMissingClientCertificate, cancellationToken);
 
-        // 8) one-window
+        // one-window
         ValidateOneWindowV3(transaction);
 
-        // 9) unique request id
+        // antifraud one-window compatibility
+        ValidateAntifraudOneWindowCompatibilityV3(transaction, requestV3);
+
+        // unique request id
         await ValidateUniqueRequestIdV3(transaction, cacheService, requestV3);
 
-        // 10) request date
+        // request date
         ValidateRequestDateV3(transaction, validationService, requestV3);
 
-        // 11) additional validation
+        // additional validation
         AdditionalValidationV3(transaction, requestV3);
 
-        // 12) agreement
+        // agreement
         ValidateAgreementV3(transaction, requestV3);
 
-        // 13) inn/self-prohibition
+        // inn/self-prohibition
         ValidateInnAndSelfProhibitionV3(transaction, requestV3);
 
         transaction.ValidationComplete();
@@ -86,6 +90,17 @@ public static class QBCHValidationDispatcherV3
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && (transaction.Attachment.SignedRequestBody is null || transaction.Attachment.SignedRequestBody.Length == 0))
             transaction.RiseCriticalError(Error.Code2_EmptyRequestBody());
+    }
+
+    private static void ValidateAntifraudOneWindowCompatibilityV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
+    {
+        if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
+            return;
+
+        if (requestV3.КодСведений == СправочникВидыСведений.Item8 && requestV3.ТипЗапроса == СправочникСпособыЗапросаV3.Item2)
+        {
+            transaction.RiseCriticalError(Error.Code99_OtherError("Комбинация КодСведений=\"8\" и ТипЗапроса=\"2\" недопустима"));
+        }
     }
 
     private static void ProcessSignV3(
@@ -138,8 +153,8 @@ public static class QBCHValidationDispatcherV3
 
         var (requestInn, requestOgrn) = GetAbonentRequisitesV3(requestV3);
         var dbRequisites = await repository.GetInnOgrnByThumbprintV3(transaction.ClentRequest.Certificate?.Thumbprint);
-        var dbInn = requestInn;// dbRequisites?.Element("inn")?.Value;
-        var dbOgrn = requestOgrn; // dbRequisites?.Element("ogrn")?.Value;
+        var dbInn = dbRequisites?.Element("inn")?.Value;
+        var dbOgrn = dbRequisites?.Element("ogrn")?.Value;
 
         transaction.ClentRequest.SetRequestCertificateData(transaction.ClentRequest.Certificate?.Thumbprint, dbInn, dbOgrn);
 

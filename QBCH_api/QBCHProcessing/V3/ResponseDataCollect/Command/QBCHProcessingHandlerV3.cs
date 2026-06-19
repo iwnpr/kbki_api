@@ -61,125 +61,165 @@ public class QBCHProcessingHandlerV3(
             return transaction;
         }
 
-        var processingTimer = Stopwatch.StartNew();
-
-        var tasks = new List<Task<QBCHTaskResult>>
-        {
-            _qbchService.RequestFromDB(transaction)
-        };
-
-        // Item2 в API 3.0 — запрос "во все КБКИ".
-        if (input.ТипЗапроса == СправочникСпособыЗапроса.Item2)
-        {
-            _qbchList.ForEach(qbch =>
-            {
-                tasks.Add(_qbchService.RequestFromExternalBureau(transaction, _httpClientFactory.CreateClient($"{qbch.Name}v3"), qbch));
-            });
-        }
+        byte[]? responseXml = null;
 
         try
         {
-            var results = await Task.WhenAll(tasks);
-
-            var response = new ОтветНаЗапросСведений
+            var process = Task.Run(async () =>
             {
-                ИдентификаторЗапроса = input.ИдентификаторЗапроса,
-                ИдентификаторОтвета = transaction.Id.ToString(),
-                ДатаЗапроса = input.ДатаЗапроса.ToString("yyyy-MM-dd"),
-                РежимЗапроса = input.РежимЗапроса,
-                ТипОтвета = input.ТипЗапроса,
-                ОГРН = request.OurBureauPSRN,
-                Сведения = (input.Запрос ?? [])
-                    .Select(x => new ОтветНаЗапросСведенийСведения
-                    {
-                        ПорядковыйНомер = x.ПорядковыйНомер,
-                        ТитульнаяЧасть = x.Субъект,
-                        КБКИ = []
-                    })
-                    .ToArray()
-            };
-
-            for (var i = 0; i < response.Сведения.Length; i++)
-            {
-                var info = response.Сведения[i];
-                var kbkiItems = new List<ОтветНаЗапросСведенийСведенияКБКИ>();
-
-                foreach (var taskResult in results)
+                try
                 {
-                    _logger.LogDebug("{guid} {bureau}: Количество ответов {count}",
-                        transaction.Id,
-                        taskResult.BureauPSRN,
-                        taskResult.Answer3?.Сведения?.Length ?? 0);
+                    var tasks = new List<Task<QBCHTaskResult>>
+                    {
+                        _qbchService.RequestFromDB(transaction)
+                    };
 
-                    var sourceInfo = taskResult.Answer3?.Сведения?.FirstOrDefault(x => x.ПорядковыйНомер == info.ПорядковыйНомер);
-                    if (sourceInfo?.КБКИ is { Length: > 0 })
+                    // Item2 в API 3.0 — запрос "во все КБКИ".
+                    if (input.ТипЗапроса == СправочникСпособыЗапроса.Item2)
                     {
-                        kbkiItems.AddRange(sourceInfo.КБКИ);
-                    }
-                    else
-                    {
-                        var errorKbki = new ОтветНаЗапросСведенийСведенияКБКИ
+                        _qbchList.ForEach(qbch =>
                         {
-                            ОГРН = taskResult.BureauPSRN,
-                            ПоСостояниюНа = DateTime.Now,
-                            ИдентификаторОтвета = transaction.Id.ToString()
-                        };
-                        errorKbki.УстановитьОшибку(28, "В ответе КБКИ отсутствуют запрошенные сведения");
-                        kbkiItems.Add(errorKbki);
+                            tasks.Add(_qbchService.RequestFromExternalBureau(transaction, _httpClientFactory.CreateClient($"{qbch.Name}v3"), qbch));
+                        });
                     }
+
+                    var results = await Task.WhenAll(tasks);
+                    responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, input, request.OurBureauPSRN);
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogCritical(ex, "Ошибка выполнения запроса QBCH API 3.0");
+                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
+                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", "99");
+                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", ex.Message);
+                }
+            }).Wait(TimeSpan.FromMilliseconds(request.ImmediateResponseDeadlineMs - transaction.TimeElapsedForValidation.ElapsedMilliseconds));
 
-                info.КБКИ = kbkiItems.ToArray();
-            }
-
-            var responseXml = _xmlService.SerializeAsByteV3(response);
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-
-            processingTimer.Stop();
-
-            // Для API 3.0: если время сборки превышает настроенный порог, возвращаем qcb_result с ИдентификаторОтвета.
-            if (processingTimer.ElapsedMilliseconds > _contractRules.ImmediateResponseDeadlineMs)
+            if (process && responseXml is not null)
             {
-                var acceptedCreatedAtUtc = DateTimeOffset.UtcNow;
-                var firstPollAllowedAtUtc = acceptedCreatedAtUtc.AddSeconds(_contractRules.MinAnswerPollingIntervalSeconds);
-                var responseExpireAtUtc = acceptedCreatedAtUtc.AddHours(_contractRules.ResponseRetentionHours);
-                var readyAtUtc = firstPollAllowedAtUtc;
-                var readyTimeMs = Math.Max(1L, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
-
-                var acceptedTicket = _ticketService.CreateResultV3Accepted(
-                    requestId: input.ИдентификаторЗапроса,
-                    responseId: transaction.Id.ToString(),
-                    requestDate: input.ДатаЗапроса,
-                    readyTime: readyTimeMs);
-
-                await SaveAcceptedPollingMetadataAsync(
-                    responseId: transaction.Id.ToString(),
-                    readyAtUtc: readyAtUtc,
-                    firstPollAllowedAtUtc: firstPollAllowedAtUtc,
-                    responseExpireAtUtc: responseExpireAtUtc);
-
-                var ticketBytes = _xmlService.SerializeAsByteV3(acceptedTicket);
-                transaction.Accepted();
-                transaction.Complete(ticketBytes, _cryptoService.SignMsg(ticketBytes));
+                transaction.Complete(responseXml, _cryptoService.SignMsg(responseXml));
                 return transaction;
             }
-
-            transaction.Complete(responseXml, _cryptoService.SignMsg(responseXml));
-            return transaction;
         }
-        catch (Exception ex)
+        catch (ArgumentOutOfRangeException ex)
         {
-            _logger.LogCritical(ex, "QBCH API 3.0 exception");
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", "99");
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", ex.Message);
+            var error = Error.Code12_ResponseIsIncomplete();
 
-            var failedTicket = _ticketService.CreateResultV3Error(new Error(99, ex.Message));
-            var failedTicketBytes = _xmlService.SerializeAsByteV3(failedTicket);
-            transaction.Complete(failedTicketBytes, _cryptoService.SignMsg(failedTicketBytes));
+            _logger.LogError(ex, "Ошибка выполнения Task, timeout истек");
+
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", error.Message);
+
+            var failedTicket = _ticketService.CreateResultV3Error(error);
+            var timeoutTicketBytes = _xmlService.SerializeAsByteV3(failedTicket);
+            transaction.Complete(timeoutTicketBytes, _cryptoService.SignMsg(timeoutTicketBytes));
             return transaction;
         }
+        catch (TaskCanceledException ex)
+        {
+            var error = Error.Code12_ResponseIsIncomplete();
+
+            _logger.LogError(ex, "Ошибка выполнения Task, timeout истек");
+
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
+            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", error.Message);
+
+            var failedTicket = _ticketService.CreateResultV3Error(error);
+            var timeoutTicketBytes = _xmlService.SerializeAsByteV3(failedTicket);
+            transaction.Complete(timeoutTicketBytes, _cryptoService.SignMsg(timeoutTicketBytes));
+            return transaction;
+        }
+
+        return await CompleteAcceptedTransactionAsync(transaction, input);
+    }
+
+    private async Task<byte[]> BuildAndStoreAggregateResponseAsync(
+        QBCHTaskResult[] results,
+        QBCHProcessingTransaction transaction,
+        ЗапросСведений input,
+        string ourBureauPsrn)
+    {
+        var response = new ОтветНаЗапросСведений
+        {
+            ИдентификаторЗапроса = input.ИдентификаторЗапроса,
+            ИдентификаторОтвета = transaction.Id.ToString(),
+            ДатаЗапроса = input.ДатаЗапроса.ToString("yyyy-MM-dd"),
+            РежимЗапроса = input.РежимЗапроса,
+            ТипОтвета = input.ТипЗапроса,
+            ОГРН = ourBureauPsrn,
+            Сведения = (input.Запрос ?? [])
+                .Select(x => new ОтветНаЗапросСведенийСведения
+                {
+                    ПорядковыйНомер = x.ПорядковыйНомер,
+                    ТитульнаяЧасть = x.Субъект,
+                    КБКИ = []
+                })
+                .ToArray()
+        };
+
+        foreach (var info in response.Сведения)
+        {
+            var kbkiItems = new List<ОтветНаЗапросСведенийСведенияКБКИ>();
+            foreach (var taskResult in results)
+            {
+                logger.LogDebug("{guid} {bureau}: Количество ответов {count}",
+                    transaction.Id,
+                    taskResult.BureauPSRN,
+                    taskResult.Answer3?.Сведения?.Length ?? 0);
+
+                var sourceInfo = taskResult.Answer3?.Сведения?.FirstOrDefault(x => x.ПорядковыйНомер == info.ПорядковыйНомер);
+                if (sourceInfo?.КБКИ is { Length: > 0 })
+                {
+                    kbkiItems.AddRange(sourceInfo.КБКИ);
+                }
+                else
+                {
+                    var errorKbki = new ОтветНаЗапросСведенийСведенияКБКИ
+                    {
+                        ОГРН = taskResult.BureauPSRN,
+                        ПоСостояниюНа = DateTime.Now,
+                        ИдентификаторОтвета = transaction.Id.ToString()
+                    };
+                    errorKbki.УстановитьОшибку(28, "В ответе КБКИ отсутствуют запрошенные сведения");
+                    kbkiItems.Add(errorKbki);
+                }
+            }
+            info.КБКИ = kbkiItems.ToArray();
+        }
+
+        var responseXml = _xmlService.SerializeAsByteV3(response);
+        await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
+        await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+
+        return responseXml;
+    }
+
+    private async Task<QBCHProcessingTransaction> CompleteAcceptedTransactionAsync(QBCHProcessingTransaction transaction, ЗапросСведений input)
+    {
+        var acceptedCreatedAtUtc = DateTimeOffset.UtcNow;
+        var firstPollAllowedAtUtc = acceptedCreatedAtUtc.AddSeconds(_contractRules.MinAnswerPollingIntervalSeconds);
+        var responseExpireAtUtc = acceptedCreatedAtUtc.AddHours(_contractRules.ResponseRetentionHours);
+        var readyAtUtc = firstPollAllowedAtUtc;
+        var readyTimeMs = Math.Max(1L, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
+
+        var acceptedTicket = _ticketService.CreateResultV3Accepted(
+            requestId: input.ИдентификаторЗапроса,
+            responseId: transaction.Id.ToString(),
+            requestDate: input.ДатаЗапроса,
+            readyTime: readyTimeMs);
+
+        await SaveAcceptedPollingMetadataAsync(
+            responseId: transaction.Id.ToString(),
+            readyAtUtc: readyAtUtc,
+            firstPollAllowedAtUtc: firstPollAllowedAtUtc,
+            responseExpireAtUtc: responseExpireAtUtc);
+
+        var ticketBytes = _xmlService.SerializeAsByteV3(acceptedTicket);
+        transaction.Accepted();
+        transaction.Complete(ticketBytes, _cryptoService.SignMsg(ticketBytes));
+        return transaction;
     }
 
     private async Task SaveAcceptedPollingMetadataAsync(

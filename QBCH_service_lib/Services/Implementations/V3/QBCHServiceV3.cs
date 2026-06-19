@@ -136,7 +136,9 @@ public class QBCHServiceV3(
             var includeAntifraud = package.КодСведений is СправочникВидыСведений.Item7 or СправочникВидыСведений.Item8;
 
             var getAmpTask = includeAmp ? _qbchDb.GetCalculationOfAmpV3(subjectKeys, timeLeft) : null;
-            var getAntifraudTask = includeAntifraud ? _qbchDb.GetAntifraudV3(subjectKeys, timeLeft) : null;
+            var getAntifraudTask = includeAntifraud && isInnVerified
+               ? _qbchDb.GetAntifraudV3(requestItem.Субъект!.ДатаРождения, requestItem.Субъект.ИНН!.Value, timeLeft)
+               : null;
 
             var pendingTasks = new List<Task<XElement?>> { getSelfProhibitionTask };
 

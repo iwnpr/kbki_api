@@ -137,7 +137,7 @@ public class QBCHIIIController(IMediator mediator,
         try
         {
             // Запускает основной pipeline обработки
-            var processingResult = await _mediator.Send(new QBCHProcessedStartV3(transaction, _config.GetValue<int>("APIConfiguration:QBCHResponseTimeoutMs"), _ourBureauPSRN ?? string.Empty));
+            var processingResult = await _mediator.Send(new QBCHProcessedStartV3(transaction, _contractRules.ImmediateResponseDeadlineMs, _ourBureauPSRN ?? string.Empty));
 
             Response.OnCompleted(async () => await _mediator.Publish(new QBCHProcessingCompleteV3(processingResult)));
 
