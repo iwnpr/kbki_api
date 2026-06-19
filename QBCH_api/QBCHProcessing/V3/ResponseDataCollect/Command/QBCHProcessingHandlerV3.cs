@@ -86,6 +86,15 @@ public class QBCHProcessingHandlerV3(
                     var results = await Task.WhenAll(tasks);
                     responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, input, request.OurBureauPSRN);
                 }
+                catch (OperationCanceledException ex)
+                {
+                    var error = Error.Code12_ResponseIsIncomplete();
+
+                    _logger.LogWarning(ex, "Выполнение запроса QBCH API 3.0 отменено по таймауту");
+                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
+                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
+                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", error.Message);
+                }
                 catch (Exception ex)
                 {
                     _logger.LogCritical(ex, "Ошибка выполнения запроса QBCH API 3.0");
@@ -101,11 +110,9 @@ public class QBCHProcessingHandlerV3(
                 return transaction;
             }
         }
-        catch (ArgumentOutOfRangeException ex)
+        catch (ArgumentOutOfRangeException)
         {
             var error = Error.Code12_ResponseIsIncomplete();
-
-            _logger.LogError(ex, "Ошибка выполнения Task, timeout истек");
 
             await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
             await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
@@ -116,12 +123,11 @@ public class QBCHProcessingHandlerV3(
             transaction.Complete(timeoutTicketBytes, _cryptoService.SignMsg(timeoutTicketBytes));
             return transaction;
         }
-        catch (TaskCanceledException ex)
+        catch (OperationCanceledException ex)
         {
             var error = Error.Code12_ResponseIsIncomplete();
 
-            _logger.LogError(ex, "Ошибка выполнения Task, timeout истек");
-
+            _logger.LogWarning(ex, "Выполнение запроса QBCH API 3.0 отменено по таймауту");
             await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
             await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
             await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", error.Message);
