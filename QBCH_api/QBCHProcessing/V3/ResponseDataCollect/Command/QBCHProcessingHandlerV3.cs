@@ -88,19 +88,15 @@ public class QBCHProcessingHandlerV3(
                 }
                 catch (OperationCanceledException ex)
                 {
-                    var error = Error.Code12_ResponseIsIncomplete();
-
                     _logger.LogWarning(ex, "Выполнение запроса QBCH API 3.0 отменено по таймауту");
-                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
-                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
-                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", error.Message);
+
+                    await StoreProcessingErrorAsync(transaction, Error.Code18_WaitForResponseExpired());
                 }
                 catch (Exception ex)
                 {
                     _logger.LogCritical(ex, "Ошибка выполнения запроса QBCH API 3.0");
-                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
-                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", "99");
-                    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", ex.Message);
+
+                    await StoreProcessingErrorAsync(transaction, Error.Code99_OtherError(ex.Message));
                 }
             }).Wait(TimeSpan.FromMilliseconds(request.ImmediateResponseDeadlineMs - transaction.TimeElapsedForValidation.ElapsedMilliseconds));
 
@@ -110,35 +106,30 @@ public class QBCHProcessingHandlerV3(
                 return transaction;
             }
         }
-        catch (ArgumentOutOfRangeException)
+        catch (ArgumentOutOfRangeException ex)
         {
-            var error = Error.Code12_ResponseIsIncomplete();
-
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", error.Message);
-
-            var failedTicket = _ticketService.CreateResultV3Error(error);
-            var timeoutTicketBytes = _xmlService.SerializeAsByteV3(failedTicket);
-            transaction.Complete(timeoutTicketBytes, _cryptoService.SignMsg(timeoutTicketBytes));
-            return transaction;
+            _logger.LogError(ex, "Время проверки превысило {ImmediateResponseDeadlineMs} миллисекунд.", request.ImmediateResponseDeadlineMs);
+            return await CompleteAcceptedTransactionAsync(transaction, input);
         }
         catch (OperationCanceledException ex)
         {
-            var error = Error.Code12_ResponseIsIncomplete();
-
-            _logger.LogWarning(ex, "Выполнение запроса QBCH API 3.0 отменено по таймауту");
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
-            await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", error.Message);
-
-            var failedTicket = _ticketService.CreateResultV3Error(error);
-            var timeoutTicketBytes = _xmlService.SerializeAsByteV3(failedTicket);
-            transaction.Complete(timeoutTicketBytes, _cryptoService.SignMsg(timeoutTicketBytes));
-            return transaction;
+            _logger.LogError(ex, "Время проверки превысило {ImmediateResponseDeadlineMs} миллисекунд.", request.ImmediateResponseDeadlineMs);
+            await StoreProcessingErrorAsync(transaction, Error.Code18_WaitForResponseExpired());
+            return await CompleteAcceptedTransactionAsync(transaction, input);
         }
 
         return await CompleteAcceptedTransactionAsync(transaction, input);
+    }
+
+    private async Task StoreProcessingErrorAsync(QBCHProcessingTransaction transaction, Error error)
+    {
+        var responseId = transaction.Id.ToString();
+
+        await _storageService.AddHash(DlRequestV3Scope, responseId, "cancellation_flag", "true");
+        await _storageService.AddHash(DlRequestV3Scope, responseId, "error_code", error.Code.ToString());
+        await _storageService.AddHash(DlRequestV3Scope, responseId, "error_message", error.Message);
+        await _storageService.AddHash(DlRequestV3Scope, responseId, "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+        await _storageService.TrySetKeyExpiration(DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
     }
 
     private async Task<byte[]> BuildAndStoreAggregateResponseAsync(

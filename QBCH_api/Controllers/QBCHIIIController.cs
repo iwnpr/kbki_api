@@ -250,13 +250,14 @@ public class QBCHIIIController(IMediator mediator,
 
             if (!await _storageService.KeyExists([DlRequestV3Scope, id]))
             {
-                _logger.LogError("Данные по указанному идентификатору не найдены");
+                standartError = Error.Code16_InvalidRequestId();
+                _logger.LogError(standartError.Message);
 
                 var errorResult = await BuildV3ErrorResponseAsync(
                     serviceName,
                     guid,
-                    16,
-                    "Данные по указанному идентификатору не найдены",
+                    standartError.Code,
+                    standartError.Message,
                     StatusCodes.Status400BadRequest);
 
                 responseXml = errorResult.ResponseXml;
