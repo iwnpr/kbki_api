@@ -182,18 +182,26 @@ public class QBCHServiceV3(
 
         await _storageService.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-        request.ИдентификаторЗапроса = guid;
-        request.Абонент = new ЗапросСведенийАбонент
+        var externalRequest = new ЗапросСведений
         {
-            Item = new ЗапросСведенийАбонентЮридическоеЛицо
+            Абонент = new ЗапросСведенийАбонент
             {
-                ИНН = _ourBureauInn,
-                ОГРН = _ourBureauPsrn
-            }
+                Item = new ЗапросСведенийАбонентЮридическоеЛицо
+                {
+                    ИНН = _ourBureauInn,
+                    ОГРН = _ourBureauPsrn
+                }
+            },
+            ДатаЗапроса = request.ДатаЗапроса,
+            Версия = request.Версия,
+            ИдентификаторЗапроса = guid,
+            КодСведений = request.КодСведений,
+            РежимЗапроса = request.РежимЗапроса,
+            ТипЗапроса = СправочникСпособыЗапроса.Item1,
+            Запрос = request.Запрос
         };
-        request.ТипЗапроса = СправочникСпособыЗапроса.Item1;
 
-        var dlrequestBytes = _xmlService.SerializeAsByteV3(request);
+        var dlrequestBytes = _xmlService.SerializeAsByteV3(externalRequest);
         var signedDlrequestBytes = _cryptoService.SignMsg(dlrequestBytes);
         var dlrequestContent = new ByteArrayContent(signedDlrequestBytes);
 
@@ -237,15 +245,15 @@ public class QBCHServiceV3(
                             var badValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", redisMsg, ticketCheckCts.Token);
                             if (badValidation.IsError)
                             {
-                                dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, badValidation.ErrorCode.ToString(), badValidation.Error ?? "Ошибка валидации", orderNumbers, guid, request);
+                                dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, badValidation.ErrorCode.ToString(), badValidation.Error ?? "Ошибка валидации", orderNumbers, guid, externalRequest);
                                 break;
                             }
 
                             var badTicket = _xmlService.DeserializeV3<Результат>(badValidation.Body);
                             var badError = badTicket?.Item as ТипОшибка;
                             dlrequestResult = badError is not null
-                                ? CreateErrorAnswerV3(badTicket?.ОГРН ?? bureau.ogrn!, badError.Код ?? "99", badError.Value ?? "Ошибка", orderNumbers, guid, request)
-                                : CreateErrorAnswerV3(bureau.ogrn!, "99", "Непредвиденные данные в ответе КБКИ", orderNumbers, guid, request);
+                                ? CreateErrorAnswerV3(badTicket?.ОГРН ?? bureau.ogrn!, badError.Код ?? "99", badError.Value ?? "Ошибка", orderNumbers, guid, externalRequest)
+                                : CreateErrorAnswerV3(bureau.ogrn!, "99", "Непредвиденные данные в ответе КБКИ", orderNumbers, guid, externalRequest);
                             break;
 
                         case HttpStatusCode.Accepted:
@@ -259,7 +267,7 @@ public class QBCHServiceV3(
                             ticket = _xmlService.DeserializeV3<Результат>(ticketValidation.Body);
                             if (ticket?.Item is not РезультатИдентификаторОтвета)
                             {
-                                dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, "99", "Непредвиденные данные в ответе КБКИ", orderNumbers, guid, request);
+                                dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, "99", "Непредвиденные данные в ответе КБКИ", orderNumbers, guid, externalRequest);
                             }
                             break;
 
@@ -286,7 +294,7 @@ public class QBCHServiceV3(
         }
         catch (TaskCanceledException)
         {
-            dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, "18", "Время ожидания ответа истекло.", orderNumbers, guid, request);
+            dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, "18", "Время ожидания ответа истекло.", orderNumbers, guid, externalRequest);
         }
 
         if (dlrequestResult is not null)
@@ -297,13 +305,13 @@ public class QBCHServiceV3(
         var responseId = (ticket?.Item as РезультатИдентификаторОтвета)?.Value;
         if (string.IsNullOrWhiteSpace(responseId))
         {
-            var invalidTicket = CreateErrorAnswerV3(bureau.ogrn!, "99", "Непредвиденные данные в ответе КБКИ", orderNumbers, guid, request);
+            var invalidTicket = CreateErrorAnswerV3(bureau.ogrn!, "99", "Непредвиденные данные в ответе КБКИ", orderNumbers, guid, externalRequest);
             return new QBCHTaskResult(bureau.ogrn!, answer3: invalidTicket);
         }
 
         await _storageService.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "response_id", responseId);
 
-        var timeLeftMs = _qbchResponseTimeoutMs * (request.Запрос?.Length ?? 1)
+        var timeLeftMs = _qbchResponseTimeoutMs * (externalRequest.Запрос?.Length ?? 1)
             - ticketTimer.ElapsedMilliseconds
             - transaction.TimeElapsedForValidation.ElapsedMilliseconds;
 
@@ -311,12 +319,12 @@ public class QBCHServiceV3(
 
         try
         {
-            var dlanswerResult = await ResendDlanswer(responseId, client, bureau, guid, resendCts.Token, orderNumbers, request);
+            var dlanswerResult = await ResendDlanswer(responseId, client, bureau, guid, resendCts.Token, orderNumbers, externalRequest);
             return new QBCHTaskResult(bureau.ogrn!, answer3: dlanswerResult);
         }
         catch (TaskCanceledException)
         {
-            var timeout = CreateErrorAnswerV3(bureau.ogrn!, "18", "Время ожидания ответа истекло.", orderNumbers, guid, request);
+            var timeout = CreateErrorAnswerV3(bureau.ogrn!, "18", "Время ожидания ответа истекло.", orderNumbers, guid, externalRequest);
             return new QBCHTaskResult(bureau.ogrn!, answer3: timeout);
         }
     }
