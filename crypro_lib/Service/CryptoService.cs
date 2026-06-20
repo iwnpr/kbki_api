@@ -113,7 +113,7 @@ namespace Crypto_lib.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, ex.Message);
                 var processingMessage = Error.Code7_IncorrectRequestFormat();
                 result.Error = processingMessage.Message;
                 result.ErrorCode = processingMessage.Code;
@@ -157,7 +157,7 @@ namespace Crypto_lib.Service
                     catch (Exception ex)
                     {
                         var processingError = new Error(4, ex.Message);
-                        _logger.LogError("УЭП некорректна {Error}", ex.Message); // TODO странно 
+                        _logger.LogError(ex, "УЭП некорректна {Error}", ex.Message); // TODO странно 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
                         result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");
@@ -261,7 +261,7 @@ namespace Crypto_lib.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError("Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
+                _logger.LogError(ex, "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
                 result.Error = ex.Message;
                 result.ErrorCode = 7;
                 result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
@@ -297,7 +297,7 @@ namespace Crypto_lib.Service
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError("УЭП некорректна {Error}", ex.Message);
+                        _logger.LogError(ex, "УЭП некорректна {Error}", ex.Message);
                         result.Error = ex.Message;
                         result.ErrorCode = 4;
                         result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");
@@ -375,10 +375,10 @@ namespace Crypto_lib.Service
                     {
                         current.CheckSignature(true);
                         IsValidCert = true;
-                    }
+                    }   
                     catch (Exception ex)
                     {
-                        _logger.LogError("УЭП некорректна {Error}", ex.Message);
+                        _logger.LogError(ex,"УЭП некорректна {Error}", ex.Message);
                         result.Error = ex.Message;
                         result.ErrorCode = 4;
                         result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "4", $"УЭП некорректна: {ex.Message}");

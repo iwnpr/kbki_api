@@ -58,7 +58,6 @@ public class QBCHIIIController(IMediator mediator,
     /// Флаг Redis о наличии сохранённого ответа для /dlputanswer версии 3.
     /// </summary>
     private const string DlPutAnswerV3ExistsField = "putanswer_v3_exists";
-    private const string ResponseDeliveredUtcField = "response_delivered_utc";
     private const string DlRequestV3Scope = "dlrequest:v3";
     /// <summary>
     /// Redis-scope (префикс ключей) для запросов /dlput версии 3.
@@ -307,23 +306,6 @@ public class QBCHIIIController(IMediator mediator,
 
             if (_storageService.TryGetHash(DlRequestV3Scope, id, "qbch_tasks_aggregate_xml", out responseXml))
             {
-                // Ошибка 99: ответ уже был получен клиентом — повторная доставка запрещена протоколом v3.
-                // Код 17 по спецификации зарезервирован для ошибки соединения в режиме «одно окно».
-                if (await _storageService.HashFieldExists(DlRequestV3Scope, id, ResponseDeliveredUtcField))
-                {
-                    standartError = Error.Code99_OtherError("Ответ уже получен");
-
-                    var alreadyDeliveredResult = await BuildV3ErrorResponseAsync(serviceName, guid, standartError.Code, standartError.Message, ResolveDlAnswerStatusCodeByErrorCode(standartError.Code));
-
-                    responseXml = alreadyDeliveredResult.ResponseXml;
-                    signedResponse = alreadyDeliveredResult.SignedResponse;
-
-
-                    LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
-                    return alreadyDeliveredResult.ActionResult;
-                }
-
-                await _storageService.AddHash(DlRequestV3Scope, id, ResponseDeliveredUtcField, DateTimeOffset.UtcNow.ToString("O"));
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 return File(signedResponse, "application/octet-stream");
             }
@@ -766,20 +748,6 @@ public class QBCHIIIController(IMediator mediator,
 
             if (_storageService.TryGetHash(DlPutV3Scope, id, DlPutAnswerV3ReadyField, out responseXml))
             {
-                // Ошибка 99: ответ уже был получен клиентом — повторная доставка запрещена протоколом v3.
-                // Код 17 по спецификации зарезервирован для ошибки соединения в режиме «одно окно».
-                if (await _storageService.HashFieldExists(DlPutV3Scope, id, ResponseDeliveredUtcField))
-                {
-                    error = Error.Code99_OtherError("Ответ уже получен");
-                    var alreadyDeliveredResult = await BuildV3ErrorResponseAsync(serviceName, guid, error.Code, error.Message, ResolveDlPutAnswerStatusCodeByErrorCode(99));
-
-                    responseXml = alreadyDeliveredResult.ResponseXml;
-                    signedResponse = alreadyDeliveredResult.SignedResponse;
-
-                    return alreadyDeliveredResult.ActionResult;
-                }
-
-                await _storageService.AddHash(DlPutV3Scope, id, ResponseDeliveredUtcField, DateTimeOffset.UtcNow.ToString("O"));
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 return File(signedResponse, "application/octet-stream");
             }

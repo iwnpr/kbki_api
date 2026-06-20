@@ -1082,7 +1082,6 @@ namespace QBCH_api.Services.Implementations
 
             return await repository.IsPermissionGrantedv2(thumbprint, serviceName, ct);
         }
-        //public async Task<bool> ValidateRules(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await repository.IsPermissionGrantedv2(thumbprint, serviceName, ct);
 
         /// <summary>
         /// 

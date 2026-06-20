@@ -50,11 +50,8 @@ public static class XMLRequestCollectionValidatorV3
 
         if (requests.Count > 10)
         {
-            foreach (var request in requests.Skip(10))
-            {
-                AddPackageErrorIfMissing(transaction, ParseOrderNumberOrPosition(request.OrderNumberRaw, request.Position),
-                    "Количество блоков \"Запрос\" не соответствует режиму запроса (не более 10 блоков)");
-            }
+            transaction.RiseCriticalError(Error.Code26_WrongBlockCount());
+            return;
         }
 
         var parsedOrders = requests

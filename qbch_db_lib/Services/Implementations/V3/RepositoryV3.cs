@@ -242,12 +242,14 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
             ? procName
             : $"{_schemaQbchAntifraudV3}.{procName}";
 
-        var sql = $"SELECT {procedureFullName}(@birth_date, @inn)";
+        var sql = $"SELECT {procedureFullName}(@p_birth, @p_tax_num)";
+
         var value = await ExecuteScalarAsync(sql, procName, _antifraudConnectionPool, timeLeftMs ?? _antifraudTimeout, cmd =>
-        {
-            cmd.Parameters.AddWithValue("birth_date", NpgsqlDbType.Date, birthDate.Date);
-            cmd.Parameters.AddWithValue("inn", NpgsqlDbType.Text, inn);
-        }, "GetAntifraudV3");
+            {
+                cmd.Parameters.AddWithValue("p_birth", NpgsqlDbType.Date, birthDate.Date);
+                cmd.Parameters.AddWithValue("p_tax_num", NpgsqlDbType.Text, inn);
+            },
+            "GetAntifraudV3");
 
         var xml = value is string xmlString && !string.IsNullOrWhiteSpace(xmlString)
             ? XElement.Parse(xmlString)

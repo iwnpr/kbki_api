@@ -109,8 +109,6 @@ public class ValidationServiceV3(
         result = null;
         return true;
     }
-
-    //public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
     public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
     {
         if (thumbprint is null && configuration.GetValue("CertificateValidation:AllowMissingClientCertificate", false))
