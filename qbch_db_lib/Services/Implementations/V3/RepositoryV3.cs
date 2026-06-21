@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
+using NRedisStack.Search;
 using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib.domain.errors;
 using QBCH_lib.Configuration;
@@ -194,17 +195,27 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
     /// <param name="subjectIds">Идентификаторы субъектов.</param>
     /// <param name="timeLeftMs">Оставшееся время выполнения, мс.</param>
     /// <returns>XML с обязательствами для прямого маппинга в ответ 3.0.</returns>
-    public async Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long? timeLeftMs = null)
-    {
-        var xml = await ExecuteXmlProcedureV3(
-            _config.GetValue<string>("QbchCalcOfAmpV3:Procedures:CalculationOfAmp"),
-            _schemaQbchCalcOfAmpV3,
-            _calcOfAmpConnectionPool,
-            subjectIds,
-            timeLeftMs ?? _calcOfAmpTimeout,
-            "CalculationOfAmpV3");
+    public async Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long timeLeftMs)
+    { 
+        var procName = _config.GetValue<string>("QbchCalcOfAmpV3:Procedures:CalculationOfAmp");
 
-        return ApplyFourDayWindowForContracts(xml);
+        if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchCalcOfAmpV3) || subjectIds.Count == 0)
+        {
+            return null;
+        }
+
+        var sql = $"SELECT {_schemaQbchCalcOfAmpV3}.{procName}(@subj_id)";
+        var value = await ExecuteScalarAsync(sql, procName, _calcOfAmpConnectionPool, timeLeftMs, cmd =>
+        {
+            cmd.Parameters.AddWithValue("subj_id", NpgsqlDbType.Array | NpgsqlDbType.Bigint, subjectIds);
+        }, procName);
+
+        if (value is string xml && !string.IsNullOrWhiteSpace(xml))
+        {
+            return XElement.Parse(xml);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -255,7 +266,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
             ? XElement.Parse(xmlString)
             : null;
 
-        return SelectAntifraudFields(xml);
+        return xml;
     }
 
     /// <summary>
@@ -611,120 +622,6 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         }
 
         return null;
-    }
-
-    private static XElement? ApplyFourDayWindowForContracts(XElement? source)
-    {
-        if (source is null)
-        {
-            return null;
-        }
-
-        var minDate = DateTime.UtcNow.Date.AddDays(-4);
-        var contracts = source.Descendants().Where(x => x.Name.LocalName == "Договор").ToList();
-
-        foreach (var contract in contracts)
-        {
-            var terminationDateNode = contract.Elements().FirstOrDefault(x => x.Name.LocalName == "ДатаПрекращения");
-            if (terminationDateNode is null || string.IsNullOrWhiteSpace(terminationDateNode.Value))
-            {
-                continue;
-            }
-
-            var rawTerminationDate = terminationDateNode.Value.Trim();
-            if (!DateTime.TryParse(rawTerminationDate, out var terminationDate) || terminationDate.Date >= minDate)
-            {
-                continue;
-            }
-
-            contract.Remove();
-        }
-
-        return source;
-    }
-
-    private static XElement? SelectAntifraudFields(XElement? source)
-    {
-        if (source is null)
-        {
-            return null;
-        }
-
-        var result = new XElement(source.Name.Namespace + "Антифрод");
-        var applications = source.Descendants().Where(x => x.Name.LocalName == "ОбращениеОбязательство");
-
-        foreach (var app in applications)
-        {
-            var row = new XElement(source.Name.Namespace + "ОбращениеОбязательство");
-            AddFieldIfExists(app, row, "КодИсточника");
-            AddFieldIfExists(app, row, "СтадияРассмотрения");
-            AddFieldIfExists(app, row, "ДатаСтадии");
-            AddFieldIfExists(app, row, "СуммаЗайма");
-            AddAllFieldsIfExists(app, row, "ПричинаОтказа");
-            AddFieldIfExists(app, row, "УИД");
-            result.Add(row);
-        }
-
-        return result;
-    }
-
-    private static void AddFieldIfExists(XElement source, XElement target, string fieldName)
-    {
-        var node = source.Elements().FirstOrDefault(x => x.Name.LocalName == fieldName);
-        if (node is not null)
-        {
-            target.Add(new XElement(target.Name.Namespace + fieldName, node.Value));
-        }
-    }
-
-    private static void AddAllFieldsIfExists(XElement source, XElement target, string fieldName)
-    {
-        var nodes = source.Elements().Where(x => x.Name.LocalName == fieldName).ToList();
-        if (nodes.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var node in nodes)
-        {
-            target.Add(new XElement(target.Name.Namespace + fieldName, node.Value));
-        }
-    }
-
-    private static XElement? NormalizeCreditHistoryPresenceFlag(XElement? source)
-    {
-        if (source is null)
-        {
-            return null;
-        }
-
-        var node = source.Descendants().FirstOrDefault(x => x.Name.LocalName is "ПризнакНаличияКИ" or "CreditHistoryPresenceFlag");
-        if (node is null || string.IsNullOrWhiteSpace(node.Value))
-        {
-            return null;
-        }
-
-        var value = node.Value.Trim();
-        var normalizedValue = value;
-        if (bool.TryParse(value, out var boolValue))
-        {
-            normalizedValue = boolValue ? "1" : "0";
-        }
-        else
-        {
-            normalizedValue = value.ToLowerInvariant() switch
-            {
-                "item1" => "1",
-                "item0" => "0",
-                "1" => "1",
-                "0" => "0",
-                _ => value
-            };
-        }
-
-        var ns = source.Name.Namespace;
-        return new XElement(ns + "СведенияКИ",
-            new XElement(ns + "ПризнакНаличияКИ", normalizedValue));
     }
 
     private static string? NormalizeServiceNameForAccessCheck(string serviceName)
