@@ -264,14 +264,18 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         var procedureFullName = procName.Contains('.') || string.IsNullOrWhiteSpace(_schemaQbchAntifraudV3)
             ? procName
             : $"{_schemaQbchAntifraudV3}.{procName}";
-        
+
+        var resultColumn = procName.Contains('.')
+            ? procName[(procName.LastIndexOf('.') + 1)..]
+            : procName;
+
         var sql = $"SELECT {procedureFullName}(@p_birth, @p_tax_num)";
 
-        var value = await ExecuteScalarAsync(sql, procName, _antifraudConnectionPool, timeLeftMs ?? _antifraudTimeout, cmd =>
-            {
-                cmd.Parameters.AddWithValue("p_birth", NpgsqlDbType.Date, birthDate.Date);
-                cmd.Parameters.AddWithValue("p_tax_num", NpgsqlDbType.Text, inn);
-            },
+        var value = await ExecuteScalarAsync(sql, resultColumn, _antifraudConnectionPool, timeLeftMs ?? _antifraudTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("p_birth", NpgsqlDbType.Date, birthDate.Date);
+            cmd.Parameters.AddWithValue("p_tax_num", NpgsqlDbType.Text, inn);
+        },
             nameof(GetAntifraudV3));
 
         if (value is string xml && !string.IsNullOrWhiteSpace(xml))
