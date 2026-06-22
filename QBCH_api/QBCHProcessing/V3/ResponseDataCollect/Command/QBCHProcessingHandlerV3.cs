@@ -2,14 +2,15 @@
 using Crypto_lib.Service;
 using MediatR;
 using QBCH.Lib.qcb_xml.v3_0;
-using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.Services.Interfaces.V3;
 using QBCHService_lib.Models;
 using QBCHService_lib.Services.Interfaces.V3;
-using System.Diagnostics;
+using System.Collections.Concurrent;
+using qbch_lib;
+using qbch_lib.domain.errors;
 using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
@@ -29,13 +30,13 @@ public class QBCHProcessingHandlerV3(
     ApiV3ContractRules contractRules)
     : IRequestHandler<QBCHProcessedStartV3, QBCHProcessingTransaction>
 {
-    private const string DlRequestV3Scope = "dlrequest:v3";
-    private const string ReadyAtUtcField = "ready_at_utc";
-    private const string ReadyAtMskField = "ready_at_msk";
-    private const string FirstPollAllowedAtUtcField = "first_poll_allowed_at_utc";
-    private const string ResponseExpireAtUtcField = "response_expire_at_utc";
-    private const string LastPollUtcField = "last_poll_utc";
-    private const string ResponseGuidField = "response_guid";
+    //NOTE: Убрал логику про 1 секунду между запросами
+    //private const string ReadyAtUtcField = "ready_at_utc";
+    //private const string ReadyAtMskField = "ready_at_msk";
+    //private const string FirstPollAllowedAtUtcField = "first_poll_allowed_at_utc";
+    //private const string ResponseExpireAtUtcField = "response_expire_at_utc";
+    //private const string LastPollUtcField = "last_poll_utc";
+    //private const string ResponseGuidField = "response_guid";
     private readonly ILogger<QBCHProcessingHandlerV3> _logger = logger;
     private readonly IQBCHServiceV3 _qbchService = qbchService;
     private readonly IKeyValueStorageService _storageService = storageService;
@@ -45,26 +46,30 @@ public class QBCHProcessingHandlerV3(
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly List<QBCHRequisite> _qbchList = bkiRequisitsHandler.GetBureaList();
     private readonly ApiV3ContractRules _contractRules = contractRules;
+    //Вернул потоконезависимость. Не факт, что она тут нужна, но рисковать не хочется
+    private readonly ConcurrentBag<Task<QBCHTaskResult>> _tasksList = [];
 
     public async Task<QBCHProcessingTransaction> Handle(QBCHProcessedStartV3 request, CancellationToken cancellationToken)
     {
         var transaction = request.Transaction;
-        var input = transaction.GetRequest<ЗапросСведений>();
+        //NOTE: переименовал, так как input слишком абстрактен
+        var clientRequest = transaction.GetRequest<ЗапросСведений>();
 
-        if (input is null)
-        {
-            var error = Error.Code99_OtherError("Не удалось получить данные запроса");
-            var nullRequestTicket = _ticketService.CreateResultV3Error(error);
-            var nullRequestTicketBytes = _xmlService.SerializeAsByteV3(nullRequestTicket);
+        //NOTE: У нас для такого catch дальше есть, не вижу смысла в дополнительной логике. 
+        //if (input is null)
+        //{
+        //    var error = AnswerErrorCode.Code99_OtherError("Не удалось получить данные запроса API 3.0");
+        //    var nullRequestTicket = _ticketService.CreateResultV3Error(error);
+        //    var nullRequestTicketBytes = _xmlService.SerializeAsByteV3(nullRequestTicket);
 
-            transaction.Complete(nullRequestTicketBytes, _cryptoService.SignMsg(nullRequestTicketBytes));
-            return transaction;
-        }
+        //    transaction.Complete(nullRequestTicketBytes, _cryptoService.SignMsg(nullRequestTicketBytes));
+        //    return transaction;
+        //}
 
-        var requestId = input.ИдентификаторЗапроса;
-        var requestDate = input.ДатаЗапроса;
-        var requestType = input.ТипЗапроса;
-        var requestMode = input.РежимЗапроса;
+        var requestId = clientRequest.ИдентификаторЗапроса;
+        var requestDate = clientRequest.ДатаЗапроса;
+        var requestType = clientRequest.ТипЗапроса;
+        var requestMode = clientRequest.РежимЗапроса;
 
         byte[]? responseXml = null;
 
@@ -74,30 +79,38 @@ public class QBCHProcessingHandlerV3(
             {
                 try
                 {
-                    var tasks = new List<Task<QBCHTaskResult>>
-                    {
-                        _qbchService.RequestFromDB(transaction)
-                    };
+                    //NOTE: Вернул код Артема
+                    _tasksList.Add(_qbchService.RequestFromDB(transaction));
 
                     // Item2 в API 3.0 — запрос "во все КБКИ".
-                    if (requestType == СправочникСпособыЗапроса.Item2)
+                    if (clientRequest.ТипЗапроса == СправочникСпособыЗапроса.Item2)
                     {
                         _qbchList.ForEach(qbch =>
                         {
-                            tasks.Add(_qbchService.RequestFromExternalBureau(transaction, _httpClientFactory.CreateClient($"{qbch.Name}v3"), qbch));
+                            _tasksList.Add(_qbchService.RequestFromExternalBureau(transaction, _httpClientFactory.CreateClient($"{qbch.Name}v3"), qbch));
                         });
                     }
 
-                    var results = await Task.WhenAll(tasks);
-                    responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, input, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
+                    var results = await Task.WhenAll(_tasksList);
+                    responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, clientRequest, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
                 }
+                //NOTE: Странная обработка, отстуствующая у Артема. Убрал.
+                //catch (OperationCanceledException ex)
+                //{
+                //    var error = AnswerErrorCode.Code12_ResponseIsIncomplete();
+
+                //    _logger.LogWarning(ex, "Выполнение запроса QBCH API 3.0 отменено по таймауту");
+                //    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "cancellation_flag", "true");
+                //    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_code", error.Code.ToString());
+                //    await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "error_message", error.Message);
+                //}
                 catch (Exception ex)
                 {
                     _logger.LogCritical(ex, "Ошибка выполнения запроса QBCH API 3.0");
 
-                    await StoreProcessingErrorAsync(transaction, Error.Code99_OtherError(ex.Message));
+                    await StoreProcessingErrorAsync(transaction, AnswerErrorCode.Code99_OtherError(ex.Message));
                 }
-            }).Wait(TimeSpan.FromMilliseconds(request.ImmediateResponseDeadlineMs - transaction.TimeElapsedForValidation.ElapsedMilliseconds));
+            }).Wait(TimeSpan.FromMilliseconds(_contractRules.ImmediateResponseDeadlineMs - transaction.TimeElapsedForValidation.ElapsedMilliseconds));
 
             if (process && responseXml is not null)
             {
@@ -108,32 +121,31 @@ public class QBCHProcessingHandlerV3(
         catch (ArgumentOutOfRangeException ex)
         {
             _logger.LogWarning(ex, "Время проверки превысило {ImmediateResponseDeadlineMs} миллисекунд.", request.ImmediateResponseDeadlineMs);
-            return await CompleteAcceptedTransactionAsync(transaction, requestId, requestDate);
         }
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Ошибка выполнения запроса QBCH API 3.0");
-            return await CompleteAcceptedTransactionAsync(transaction, requestId, requestDate);
         }
 
         return await CompleteAcceptedTransactionAsync(transaction, requestId, requestDate);
     }
 
-    private async Task StoreProcessingErrorAsync(QBCHProcessingTransaction transaction, Error error)
+    private async Task StoreProcessingErrorAsync(QBCHProcessingTransaction transaction, AnswerErrorCode error)
     {
         var responseId = transaction.Id.ToString();
 
-        await _storageService.AddHash(DlRequestV3Scope, responseId, "cancellation_flag", "true");
-        await _storageService.AddHash(DlRequestV3Scope, responseId, "error_code", error.Code.ToString());
-        await _storageService.AddHash(DlRequestV3Scope, responseId, "error_message", error.Message);
-        await _storageService.AddHash(DlRequestV3Scope, responseId, "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-        await _storageService.TrySetKeyExpiration(DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
+        await _storageService.AddHash(RedisConstants.DlRequestV3Scope, responseId, "cancellation_flag", "true");
+        await _storageService.AddHash(RedisConstants.DlRequestV3Scope, responseId, "error_code", error.Code.ToString());
+        await _storageService.AddHash(RedisConstants.DlRequestV3Scope, responseId, "error_message", error.Message);
+        await _storageService.AddHash(RedisConstants.DlRequestV3Scope, responseId, "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+        await _storageService.TrySetKeyExpiration(RedisConstants.DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
     }
 
     private async Task<byte[]> BuildAndStoreAggregateResponseAsync(
         QBCHTaskResult[] results,
         QBCHProcessingTransaction transaction,
-        ЗапросСведений input,
+        //NOTE: переименовал, так как input слишком абстрактен
+        ЗапросСведений clientRequest,
         string ourBureauPsrn,
         string requestId,
         DateTime requestDate,
@@ -148,12 +160,13 @@ public class QBCHProcessingHandlerV3(
             РежимЗапроса = requestMode,
             ТипОтвета = requestType,
             ОГРН = ourBureauPsrn,
-            Сведения = (input.Запрос ?? [])
+            Сведения = (clientRequest.Запрос ?? [])
                 .Select(x => new ОтветНаЗапросСведенийСведения
                 {
                     ПорядковыйНомер = x.ПорядковыйНомер,
                     ТитульнаяЧасть = x.Субъект,
-                    КБКИ = []
+                    //NOTE: Зачем заполнять это поле, если мы его будем перезаписывать?
+                    //КБКИ = []
                 })
                 .ToArray()
         };
@@ -168,6 +181,11 @@ public class QBCHProcessingHandlerV3(
                     taskResult.BureauPSRN,
                     taskResult.Answer3?.Сведения?.Length ?? 0);
 
+                //NOTE: Вернул запись в redis
+                var TaskResultXml = _xmlService.SerializeAsStringV3(taskResult.Answer3);
+                await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_result_xml", TaskResultXml);
+                await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+
                 var sourceInfo = taskResult.Answer3?.Сведения?.FirstOrDefault(x => x.ПорядковыйНомер == info.ПорядковыйНомер);
                 if (sourceInfo?.КБКИ is { Length: > 0 })
                 {
@@ -179,8 +197,10 @@ public class QBCHProcessingHandlerV3(
                     {
                         ОГРН = taskResult.BureauPSRN,
                         ПоСостояниюНа = DateTime.Now,
-                        ИдентификаторОтвета = transaction.Id.ToString()
+                        //NOTE: В версии Артема это поле при ошибке не заполнялось 
+                        //ИдентификаторОтвета = transaction.Id.ToString()
                     };
+                    //NOTE: Русские названия методов???
                     errorKbki.УстановитьОшибку(28, "В ответе КБКИ отсутствуют запрошенные сведения");
                     kbkiItems.Add(errorKbki);
                 }
@@ -189,31 +209,35 @@ public class QBCHProcessingHandlerV3(
         }
 
         var responseXml = _xmlService.SerializeAsByteV3(response);
-        await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
-        await _storageService.AddHash(DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
+        await _storageService.AddHash(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
+        await _storageService.AddHash(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
         return responseXml;
     }
 
     private async Task<QBCHProcessingTransaction> CompleteAcceptedTransactionAsync(QBCHProcessingTransaction transaction, string requestId, DateTime requestDate)
     {
-        var acceptedCreatedAtUtc = DateTimeOffset.UtcNow;
-        var firstPollAllowedAtUtc = acceptedCreatedAtUtc.AddSeconds(_contractRules.MinAnswerPollingIntervalSeconds);
-        var responseExpireAtUtc = acceptedCreatedAtUtc.AddHours(_contractRules.ResponseRetentionHours);
-        var readyAtUtc = firstPollAllowedAtUtc;
-        var readyTimeMs = Math.Max(1L, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
+        //NOTE: ВНИМАНИЕ! Ни в коем случае не заполняй это поле. Не надо добрать на себя дополнительные обязательства по времени выдачи ответа, так как и за существующие приходится отвечать перед ЦБ. Убрал его заполнение из всех вызываемых методов
+        //var readyTimeMs = Math.Max(1L, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
 
         var acceptedTicket = _ticketService.CreateResultV3Accepted(
             requestId: requestId,
             responseId: transaction.Id.ToString(),
-            requestDate: requestDate,
-            readyTime: readyTimeMs);
+            requestDate: requestDate
+            //NOTE: ВНИМАНИЕ! Ни в коем случае не заполняй это поле. Не надо добрать на себя дополнительные обязательства по времени выдачи ответа, так как и за существующие приходится отвечать перед ЦБ. Убрал его заполнение из всех вызываемых методов
+            //,readyTime: readyTimeMs
+            );
 
-        await SaveAcceptedPollingMetadataAsync(
-            responseId: transaction.Id.ToString(),
-            readyAtUtc: readyAtUtc,
-            firstPollAllowedAtUtc: firstPollAllowedAtUtc,
-            responseExpireAtUtc: responseExpireAtUtc);
+        //NOTE: Убрал логику про 1 секунду между запросами
+        //var acceptedCreatedAtUtc = DateTimeOffset.UtcNow;
+        //var firstPollAllowedAtUtc = acceptedCreatedAtUtc.AddSeconds(_contractRules.MinAnswerPollingIntervalSeconds);
+        //var responseExpireAtUtc = acceptedCreatedAtUtc.AddHours(_contractRules.ResponseRetentionHours);
+        //var readyAtUtc = firstPollAllowedAtUtc;
+        //await SaveAcceptedPollingMetadataAsync(
+        //    responseId: transaction.Id.ToString(),
+        //    readyAtUtc: readyAtUtc,
+        //    firstPollAllowedAtUtc: firstPollAllowedAtUtc,
+        //    responseExpireAtUtc: responseExpireAtUtc);
 
         var ticketBytes = _xmlService.SerializeAsByteV3(acceptedTicket);
         transaction.Accepted();
@@ -221,18 +245,19 @@ public class QBCHProcessingHandlerV3(
         return transaction;
     }
 
-    private async Task SaveAcceptedPollingMetadataAsync(
-        string responseId,
-        DateTimeOffset readyAtUtc,
-        DateTimeOffset firstPollAllowedAtUtc,
-        DateTimeOffset responseExpireAtUtc)
-    {
-        await _storageService.AddHash(DlRequestV3Scope, responseId, ReadyAtUtcField, readyAtUtc.ToString("O"));
-        await _storageService.AddHash(DlRequestV3Scope, responseId, ReadyAtMskField, readyAtUtc.ToOffset(TimeSpan.FromHours(3)).ToString("O"));
-        await _storageService.AddHash(DlRequestV3Scope, responseId, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
-        await _storageService.AddHash(DlRequestV3Scope, responseId, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
-        await _storageService.AddHash(DlRequestV3Scope, responseId, ResponseGuidField, responseId);
-        await _storageService.AddHash(DlRequestV3Scope, responseId, LastPollUtcField, string.Empty);
-        await _storageService.TrySetKeyExpiration(DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
-    }
+    //NOTE: Убрал логику про 1 секунду между запросами
+    //private async Task SaveAcceptedPollingMetadataAsync(
+    //    string responseId,
+    //    DateTimeOffset readyAtUtc,
+    //    DateTimeOffset firstPollAllowedAtUtc,
+    //    DateTimeOffset responseExpireAtUtc)
+    //{
+    //    await _storageService.AddHash(DlRequestV3Scope, responseId, ReadyAtUtcField, readyAtUtc.ToString("O"));
+    //    await _storageService.AddHash(DlRequestV3Scope, responseId, ReadyAtMskField, readyAtUtc.ToOffset(TimeSpan.FromHours(3)).ToString("O"));
+    //    await _storageService.AddHash(DlRequestV3Scope, responseId, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
+    //    await _storageService.AddHash(DlRequestV3Scope, responseId, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
+    //    await _storageService.AddHash(DlRequestV3Scope, responseId, ResponseGuidField, responseId);
+    //    await _storageService.AddHash(DlRequestV3Scope, responseId, LastPollUtcField, string.Empty);
+    //    await _storageService.TrySetKeyExpiration(DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
+    //}
 }

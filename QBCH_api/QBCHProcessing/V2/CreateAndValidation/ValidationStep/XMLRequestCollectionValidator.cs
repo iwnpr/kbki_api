@@ -35,12 +35,12 @@ public static class XMLRequestCollectionValidator
 
                 case СправочникРежимыЗапроса.Single:
                     if (requestCollection?.Count != 1)
-                        transaction.RiseCriticalError(Error.Code26_WrongBlockCount());
+                        transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
                     break;
                 case СправочникРежимыЗапроса.Package:
                     {
                         if (requestCollection?.Count > 10)
-                            transaction.RiseCriticalError(Error.Code26_WrongBlockCount());
+                            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
                         break;
                     }
             }
@@ -63,7 +63,7 @@ public static class XMLRequestCollectionValidator
             if (requestIdsCollection?.First() != 1)
             {
                 var errorMessage = "Порядкове номера запросов должны начинаться c \"1\"";
-                transaction.RiseCriticalError(Error.Code99_OtherError(errorMessage));
+                transaction.RiseCriticalError(AnswerErrorCode.Code99_OtherError(errorMessage));
             }
 
             if (!requestIdsCollection.Count.Equals(requestIdsCollection.Distinct().Count()))
@@ -75,7 +75,7 @@ public static class XMLRequestCollectionValidator
                     .ToList();
 
                 var errorMessage = $"Порядковый номер запроса в пакете должен быть уникальным, повторяющиеся значения: {doubleId!.First().ПорядковыйНомер}";
-                transaction.RiseCriticalError(Error.Code99_OtherError(errorMessage));
+                transaction.RiseCriticalError(AnswerErrorCode.Code99_OtherError(errorMessage));
             }
         }
         return transaction;

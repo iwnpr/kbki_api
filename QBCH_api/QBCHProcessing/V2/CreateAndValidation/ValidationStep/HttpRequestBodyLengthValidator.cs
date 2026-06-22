@@ -19,7 +19,7 @@ public static class HttpRequestBodyLengthValidator
         {
             if (transaction.Attachment.SignedRequestBody is null || transaction.Attachment.SignedRequestBody!.Length < 1)
             {
-                transaction.RiseCriticalError(Error.Code2_EmptyRequestBody());
+                transaction.RiseCriticalError(AnswerErrorCode.Code2_EmptyRequestBody());
                 return transaction;
             }
         }

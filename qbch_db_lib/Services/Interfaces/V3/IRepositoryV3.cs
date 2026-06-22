@@ -6,7 +6,7 @@ namespace Qbch_db_lib.Services.Interfaces.V3;
 public interface IRepositoryV3
 {
     Task<List<long>> GetSearchAllSubjectsV3(string request, long? timeLeftMs = null);
-    Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long? timeLeftMs);
+    Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long? timeLeftMs = null);
     Task<XElement?> GetSelfProhibitionV3(List<long> subjectIds, long? timeLeftMs = null);
     Task<XElement?> GetAntifraudV3(DateTime birthDate, string inn, long? timeLeftMs = null);
     Task<bool> IsPermissionGrantedV3(string? thumbprint, string? serviceName, CancellationToken? ct = null);

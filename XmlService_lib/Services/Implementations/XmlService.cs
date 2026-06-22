@@ -229,7 +229,7 @@ namespace XmlService_lib.Services.Implementations
         /// <returns>Результат проверки</returns>
         public BaseResult? ValidateXml(MemoryStream memoryStream, string[] xsdFullPaths)
         {
-            var standatError = Error.Code9_InvalidRequestByScheme();
+            var standatError = AnswerErrorCode.Code9_InvalidRequestByScheme();
 
             XmlSchemaSet schemaSet = new()
             {
@@ -248,7 +248,7 @@ namespace XmlService_lib.Services.Implementations
                 var xDoc = XDocument.Load(memoryStream);
                 xDoc.Validate(schemaSet, (sender, e) =>
                 {
-                    
+
                     var validateErrorMessage = string.Concat(e.Severity, ": ", e.Message);
                     _logger.LogError(standatError.Message + validateErrorMessage);
 
@@ -377,11 +377,11 @@ namespace XmlService_lib.Services.Implementations
                         Ticket_v2 = ticketService.CreateResultV2(ResponseType.Error, "9", $"Запрос не соответствует схеме: {error}")
                     };
                 });
-                return xsdError is not null ? Result.Failure(new Error(9, $"Запрос не соответствует схеме: {xsdError.Error}")) : Result.Success();
+                return xsdError is not null ? Result.Failure(new AnswerErrorCode(9, $"Запрос не соответствует схеме: {xsdError.Error}")) : Result.Success();
             }
             catch (Exception ex)
             {
-                return Result.Failure(new Error(9, $"Запрос не соответствует схеме: {ex.Message}"));
+                return Result.Failure(new AnswerErrorCode(9, $"Запрос не соответствует схеме: {ex.Message}"));
             }
         }
     }

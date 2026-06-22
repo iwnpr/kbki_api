@@ -19,8 +19,7 @@ public class ValidationServiceV3(
     IKeyValueStorageService cache,
     IRepositoryV3 repository,
     ITicketServiceV3 ticketService,
-    ILogger<ValidationServiceV3> logger,
-    IConfiguration configuration) : IValidationServiceV3
+    ILogger<ValidationServiceV3> logger) : IValidationServiceV3
 {
     private static readonly TimeZoneInfo MoscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
     private readonly IXmlServiceV3 _xmlService = xmlService;
@@ -36,11 +35,11 @@ public class ValidationServiceV3(
 
         if (!isValid)
         {
-            var error = Error.Code9_InvalidRequestByScheme();
+            var error = new AnswerErrorCode(xmlResult.ErrorCode, xmlResult.Error);
             result = CreateErrorResult(error);
             return false;
         }
-        
+
         result = null;
         return true;
 
@@ -55,7 +54,7 @@ public class ValidationServiceV3(
         }
         catch (DecoderFallbackException ex)
         {
-            var error = Error.Code8_UnsupportedEncoding();
+            var error = AnswerErrorCode.Code8_UnsupportedEncoding();
             _logger.LogError(ex, error.Message);
             result = CreateErrorResult(error);
 
@@ -72,7 +71,7 @@ public class ValidationServiceV3(
 
         if (requestDate?.Date != currentMoscowDate)
         {
-            var error = Error.Code23_InvalidRerquestDate();
+            var error = AnswerErrorCode.Code23_InvalidRerquestDate();
             _logger.LogError(error.Message);
 
             result = CreateErrorResult(error);
@@ -103,22 +102,14 @@ public class ValidationServiceV3(
             var code = certResult.ErrorCode;
             var message = certResult.Error;
 
-            result = CreateErrorResult(new Error(code, message));
+            result = CreateErrorResult(new AnswerErrorCode(code, message));
             return false;
         }
         result = null;
         return true;
     }
-    public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
-    {
-        if (thumbprint is null && configuration.GetValue("CertificateValidation:AllowMissingClientCertificate", false))
-        {
-            _logger.LogWarning("Проверка прав доступа v3 пропущена для {ServiceName}: отсутствует сертификат запроса и CertificateValidation:AllowMissingClientCertificate=true.", serviceName);
-            return true;
-        }
 
-        return await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
-    }
+    public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
 
     public async Task<(bool IsUnique, BaseResultV3? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
     {
@@ -127,7 +118,7 @@ public class ValidationServiceV3(
         if (isUnique)
             return (true, null);
 
-        return (false, CreateErrorResult(Error.Code11_RequestIdIsNotUnique()));
+        return (false, CreateErrorResult(AnswerErrorCode.Code11_RequestIdIsNotUnique()));
     }
 
     public async Task<bool> IsCertExistsV3(byte[] cert) => await _repository.IsCertExist(cert);
@@ -157,7 +148,7 @@ public class ValidationServiceV3(
         var certificate = new X509Certificate2(cert);
         return await _repository.SetCertificateInactive(certificate.Thumbprint ?? string.Empty);
     }
-    private BaseResultV3 CreateErrorResult(Error error)
+    private BaseResultV3 CreateErrorResult(AnswerErrorCode error)
     {
         return new BaseResultV3
         {

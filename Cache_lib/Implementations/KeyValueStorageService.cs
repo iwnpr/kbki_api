@@ -163,7 +163,7 @@ namespace Cache_lib.Implementations
                 if (bytes is null || bytes.Length == 0)
                 {
 
-                    return Result<byte[]>.Failure(new Error(404, "Data on redis not found"));
+                    return Result<byte[]>.Failure(new AnswerErrorCode(404, "Data on redis not found"));
                 }
 
                 return Result<byte[]>.Success(bytes);
@@ -171,7 +171,7 @@ namespace Cache_lib.Implementations
             catch (Exception ex)
             {
                 _logger.LogCritical(ex, "Redis error");
-                return Result<byte[]>.Failure(new Error(500, ex.Message));
+                return Result<byte[]>.Failure(new AnswerErrorCode(500, ex.Message));
             }
         }
 

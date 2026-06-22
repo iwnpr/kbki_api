@@ -22,14 +22,14 @@ public static class AccessRightsValidator
             {
                 if (!await isPermissionGranted(transaction.ClentRequest?.Certificate?.Thumbprint, transaction.ServiceName, null))
                 {
-                    transaction.RiseCriticalError(Error.Code22_AccessDenied());
+                    transaction.RiseCriticalError(AnswerErrorCode.Code22_AccessDenied());
                 }
             }
             catch
             {
                 if (transaction.ClentRequest?.Certificate?.Thumbprint is null)
                 {
-                    transaction.RiseCriticalError(Error.Code22_AccessDenied());
+                    transaction.RiseCriticalError(AnswerErrorCode.Code22_AccessDenied());
                 }
             }
         }

@@ -1,7 +1,8 @@
 using QBCH_api.Services.Interfaces.V3;
+using Qbch_db_lib.Services.Interfaces.V3;
+using qbch_lib.domain.errors;
 using QBCH_lib.Configuration;
 using QBCH_lib.Services.Interfaces.V3;
-using Qbch_db_lib.Services.Interfaces.V3;
 using XmlService_lib.Services.Interfaces.V3;
 using ПредставлениеСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ПредставлениеСведений;
 using ПредставлениеСведенийСведенияV3 = QBCH.Lib.qcb_xml.v3_0.ПредставлениеСведенийСведения;
@@ -9,15 +10,14 @@ using ПредставлениеСведенийСведенияДоговорV3
 using ПредставлениеСведенийСведенияДоговорУдалитьV3 = QBCH.Lib.qcb_xml.v3_0.ПредставлениеСведенийСведенияДоговорУдалить;
 using ПредставлениеСведенийСведенияОбращениеV3 = QBCH.Lib.qcb_xml.v3_0.ПредставлениеСведенийСведенияОбращениеОбязательство;
 using ПредставлениеСведенийСведенияОбращениеУдалитьV3 = QBCH.Lib.qcb_xml.v3_0.ПредставлениеСведенийСведенияОбращениеОбязательствоУдалить;
+using РезультатПредставленияСведенийV3 = QBCH.Lib.qcb_xml.v3_0.РезультатПредставленияСведений;
 using РезультатПредставленияСведенийБКИV3 = QBCH.Lib.qcb_xml.v3_0.РезультатПредставленияСведенийБКИ;
 using РезультатПредставленияСведенийРезультатV3 = QBCH.Lib.qcb_xml.v3_0.РезультатПредставленияСведенийРезультат;
 using РезультатПредставленияСведенийРезультатДоговорV3 = QBCH.Lib.qcb_xml.v3_0.РезультатПредставленияСведенийРезультатДоговор;
 using РезультатПредставленияСведенийРезультатОбращениеV3 = QBCH.Lib.qcb_xml.v3_0.РезультатПредставленияСведенийРезультатОбращениеОбязательство;
-using РезультатПредставленияСведенийV3 = QBCH.Lib.qcb_xml.v3_0.РезультатПредставленияСведений;
 using СправочникОперацииV3 = QBCH.Lib.qcb_xml.v3_0.СправочникОперации;
 using ТипДоговорV3 = QBCH.Lib.qcb_xml.v3_0.ТипДоговор;
 using ТипОбращениеV3 = QBCH.Lib.qcb_xml.v3_0.ТипОбращениеОбязательство;
-using qbch_lib.domain.errors;
 
 namespace QBCH_api.Services.Implementations.V3;
 
@@ -32,7 +32,7 @@ public class DlPutServiceV3(
     private readonly IRepositoryV3 _repository = repository;
     private readonly IXmlServiceV3 _xmlService = xmlService;
 
-    public async Task<DlPutServiceV3ProcessingResult> ProcessAsync(ПредставлениеСведенийV3 request, bool returnAcceptedTicket = false, string? responseId = null, long? readyTime = null)
+    public async Task<DlPutServiceV3ProcessingResult> ProcessAsync(ПредставлениеСведенийV3 request, bool returnAcceptedTicket = false, string? responseId = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -45,7 +45,7 @@ public class DlPutServiceV3(
         if (returnAcceptedTicket)
         {
             var acceptedId = !string.IsNullOrWhiteSpace(responseId) ? responseId : Guid.NewGuid().ToString();
-            var accepted = _ticketServiceV3.CreateResultV3Accepted(request.ИдентификаторЗапроса, acceptedId, request.ДатаЗапроса, readyTime);
+            var accepted = _ticketServiceV3.CreateResultV3Accepted(request.ИдентификаторЗапроса, acceptedId, request.ДатаЗапроса);
             return new DlPutServiceV3ProcessingResult(true, null, accepted);
         }
 
@@ -98,13 +98,13 @@ public class DlPutServiceV3(
 
                 if (string.IsNullOrWhiteSpace(add.УИД))
                 {
-                    SetError(deal, Error.Code15_InvalidRequestData("Атрибут \"УИД\" не может быть пустым"));
+                    SetError(deal, AnswerErrorCode.Code15_InvalidRequestData("Атрибут \"УИД\" не может быть пустым"));
                     break;
                 }
 
                 if (add.СреднемесячныйПлатеж is null)
                 {
-                    SetError(deal, Error.Code15_InvalidRequestData("Блок \"СреднемесячныйПлатеж\" обязателен для операции \"Добавить\""));
+                    SetError(deal, AnswerErrorCode.Code15_InvalidRequestData("Блок \"СреднемесячныйПлатеж\" обязателен для операции \"Добавить\""));
                     break;
                 }
 
@@ -119,13 +119,13 @@ public class DlPutServiceV3(
 
                 if (string.IsNullOrWhiteSpace(delete.УИД))
                 {
-                    SetError(deal, Error.Code15_InvalidRequestData("Атрибут \"УИД\" не может быть пустым"));
+                    SetError(deal, AnswerErrorCode.Code15_InvalidRequestData("Атрибут \"УИД\" не может быть пустым"));
                     break;
                 }
 
                 if (!delete.ДатаРасчетаSpecified)
                 {
-                    SetError(deal, Error.Code15_InvalidRequestData("Атрибут \"ДатаРасчета\" обязателен для операции \"Удалить\""));
+                    SetError(deal, AnswerErrorCode.Code15_InvalidRequestData("Атрибут \"ДатаРасчета\" обязателен для операции \"Удалить\""));
                     break;
                 }
 
@@ -137,7 +137,7 @@ public class DlPutServiceV3(
 
                 if (contractSubjectIds is null || contractSubjectIds.Count == 0)
                 {
-                    SetError(deal, Error.Code29_SubjectNotFound());
+                    SetError(deal, AnswerErrorCode.Code29_SubjectNotFound());
                     break;
                 }
 
@@ -146,7 +146,7 @@ public class DlPutServiceV3(
                     var contractUidExists = await _repository.ContractUidExistsForSubjectsV3(contractSubjectIds, delete.УИД);
                     if (contractUidExists is false)
                     {
-                        SetError(deal, Error.Code20_ContractNotFound_V3());
+                        SetError(deal, AnswerErrorCode.Code20_ContractNotFound_V3());
                         break;
                     }
 
@@ -155,7 +155,7 @@ public class DlPutServiceV3(
                         var calcDateExists = await _repository.ContractCalculationDateExistsForSubjectsV3(contractSubjectIds, delete.УИД, delete.ДатаРасчета);
                         if (calcDateExists is false)
                         {
-                            SetError(deal, Error.Code21_CalculationDateNotFound());
+                            SetError(deal, AnswerErrorCode.Code21_CalculationDateNotFound());
                             break;
                         }
                     }
@@ -187,7 +187,7 @@ public class DlPutServiceV3(
 
                 if (string.IsNullOrWhiteSpace(add.УИД))
                 {
-                    SetError(appeal, Error.Code15_InvalidRequestData("Атрибут \"УИД\" не может быть пустым"));
+                    SetError(appeal, AnswerErrorCode.Code15_InvalidRequestData("Атрибут \"УИД\" не может быть пустым"));
                     break;
                 }
 
@@ -202,13 +202,13 @@ public class DlPutServiceV3(
 
                 if (string.IsNullOrWhiteSpace(delete.УИД))
                 {
-                    SetError(appeal, Error.Code15_InvalidRequestData("Атрибут \"УИД\" не может быть пустым"));
+                    SetError(appeal, AnswerErrorCode.Code15_InvalidRequestData("Атрибут \"УИД\" не может быть пустым"));
                     break;
                 }
 
                 if (!delete.СтадияРассмотренияSpecified)
                 {
-                    SetError(appeal, Error.Code15_InvalidRequestData("Атрибут \"СтадияРассмотрения\" обязателен для операции \"Удалить\""));
+                    SetError(appeal, AnswerErrorCode.Code15_InvalidRequestData("Атрибут \"СтадияРассмотрения\" обязателен для операции \"Удалить\""));
                     break;
                 }
 
@@ -219,7 +219,7 @@ public class DlPutServiceV3(
 
                 if (string.IsNullOrWhiteSpace(inn))
                 {
-                    SetError(appeal, Error.Code29_SubjectNotFound());
+                    SetError(appeal, AnswerErrorCode.Code29_SubjectNotFound());
                     break;
                 }
 
@@ -227,7 +227,7 @@ public class DlPutServiceV3(
 
                 if (appealSubjectIds is null || appealSubjectIds.Count == 0)
                 {
-                    SetError(appeal, Error.Code29_SubjectNotFound());
+                    SetError(appeal, AnswerErrorCode.Code29_SubjectNotFound());
                     break;
                 }
 
@@ -237,7 +237,7 @@ public class DlPutServiceV3(
 
                     if (appealUidExists is false)
                     {
-                        SetError(appeal, Error.Code30_AppealObligationNotFound());
+                        SetError(appeal, AnswerErrorCode.Code30_AppealObligationNotFound());
                         break;
                     }
                     else
@@ -246,7 +246,7 @@ public class DlPutServiceV3(
 
                         if (stageExists is false)
                         {
-                            SetError(appeal, Error.Code31_AntiFraudDataNotFound());
+                            SetError(appeal, AnswerErrorCode.Code31_AntiFraudDataNotFound());
                             break;
                         }
                     }
@@ -278,9 +278,9 @@ public class DlPutServiceV3(
         return result;
     }
 
-    private static void SetError(РезультатПредставленияСведенийРезультатДоговорV3 target, Error error)
+    private static void SetError(РезультатПредставленияСведенийРезультатДоговорV3 target, AnswerErrorCode error)
         => target.УстановитьОшибку(error.Code, error.Message);
 
-    private static void SetError(РезультатПредставленияСведенийРезультатОбращениеV3 target, Error error)
+    private static void SetError(РезультатПредставленияСведенийРезультатОбращениеV3 target, AnswerErrorCode error)
         => target.УстановитьОшибку(error.Code, error.Message);
 }

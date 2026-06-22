@@ -52,7 +52,7 @@ public static class QBCHValidationDispatcher
 
         if (!result.Status.Equals(QBCHProcessingStatus.Failure) && result.GetRequest<ЗапросСведений>() is null)
         {
-            result.RiseCriticalError(Error.Code9_InvalidRequestByScheme());
+            result.RiseCriticalError(AnswerErrorCode.Code9_InvalidRequestByScheme());
         }
 
         result.ValidationComplete(); //Смена статуса транзакции на провадилировано

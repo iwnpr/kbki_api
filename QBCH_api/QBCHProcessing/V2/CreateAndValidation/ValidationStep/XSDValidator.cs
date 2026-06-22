@@ -27,7 +27,7 @@ public static class XSDValidator
             if (!xmlValidateResult.IsSuccess)
             {
                 var er = xmlValidateResult.Error;
-                transaction.RiseCriticalError(new Error(er!.Code, er.Message));
+                transaction.RiseCriticalError(new AnswerErrorCode(er!.Code, er.Message));
             }
             else
             {
@@ -40,7 +40,7 @@ public static class XSDValidator
                     {
                         if (serializer.Deserialize(memoryStream) is not ЗапросСведений deserializeResult)
                         {
-                            transaction.RiseCriticalError(Error.Code9_InvalidRequestByScheme());
+                            transaction.RiseCriticalError(AnswerErrorCode.Code9_InvalidRequestByScheme());
                         }
                         else
                         {
@@ -51,7 +51,7 @@ public static class XSDValidator
                     }
                     catch
                     {
-                        transaction.RiseCriticalError(Error.Code9_InvalidRequestByScheme());
+                        transaction.RiseCriticalError(AnswerErrorCode.Code9_InvalidRequestByScheme());
                     }
                 }
             }

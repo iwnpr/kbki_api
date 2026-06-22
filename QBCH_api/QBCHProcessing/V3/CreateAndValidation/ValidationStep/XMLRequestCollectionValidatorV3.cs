@@ -1,7 +1,7 @@
-﻿using QBCH_lib.domain.aggregate;
-using РежимЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
+﻿using qbch_lib.domain.errors;
+using QBCH_lib.domain.aggregate;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
-using qbch_lib.domain.errors;
+using РежимЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 
@@ -37,20 +37,20 @@ public static class XMLRequestCollectionValidatorV3
     private static void ValidateSingleMode(QBCHProcessingTransaction transaction, int requestCount)
     {
         if (requestCount != 1)
-            transaction.RiseCriticalError(Error.Code26_WrongBlockCount());
+            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
     }
 
     private static void ValidatePackageMode(QBCHProcessingTransaction transaction, List<(string? OrderNumberRaw, int Position)> requests)
     {
         if (requests.Count == 0)
         {
-            transaction.RiseCriticalError(Error.Code26_WrongBlockCount());
+            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
             return;
         }
 
         if (requests.Count > 10)
         {
-            transaction.RiseCriticalError(Error.Code26_WrongBlockCount());
+            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
             return;
         }
 
@@ -108,6 +108,6 @@ public static class XMLRequestCollectionValidatorV3
             return;
         }
 
-        transaction.SetPacakgeValidationError(orderNumber, Error.Code99_OtherError(message));
+        transaction.SetPacakgeValidationError(orderNumber, AnswerErrorCode.Code99_OtherError(message));
     }
 }

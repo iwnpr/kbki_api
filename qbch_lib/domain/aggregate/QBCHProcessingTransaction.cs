@@ -33,7 +33,7 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     /// <summary>
     /// Ошибки процессинга
     /// </summary>
-    public List<Error> ProcessingErrors { get; private set; }
+    public List<AnswerErrorCode> ProcessingErrors { get; private set; }
     /// <summary>
     /// Ошибки пакетного запроса
     /// </summary>
@@ -120,7 +120,7 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     /// 
     /// </summary>
     /// <param name="error"></param>
-    public void RiseCriticalError(Error error)
+    public void RiseCriticalError(AnswerErrorCode error)
     {
         ProcessingErrors.Add(error);
         Status = QBCHProcessingStatus.Failure;
@@ -132,7 +132,7 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     /// </summary>
     /// <param name="requestNumber"></param>
     /// <param name="error"></param>
-    public void SetPacakgeValidationError(int requestNumber, Error error)
+    public void SetPacakgeValidationError(int requestNumber, AnswerErrorCode error)
     {
         PackageValidationErrors.Add(new PackageError(requestNumber, error.Code, error.Message));
     }

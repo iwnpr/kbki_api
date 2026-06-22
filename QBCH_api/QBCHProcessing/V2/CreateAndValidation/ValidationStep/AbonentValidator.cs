@@ -16,6 +16,7 @@ public static class AbonentValidator
     /// <returns></returns>
     public static async Task<QBCHProcessingTransaction> AbonentValidation(this QBCHProcessingTransaction transaction, Func<string, Task<XElement>> getInnOgrnByThumbprint)
     {
+        //
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure))
         {
             var requestINN = transaction.ClentRequest?.RequestINN;
@@ -24,10 +25,10 @@ public static class AbonentValidator
             var abonentOGRN = transaction.ClentRequest?.Request?.Абонент?.Requisites?.ogrn;
 
             // ИНН и ОГРН из сертификата сравнивается с ИНН и ОГРН в запросе
-            //if (requestINN != abonentINN || requestOGRN != abonentOGRN)
-            //{
-            //    transaction.RiseCriticalError(Error.Code10_RequestAndAbonentDataNotMach(abonentINN, requestINN, abonentOGRN, requestOGRN));
-            //}
+            if (requestINN != abonentINN || requestOGRN != abonentOGRN)
+            {
+                transaction.RiseCriticalError(AnswerErrorCode.Code10_RequestAndAbonentDataNotMach(abonentINN, requestINN, abonentOGRN, requestOGRN));
+            }
         }
         return transaction;
     }

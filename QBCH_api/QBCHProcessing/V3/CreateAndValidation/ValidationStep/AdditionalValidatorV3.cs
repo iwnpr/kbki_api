@@ -99,7 +99,7 @@ public static class AdditionalValidatorV3
             string.IsNullOrWhiteSpace(document.НаименованиеДУЛ))
         {
             AddError(transaction, requestMode, orderNumber,
-                Error.Code15_InvalidRequestData("При значении \"КодДУЛ\" = 999 поле \"НаименованиеДУЛ\" обязательно к заполнению"));
+                AnswerErrorCode.Code15_InvalidRequestData("При значении \"КодДУЛ\" = 999 поле \"НаименованиеДУЛ\" обязательно к заполнению"));
         }
     }
 
@@ -130,7 +130,7 @@ public static class AdditionalValidatorV3
         if (birthDate.Value.Date >= DateTime.Today)
         {
             AddError(transaction, requestMode, orderNumber,
-                Error.Code15_InvalidRequestData($"Дата рождения {birthDate:dd.MM.yyyy} больше или равна текущей дате"));
+                AnswerErrorCode.Code15_InvalidRequestData($"Дата рождения {birthDate:dd.MM.yyyy} больше или равна текущей дате"));
         }
     }
 
@@ -151,7 +151,7 @@ public static class AdditionalValidatorV3
             if (document.ДатаВыдачи.Date <= birthDate.Value.Date)
             {
                 AddError(transaction, requestMode, orderNumber,
-                    Error.Code15_InvalidRequestData($"Дата выдачи ДУЛ {document.ДатаВыдачи:dd.MM.yyyy} более ранняя или равна дате рождения {birthDate:dd.MM.yyyy}"));
+                    AnswerErrorCode.Code15_InvalidRequestData($"Дата выдачи ДУЛ {document.ДатаВыдачи:dd.MM.yyyy} более ранняя или равна дате рождения {birthDate:dd.MM.yyyy}"));
                 return;
             }
         }
@@ -170,7 +170,7 @@ public static class AdditionalValidatorV3
         if (hasCreditTarget && requestItem.СуммаОбязательства is null)
         {
             AddError(transaction, requestMode, orderNumber,
-                Error.Code15_InvalidRequestData("Для кредитных целей \"СуммаОбязательства\" обязательна к заполнению"));
+                AnswerErrorCode.Code15_InvalidRequestData("Для кредитных целей \"СуммаОбязательства\" обязательна к заполнению"));
         }
     }
 
@@ -189,7 +189,7 @@ public static class AdditionalValidatorV3
         if (!Regex.IsMatch(snils, "^\\d{11}$"))
         {
             AddError(transaction, requestMode, orderNumber,
-                Error.Code15_InvalidRequestData("Поле \"СНИЛС\" должно содержать 11 цифр без дефисов и разделителей"));
+                AnswerErrorCode.Code15_InvalidRequestData("Поле \"СНИЛС\" должно содержать 11 цифр без дефисов и разделителей"));
         }
     }
 
@@ -217,7 +217,7 @@ public static class AdditionalValidatorV3
         if (hasPlaceOfBirthElements || hasPlaceOfBirthAttributes)
         {
             transaction.RiseCriticalError(
-                Error.Code15_InvalidRequestData("Поля и элементы \"МестоРождения\" не допускаются в запросах API 3.0"));
+                AnswerErrorCode.Code15_InvalidRequestData("Поля и элементы \"МестоРождения\" не допускаются в запросах API 3.0"));
         }
     }
 
@@ -225,7 +225,7 @@ public static class AdditionalValidatorV3
         QBCHProcessingTransaction transaction,
         СправочникРежимыЗапросаV3 requestMode,
         int orderNumber,
-        Error error)
+        AnswerErrorCode error)
     {
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {

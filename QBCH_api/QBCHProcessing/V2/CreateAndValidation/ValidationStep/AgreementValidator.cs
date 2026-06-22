@@ -77,10 +77,10 @@ public static class AgreementValidator
                 switch (transaction.ClentRequest.Request?.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code27_СonsentIsNull());
+                        transaction.RiseCriticalError(AnswerErrorCode.Code27_СonsentIsNull());
                         return transaction;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений!.ПорядковыйНомер, Error.Code27_СonsentIsNull());
+                        transaction.SetPacakgeValidationError(запросСведений!.ПорядковыйНомер, AnswerErrorCode.Code27_СonsentIsNull());
                         return transaction;
                 }
             }
@@ -104,10 +104,10 @@ public static class AgreementValidator
                 switch (transaction.ClentRequest.Request?.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code13_СonsentDenied(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code13_СonsentDenied(er));
                         return transaction;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code13_СonsentDenied(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code13_СonsentDenied(er));
                         return transaction;
                 }
             }
@@ -131,10 +131,10 @@ public static class AgreementValidator
                 switch (transaction.ClentRequest.Request?.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                 }
             }
@@ -165,10 +165,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code13_СonsentDenied(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code13_СonsentDenied(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code13_СonsentDenied(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code13_СonsentDenied(er));
                                 return transaction;
                         }
                     }
@@ -182,10 +182,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code13_СonsentDenied(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code13_СonsentDenied(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code13_СonsentDenied(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code13_СonsentDenied(er));
                                 return transaction;
                         }
                     }
@@ -203,10 +203,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                         }
                     }
@@ -217,10 +217,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                         }
                     }
@@ -231,10 +231,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                         }
                     }
@@ -244,11 +244,11 @@ public static class AgreementValidator
                     {
                         case СправочникРежимыЗапроса.Single:
                             var er = $"Отсутствует действующее согласие Субъекта: Дата договора {dateOfContract:dd.MM.yyyy} больше текущей";
-                            transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                            transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                             return transaction;
                         case СправочникРежимыЗапроса.Package:
                             er = $"Отсутствует действующее согласие Субъекта: Дата договора {dateOfContract:dd.MM.yyyy} больше текущей";
-                            transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                            transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                             return transaction;
                     }
                     break;
@@ -291,10 +291,10 @@ public static class AgreementValidator
                 switch (transaction.ClentRequest.Request?.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                 }
             }
@@ -304,10 +304,10 @@ public static class AgreementValidator
                 switch (transaction.ClentRequest.Request?.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                 }
             }
@@ -340,10 +340,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                         }
                     }
@@ -354,10 +354,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                         }
                     }
@@ -370,10 +370,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                         }
                     }
@@ -384,10 +384,10 @@ public static class AgreementValidator
                         switch (transaction.ClentRequest.Request?.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                                 return transaction;
                         }
                     }
@@ -414,10 +414,10 @@ public static class AgreementValidator
                 switch (transaction.ClentRequest.Request?.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                 }
             }
@@ -429,10 +429,10 @@ public static class AgreementValidator
                 switch (transaction.ClentRequest.Request?.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                         return transaction;
                 }
             }
@@ -447,10 +447,10 @@ public static class AgreementValidator
                 switch (transaction.ClentRequest.Request?.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code13_СonsentDenied(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code13_СonsentDenied(er));
                         return transaction;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code13_СonsentDenied(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code13_СonsentDenied(er));
                         return transaction;
                 }
             }

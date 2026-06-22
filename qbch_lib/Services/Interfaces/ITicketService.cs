@@ -1,5 +1,4 @@
 ﻿using qbch_lib.domain.errors;
-using QBCH_lib.qcb_xml.v1_3.Enums;
 using QBCH_lib.qcb_xml.v2_0.Enums;
 using System;
 
@@ -35,7 +34,7 @@ namespace QBCH_lib.Services.Interfaces
         /// </summary>
         /// <param name="error"></param>
         /// <returns></returns>
-        qcb_xml.v2_0.qcb_result.Результат CreateResultV2Error(Error error);
+        qcb_xml.v2_0.qcb_result.Результат CreateResultV2Error(AnswerErrorCode error);
 
         /// <summary>
         /// 

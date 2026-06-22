@@ -28,8 +28,6 @@ namespace Crypto_lib.Service
         private readonly string? _storeName = config.GetValue<string>("Signer:StoreName");
         private readonly string? _findType = config.GetValue<string>("Signer:FindType");
         private readonly string? _searchValue = config.GetValue<string>("Signer:SearchValue");
-        private readonly bool _allowMissingClientCertificate = config.GetValue("CertificateValidation:AllowMissingClientCertificate", false);
-        private readonly bool _requireSignerCertificate = config.GetValue("Signer:RequireCertificate", true);
         private readonly ILogger<CryptoService> _logger = logger;
         private readonly ITicketService _ticketService = ticketService;
 
@@ -45,28 +43,13 @@ namespace Crypto_lib.Service
 
             if (requestCert is null)
             {
-                if (_allowMissingClientCertificate)
-                {
-                    _logger.LogWarning("Проверка УЭП пропущена: отсутствует сертификат запроса и CertificateValidation:AllowMissingClientCertificate=true.");
-                    result.Body = msg;
-                    result.SignedBody = msg;
-
-                    // При отсутствии клиентского сертификата бизнес-запрос может приходить
-                    // как исходный XML/байтовое тело, а не PKCS#7. Не декодируем ASN.1, чтобы не
-                    // возвращать ошибку 7: ASN1 corrupted data.
-                    // return ValidateMsg(msg, out result, encodedSignature)
-                    //     ? QBCH_lib.core.Result<CryptoServiceResult>.Success(result)
-                    //     : QBCH_lib.core.Result<CryptoServiceResult>.Failure(new Error(result.ErrorCode, result.Error ?? "Ошибка проверки УЭП"));
-                    return QBCH_lib.core.Result<CryptoServiceResult>.Success(result);
-                }
-
                 var errorMessage = "Отсутствует сертификат запроса";
                 _logger.LogError(errorMessage);
 
-                var processingError = Error.Code99_OtherError(errorMessage);
+                var processingError = AnswerErrorCode.Code99_OtherError(errorMessage);
                 result.Error = processingError.Message;
                 result.ErrorCode = processingError.Code;
-                result.Ticket_v2 = _ticketService.CreateResultV2Error(new Error(processingError.Code, processingError.Message));
+                result.Ticket_v2 = _ticketService.CreateResultV2Error(new AnswerErrorCode(processingError.Code, processingError.Message));
 
                 return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingError);
             }
@@ -83,12 +66,12 @@ namespace Crypto_lib.Service
             if (requestCert.NotAfter <= DateTime.Now)
             {
 
-                var processingError = Error.Code5_TheCertificateIsExpired();
+                var processingError = AnswerErrorCode.Code5_TheCertificateIsExpired();
                 _logger.LogError(processingError.Message);
 
                 result.ErrorCode = processingError.Code;
                 result.ErrorMessage = processingError.Message;
-                result.Ticket_v2 = _ticketService.CreateResultV2Error(new Error(processingError.Code, processingError.Message));
+                result.Ticket_v2 = _ticketService.CreateResultV2Error(new AnswerErrorCode(processingError.Code, processingError.Message));
 
                 return QBCH_lib.core.Result<CryptoServiceResult>.Failure(processingError);
             }
@@ -114,7 +97,7 @@ namespace Crypto_lib.Service
             catch (Exception ex)
             {
                 _logger.LogError(ex, ex.Message);
-                var processingMessage = Error.Code7_IncorrectRequestFormat();
+                var processingMessage = AnswerErrorCode.Code7_IncorrectRequestFormat();
                 result.Error = processingMessage.Message;
                 result.ErrorCode = processingMessage.Code;
                 result.Ticket_v2 = _ticketService.CreateResultV2(ResponseType.Error, "7", "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
@@ -125,7 +108,7 @@ namespace Crypto_lib.Service
             bool IsValidCert = false;
 
 
-            List<Error> errors = [];
+            List<AnswerErrorCode> errors = [];
 
             while (enumerator.MoveNext()) //TODO нужно понять что тут происходит
             {
@@ -137,7 +120,7 @@ namespace Crypto_lib.Service
                     if (IsCertComapreFailed(requestSubject, current.Certificate, result))
                     {
                         _logger.LogError("УЭП не соответствует абоненту, request_inn:{request_inn}, sign_inn:{sign_inn}. request_psrn:{request_inn}, sign_psrn:{sign_inn}", result.RequestINN, result.SignINN, result.RequestOGRN, result.SignOGRN);
-                        var processingError = Error.Code6_DetailsDoNotMatch();
+                        var processingError = AnswerErrorCode.Code6_DetailsDoNotMatch();
 
                         result = new CryptoServiceResult()
                         {
@@ -156,7 +139,7 @@ namespace Crypto_lib.Service
                     }
                     catch (Exception ex)
                     {
-                        var processingError = new Error(4, ex.Message);
+                        var processingError = new AnswerErrorCode(4, ex.Message);
                         _logger.LogError(ex, "УЭП некорректна {Error}", ex.Message); // TODO странно 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
@@ -187,20 +170,7 @@ namespace Crypto_lib.Service
 
             if (requestCert is null)
             {
-                if (_allowMissingClientCertificate)
-                {
-                    _logger.LogWarning("Проверка УЭП пропущена: отсутствует сертификат запроса и CertificateValidation:AllowMissingClientCertificate=true.");
-                    result.Body = msg;
-                    result.SignedBody = msg;
-
-                    // При отсутствии клиентского сертификата бизнес-запрос может приходить
-                    // как исходный XML/байтовое тело, а не PKCS#7. Не декодируем ASN.1, чтобы не
-                    // возвращать ошибку 7: ASN1 corrupted data.
-                    // return ValidateMsg(msg, out result, encodedSignature);
-                    return true;
-                }
-
-                var error = Error.Code4_SignatureIsNotCorrect();
+                var error = AnswerErrorCode.Code4_SignatureIsNotCorrect();
                 result.Error = error.Message;
                 result.ErrorCode = error.Code;
                 result.ErrorMessage = error.Message;
@@ -406,13 +376,7 @@ namespace Crypto_lib.Service
         {
             if (requestCert is null)
             {
-                if (_allowMissingClientCertificate)
-                {
-                    _logger.LogWarning("Проверка сертификата запроса пропущена: CertificateValidation:AllowMissingClientCertificate=true.");
-                    result = null;
-                    return true;
-                }
-                var error = Error.Code99_OtherError("Отсутствует сертификат запроса");
+                var error = AnswerErrorCode.Code99_OtherError("Отсутствует сертификат запроса");
                 _logger.LogError(error.Message);
 
                 result = new CryptoServiceResult
@@ -427,7 +391,7 @@ namespace Crypto_lib.Service
 
             if (requestCert.NotAfter <= DateTime.Today)
             {
-                var error = Error.Code5_TheCertificateIsExpired();
+                var error = AnswerErrorCode.Code5_TheCertificateIsExpired();
                 _logger.LogError(error.Message);
 
                 result = new CryptoServiceResult()
@@ -452,11 +416,6 @@ namespace Crypto_lib.Service
         /// <returns>Подписанный файл</returns>
         public byte[] SignMsg(byte[] msg)
         {
-            if (!_requireSignerCertificate)
-            {
-                _logger.LogWarning("Подписание сообщения пропущено: Signer:RequireCertificate=false.");
-                return msg;
-            }
             // Создаем объект ContentInfo по сообщению.
             // Это необходимо для создания объекта SignedCms.
             ContentInfo contentInfo = new(msg);

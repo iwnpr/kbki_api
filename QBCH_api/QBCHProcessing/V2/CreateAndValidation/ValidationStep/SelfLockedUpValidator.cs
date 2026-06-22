@@ -39,7 +39,7 @@ public static class SelfLockedUpValidator
                     var request = запросСведений.Запрос.FirstOrDefault();
                     if (request?.Субъект?.ИНН is null && запросСведений?.КодСведений == СправочникВидыСведений.SP6)
                     {
-                        transaction.RiseCriticalError(Error.Code25_SelfLockedUpError_V2());
+                        transaction.RiseCriticalError(AnswerErrorCode.Code25_SelfLockedUpError_V2());
                     }
                     return transaction;
                 case СправочникРежимыЗапроса.Package:
@@ -48,7 +48,7 @@ public static class SelfLockedUpValidator
                     {
                         if (x.Субъект?.ИНН is null && запросСведений?.КодСведений == СправочникВидыСведений.SP6)
                         {
-                            transaction.SetPacakgeValidationError(x.ПорядковыйНомер, Error.Code25_SelfLockedUpError_V2());
+                            transaction.SetPacakgeValidationError(x.ПорядковыйНомер, AnswerErrorCode.Code25_SelfLockedUpError_V2());
                         }
                     });
                     return transaction;
@@ -74,7 +74,7 @@ public static class SelfLockedUpValidator
                     var subjectInn = запрос?.Субъект?.ИНН;
                     if (запросСведений.КодСведений == СправочникВидыСведений.SP6 && subjectInn?.ПризнакПроверки != ТипИННФЛсПризнакомПризнакПроверки.Item1)
                     {
-                        transaction.RiseCriticalError(Error.Code25_SelfLockedUpError_V2());
+                        transaction.RiseCriticalError(AnswerErrorCode.Code25_SelfLockedUpError_V2());
                     }
                     return transaction;
                 case СправочникРежимыЗапроса.Package:
@@ -83,7 +83,7 @@ public static class SelfLockedUpValidator
                     {
                         if (запросСведений.КодСведений == СправочникВидыСведений.SP6 && i.Субъект?.ИНН?.ПризнакПроверки != ТипИННФЛсПризнакомПризнакПроверки.Item1)
                         {
-                            transaction.SetPacakgeValidationError(i.ПорядковыйНомер, Error.Code25_SelfLockedUpError_V2());
+                            transaction.SetPacakgeValidationError(i.ПорядковыйНомер, AnswerErrorCode.Code25_SelfLockedUpError_V2());
                         }
                     });
                     return transaction;

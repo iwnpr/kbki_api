@@ -20,8 +20,7 @@ public sealed class CreateAndValidateHandlerV3(
     IRepositoryV3 repository,
     IKeyValueStorageService storageService,
     IBKIRequisitsHandler bKIRequisits,
-    ILogger<CreateAndValidateHandlerV3> logger,
-    IConfiguration configuration)
+    ILogger<CreateAndValidateHandlerV3> logger)
     : IRequestHandler<CreateToValidateCommandV3, QBCHProcessingTransaction>
 {
     private readonly IValidationServiceV3 _validationService = validationService;
@@ -64,7 +63,6 @@ public sealed class CreateAndValidateHandlerV3(
             xmlService: _xmlService,
             repository: _repository,
             cacheService: _storageService,
-            allowMissingClientCertificate: configuration.GetValue("CertificateValidation:AllowMissingClientCertificate", false),
             cancellationToken: cancellationToken);
 
         _logger.LogDebug(

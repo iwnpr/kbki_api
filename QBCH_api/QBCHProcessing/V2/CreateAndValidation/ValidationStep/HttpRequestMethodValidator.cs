@@ -17,7 +17,7 @@ public static class HttpRequestMethodValidator
     {
         if (!transaction.ClentRequest.RequestMethod!.Equals(HttpMethod.Post.ToString()))
         {
-            transaction.RiseCriticalError(Error.Code1_WrongRequestMethod());
+            transaction.RiseCriticalError(AnswerErrorCode.Code1_WrongRequestMethod());
             return transaction;
         }
         return transaction;

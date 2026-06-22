@@ -32,8 +32,7 @@ namespace QBCH_api.Services.Implementations
         ILogger<ValidationService> logger,
         IKeyValueStorageService cache,
         ITicketService ticketService,
-        IRepository repository,
-        IConfiguration configuration) : IValidationService
+        IRepository repository) : IValidationService
     {
         /// <summary>
         /// 
@@ -1072,16 +1071,7 @@ namespace QBCH_api.Services.Implementations
         /// <param name="ct"></param>
         /// <param name="thumbprint"></param>
         /// <returns></returns>
-        public async Task<bool> ValidateRules(string? thumbprint, string? serviceName, CancellationToken? ct = null)
-        {
-            if (thumbprint is null && configuration.GetValue("CertificateValidation:AllowMissingClientCertificate", false))
-            {
-                logger.LogWarning("Проверка прав доступа пропущена для {ServiceName}: отсутствует сертификат запроса и CertificateValidation:AllowMissingClientCertificate=true.", serviceName);
-                return true;
-            }
-
-            return await repository.IsPermissionGrantedv2(thumbprint, serviceName, ct);
-        }
+        public async Task<bool> ValidateRules(string? thumbprint, string? serviceName, CancellationToken? ct = null) => await repository.IsPermissionGrantedv2(thumbprint, serviceName, ct);
 
         /// <summary>
         /// 

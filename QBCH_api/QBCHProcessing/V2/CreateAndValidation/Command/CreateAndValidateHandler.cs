@@ -27,8 +27,7 @@ public sealed class CreateAndValidateHandler(ICryptoService cryptoService,
                                 IRepository repository,
                                 IKeyValueStorageService redisCache,
                                 IBKIRequisitsHandler bKIRequisits,
-                                ILogger<CreateAndValidateHandler> logger,
-                                IConfiguration configuration) : IRequestHandler<CreateToValidateCommand, QBCHProcessingTransaction>
+                                ILogger<CreateAndValidateHandler> logger) : IRequestHandler<CreateToValidateCommand, QBCHProcessingTransaction>
 {
     private readonly ICryptoService _cryptoService = cryptoService;
     private readonly IXmlService _xmlService = xmlService;
@@ -62,19 +61,8 @@ public sealed class CreateAndValidateHandler(ICryptoService cryptoService,
                           _xmlService.ValidateXml,
                           request.ApiVersion,
                           _repository.GetInnOgrnByThumbprint,
-                          //repository.IsPermissionGrantedv2,
-                          IsPermissionGrantedv2,
+                          _repository.IsPermissionGrantedv2,
                           _redisCache.IsUniqueRequestId
                  );
-        async Task<bool> IsPermissionGrantedv2(string? thumbprint, string? serviceName, CancellationToken? ct = null)
-        {
-            if (thumbprint is null && configuration.GetValue("CertificateValidation:AllowMissingClientCertificate", false))
-            {
-                _logger.LogWarning("Проверка прав доступа v2 в pipeline пропущена для {ServiceName}: отсутствует сертификат запроса и CertificateValidation:AllowMissingClientCertificate=true.", serviceName);
-                return true;
-            }
-
-            return await _repository.IsPermissionGrantedv2(thumbprint, serviceName, ct);
-        }
     }
 }

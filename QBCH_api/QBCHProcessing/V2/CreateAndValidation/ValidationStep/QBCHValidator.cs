@@ -21,7 +21,7 @@ public static class QBCHValidator
             bool valiadteQBCH = transaction.Requisites.All(x => x.ogrn != requestOgrn);
             if (!valiadteQBCH)
             {
-                transaction.RiseCriticalError(Error.Code14_SingleWindowDenied());
+                transaction.RiseCriticalError(AnswerErrorCode.Code14_SingleWindowDenied());
             }
         }
         return transaction;

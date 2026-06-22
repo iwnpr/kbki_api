@@ -44,7 +44,7 @@ public static class SingProcessor
             }
             else
             {
-                transaction.RiseCriticalError(new Error(result.Error!.Code, result.Error.Message));
+                transaction.RiseCriticalError(new AnswerErrorCode(result.Error!.Code, result.Error.Message));
             }
         }
         return transaction;

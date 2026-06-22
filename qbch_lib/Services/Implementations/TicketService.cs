@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
 using qbch_lib.domain.errors;
-using QBCH_lib.qcb_xml.v1_3.Enums;
 using QBCH_lib.qcb_xml.v2_0.Enums;
 using QBCH_lib.qcb_xml.v2_0.qcb_result;
 using QBCH_lib.Services.Interfaces;
@@ -95,7 +94,7 @@ namespace QBCH_lib.Services.Implementations
         /// </summary>
         /// <param name="error"></param>
         /// <returns></returns>
-        public Результат CreateResultV2Error(Error error)
+        public Результат CreateResultV2Error(AnswerErrorCode error)
         {
             return new Результат
             {

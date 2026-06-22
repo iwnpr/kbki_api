@@ -16,7 +16,7 @@ public static class RequestDateValidator
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && transaction.ClentRequest.Request?.ДатаЗапроса != DateTime.Today)
         {
-            transaction.RiseCriticalError(Error.Code23_InvalidRerquestDate());
+            transaction.RiseCriticalError(AnswerErrorCode.Code23_InvalidRerquestDate());
         }
         return transaction;
     }

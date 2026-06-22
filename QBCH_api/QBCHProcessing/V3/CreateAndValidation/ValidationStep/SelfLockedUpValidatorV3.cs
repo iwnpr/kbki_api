@@ -80,11 +80,11 @@ public static class SelfLockedUpValidatorV3
     {
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {
-            transaction.SetPacakgeValidationError(orderNumber, Error.Code25_SelfLockedUpError_V3());
+            transaction.SetPacakgeValidationError(orderNumber, AnswerErrorCode.Code25_SelfLockedUpError_V3());
             return;
         }
 
-        transaction.RiseCriticalError(Error.Code25_SelfLockedUpError_V3());
+        transaction.RiseCriticalError(AnswerErrorCode.Code25_SelfLockedUpError_V3());
     }
 
     private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)

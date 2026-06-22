@@ -28,7 +28,7 @@ public static class UniqueRequesstIdValidator
 
             if (!keyExist)
             {
-                transaction.RiseCriticalError(Error.Code11_RequestIdIsNotUnique());
+                transaction.RiseCriticalError(AnswerErrorCode.Code11_RequestIdIsNotUnique());
             }
         }
         return transaction;

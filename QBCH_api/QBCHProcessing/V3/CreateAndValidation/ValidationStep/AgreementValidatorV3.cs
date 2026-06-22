@@ -61,7 +61,7 @@ public static class ConsentValidatorV3
         {
             if (requiresAgreement)
             {
-                AddError(transaction, requestV3.РежимЗапроса, orderNumber, Error.Code27_СonsentIsNull());
+                AddError(transaction, requestV3.РежимЗапроса, orderNumber, AnswerErrorCode.Code27_СonsentIsNull());
             }
 
             return;
@@ -70,7 +70,7 @@ public static class ConsentValidatorV3
         if (agreement.ДатаВыдачи > DateTime.Today)
         {
             AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                Error.Code13_СonsentDenied($"Дата выдачи согласия {agreement.ДатаВыдачи:dd.MM.yyyy} больше текущей даты"));
+                AnswerErrorCode.Code13_СonsentDenied($"Дата выдачи согласия {agreement.ДатаВыдачи:dd.MM.yyyy} больше текущей даты"));
             return;
         }
 
@@ -80,7 +80,7 @@ public static class ConsentValidatorV3
                 if (DateTime.Today >= agreement.ДатаВыдачи.AddMonths(6).AddDays(1))
                 {
                     AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                        Error.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 6 месяцев) меньше текущей даты"));
+                        AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 6 месяцев) меньше текущей даты"));
                 }
 
                 return;
@@ -89,7 +89,7 @@ public static class ConsentValidatorV3
                 if (DateTime.Today >= agreement.ДатаВыдачи.AddMonths(12).AddDays(1))
                 {
                     AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                        Error.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 12 месяцев) меньше текущей даты"));
+                        AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 12 месяцев) меньше текущей даты"));
                 }
 
                 return;
@@ -98,7 +98,7 @@ public static class ConsentValidatorV3
                 if (requiresAgreement && agreement.Договор is null)
                 {
                     AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                        Error.Code15_InvalidRequestData("Элемент \"Договор\" обязателен, когда значение атрибута \"СрокДействия\" равно \"3\""));
+                        AnswerErrorCode.Code15_InvalidRequestData("Элемент \"Договор\" обязателен, когда значение атрибута \"СрокДействия\" равно \"3\""));
                     return;
                 }
 
@@ -110,7 +110,7 @@ public static class ConsentValidatorV3
                 if (agreement.Договор is not null && agreement.Договор.Дата > DateTime.Today)
                 {
                     AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                        Error.Code13_СonsentDenied($"Дата договора {agreement.Договор.Дата:dd.MM.yyyy} больше текущей даты"));
+                        AnswerErrorCode.Code13_СonsentDenied($"Дата договора {agreement.Договор.Дата:dd.MM.yyyy} больше текущей даты"));
                 }
 
                 return;
@@ -121,7 +121,7 @@ public static class ConsentValidatorV3
         QBCHProcessingTransaction transaction,
         СправочникРежимыЗапросаV3 requestMode,
         int orderNumber,
-        Error error)
+        AnswerErrorCode error)
     {
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {

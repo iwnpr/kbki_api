@@ -63,10 +63,10 @@ public static class AdditionalValidator
                 switch (transaction.ClentRequest.Request.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                         break;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                         break;
                 }
 
@@ -87,10 +87,10 @@ public static class AdditionalValidator
                 switch (transaction.ClentRequest.Request.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                         break;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                         break;
                 }
             }
@@ -109,10 +109,10 @@ public static class AdditionalValidator
                 switch (transaction.ClentRequest.Request.РежимЗапроса)
                 {
                     case СправочникРежимыЗапроса.Single:
-                        transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                        transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                         break;
                     case СправочникРежимыЗапроса.Package:
-                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                        transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                         break;
                 }
             }
@@ -133,10 +133,10 @@ public static class AdditionalValidator
                     switch (transaction.ClentRequest.Request.РежимЗапроса)
                     {
                         case СправочникРежимыЗапроса.Single:
-                            transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                            transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                             break;
                         case СправочникРежимыЗапроса.Package:
-                            transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                            transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                             break;
                     }
                 }
@@ -183,10 +183,10 @@ public static class AdditionalValidator
                         switch (transaction.ClentRequest.Request.РежимЗапроса)
                         {
                             case СправочникРежимыЗапроса.Single:
-                                transaction.RiseCriticalError(Error.Code15_InvalidRequestData(er));
+                                transaction.RiseCriticalError(AnswerErrorCode.Code15_InvalidRequestData(er));
                                 break;
                             case СправочникРежимыЗапроса.Package:
-                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, Error.Code15_InvalidRequestData(er));
+                                transaction.SetPacakgeValidationError(запросСведений.ПорядковыйНомер, AnswerErrorCode.Code15_InvalidRequestData(er));
                                 break;
                         }
                     }
