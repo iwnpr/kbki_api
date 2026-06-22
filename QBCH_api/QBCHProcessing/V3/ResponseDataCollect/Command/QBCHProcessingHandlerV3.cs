@@ -53,13 +53,18 @@ public class QBCHProcessingHandlerV3(
 
         if (input is null)
         {
-            var error = Error.Code99_OtherError("Не удалось получить данные запроса API 3.0");
+            var error = Error.Code99_OtherError("Не удалось получить данные запроса");
             var nullRequestTicket = _ticketService.CreateResultV3Error(error);
             var nullRequestTicketBytes = _xmlService.SerializeAsByteV3(nullRequestTicket);
 
             transaction.Complete(nullRequestTicketBytes, _cryptoService.SignMsg(nullRequestTicketBytes));
             return transaction;
         }
+
+        var requestId = input.ИдентификаторЗапроса;
+        var requestDate = input.ДатаЗапроса;
+        var requestType = input.ТипЗапроса;
+        var requestMode = input.РежимЗапроса;
 
         byte[]? responseXml = null;
 
@@ -75,7 +80,7 @@ public class QBCHProcessingHandlerV3(
                     };
 
                     // Item2 в API 3.0 — запрос "во все КБКИ".
-                    if (input.ТипЗапроса == СправочникСпособыЗапроса.Item2)
+                    if (requestType == СправочникСпособыЗапроса.Item2)
                     {
                         _qbchList.ForEach(qbch =>
                         {
@@ -84,13 +89,7 @@ public class QBCHProcessingHandlerV3(
                     }
 
                     var results = await Task.WhenAll(tasks);
-                    responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, input, request.OurBureauPSRN);
-                }
-                catch (OperationCanceledException ex)
-                {
-                    _logger.LogWarning(ex, "Выполнение запроса QBCH API 3.0 отменено по таймауту");
-
-                    await StoreProcessingErrorAsync(transaction, Error.Code18_WaitForResponseExpired());
+                    responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, input, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
                 }
                 catch (Exception ex)
                 {
@@ -108,17 +107,16 @@ public class QBCHProcessingHandlerV3(
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            _logger.LogError(ex, "Время проверки превысило {ImmediateResponseDeadlineMs} миллисекунд.", request.ImmediateResponseDeadlineMs);
-            return await CompleteAcceptedTransactionAsync(transaction, input);
+            _logger.LogWarning(ex, "Время проверки превысило {ImmediateResponseDeadlineMs} миллисекунд.", request.ImmediateResponseDeadlineMs);
+            return await CompleteAcceptedTransactionAsync(transaction, requestId, requestDate);
         }
-        catch (OperationCanceledException ex)
+        catch (Exception ex)
         {
-            _logger.LogError(ex, "Время проверки превысило {ImmediateResponseDeadlineMs} миллисекунд.", request.ImmediateResponseDeadlineMs);
-            await StoreProcessingErrorAsync(transaction, Error.Code18_WaitForResponseExpired());
-            return await CompleteAcceptedTransactionAsync(transaction, input);
+            _logger.LogCritical(ex, "Ошибка выполнения запроса QBCH API 3.0");
+            return await CompleteAcceptedTransactionAsync(transaction, requestId, requestDate);
         }
 
-        return await CompleteAcceptedTransactionAsync(transaction, input);
+        return await CompleteAcceptedTransactionAsync(transaction, requestId, requestDate);
     }
 
     private async Task StoreProcessingErrorAsync(QBCHProcessingTransaction transaction, Error error)
@@ -136,15 +134,19 @@ public class QBCHProcessingHandlerV3(
         QBCHTaskResult[] results,
         QBCHProcessingTransaction transaction,
         ЗапросСведений input,
-        string ourBureauPsrn)
+        string ourBureauPsrn,
+        string requestId,
+        DateTime requestDate,
+        СправочникСпособыЗапроса requestType,
+        СправочникРежимыЗапроса requestMode)
     {
         var response = new ОтветНаЗапросСведений
         {
-            ИдентификаторЗапроса = input.ИдентификаторЗапроса,
+            ИдентификаторЗапроса = requestId,
             ИдентификаторОтвета = transaction.Id.ToString(),
-            ДатаЗапроса = input.ДатаЗапроса.ToString("yyyy-MM-dd"),
-            РежимЗапроса = input.РежимЗапроса,
-            ТипОтвета = input.ТипЗапроса,
+            ДатаЗапроса = requestDate.ToString("yyyy-MM-dd"),
+            РежимЗапроса = requestMode,
+            ТипОтвета = requestType,
             ОГРН = ourBureauPsrn,
             Сведения = (input.Запрос ?? [])
                 .Select(x => new ОтветНаЗапросСведенийСведения
@@ -193,7 +195,7 @@ public class QBCHProcessingHandlerV3(
         return responseXml;
     }
 
-    private async Task<QBCHProcessingTransaction> CompleteAcceptedTransactionAsync(QBCHProcessingTransaction transaction, ЗапросСведений input)
+    private async Task<QBCHProcessingTransaction> CompleteAcceptedTransactionAsync(QBCHProcessingTransaction transaction, string requestId, DateTime requestDate)
     {
         var acceptedCreatedAtUtc = DateTimeOffset.UtcNow;
         var firstPollAllowedAtUtc = acceptedCreatedAtUtc.AddSeconds(_contractRules.MinAnswerPollingIntervalSeconds);
@@ -202,9 +204,9 @@ public class QBCHProcessingHandlerV3(
         var readyTimeMs = Math.Max(1L, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
 
         var acceptedTicket = _ticketService.CreateResultV3Accepted(
-            requestId: input.ИдентификаторЗапроса,
+            requestId: requestId,
             responseId: transaction.Id.ToString(),
-            requestDate: input.ДатаЗапроса,
+            requestDate: requestDate,
             readyTime: readyTimeMs);
 
         await SaveAcceptedPollingMetadataAsync(

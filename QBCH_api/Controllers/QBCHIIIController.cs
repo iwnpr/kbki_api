@@ -504,7 +504,7 @@ public class QBCHIIIController(IMediator mediator,
                 return errorResult.ActionResult;
             }
 
-            var isDateValid = !_validationServiceV3.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult);
+            var isDateValid = _validationServiceV3.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult);
 
             if (!isDateValid & dateValidationResult is not null)
             {

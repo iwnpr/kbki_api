@@ -42,7 +42,7 @@ public class QBCHServiceV3(
     private readonly ApiV3ContractOptions _contractOptions = contractOptions;
     private readonly ApiV3ContractRules _contractRules = contractRules;
     private readonly string _ourBureauPsrn = config.GetValue<string>("Bureau:PSRN") ?? string.Empty;
-    private readonly string _ourBureauInn = config.GetValue<string>("Bureau:INN") ?? string.Empty;
+    private readonly string _ourBureauItn = config.GetValue<string>("Bureau:ITN") ?? string.Empty;
     private readonly int _qbchTicketTimeoutMs = config.GetValue<int>("APIConfiguration:QBCHTicketTimeoutMs", 4000);
     private readonly int _qbchTicketDelayMs = config.GetValue<int>("APIConfiguration:QBCHTicketDelayMs", 1000);
     private readonly int _qbchResponseTimeoutMs = config.GetValue<int>("APIConfiguration:QBCHResponseTimeoutMs", 10000);
@@ -188,7 +188,7 @@ public class QBCHServiceV3(
             {
                 Item = new ЗапросСведенийАбонентЮридическоеЛицо
                 {
-                    ИНН = _ourBureauInn,
+                    ИНН = _ourBureauItn,
                     ОГРН = _ourBureauPsrn
                 }
             },
@@ -233,7 +233,7 @@ public class QBCHServiceV3(
                             var answerValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_answer.xsd", redisMsg, ticketCheckCts.Token);
                             if (answerValidation.IsError)
                             {
-                                dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, answerValidation.ErrorCode.ToString(), answerValidation.Error ?? "Ошибка валидации", orderNumbers, guid, request);
+                                dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, answerValidation.ErrorCode.ToString(), answerValidation.Error ?? "Ошибка валидации", orderNumbers, guid, externalRequest);
                                 break;
                             }
 
@@ -312,8 +312,7 @@ public class QBCHServiceV3(
         await _storageService.AddHash("dlrequest", $"{guid}:{bureau.ogrn}", "response_id", responseId);
 
         var timeLeftMs = _qbchResponseTimeoutMs * (externalRequest.Запрос?.Length ?? 1)
-            - ticketTimer.ElapsedMilliseconds
-            - transaction.TimeElapsedForValidation.ElapsedMilliseconds;
+            - ticketTimer.ElapsedMilliseconds;
 
         using var resendCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(Math.Max(100, timeLeftMs)));
 

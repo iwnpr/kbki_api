@@ -5,11 +5,9 @@ using Npgsql;
 using NpgsqlTypes;
 using NRedisStack.Search;
 using Qbch_db_lib.Services.Interfaces.V3;
-using qbch_lib.domain.errors;
 using QBCH_lib.Configuration;
 using System.Collections;
 using System.Data;
-using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 
@@ -195,8 +193,8 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
     /// <param name="subjectIds">Идентификаторы субъектов.</param>
     /// <param name="timeLeftMs">Оставшееся время выполнения, мс.</param>
     /// <returns>XML с обязательствами для прямого маппинга в ответ 3.0.</returns>
-    public async Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long timeLeftMs)
-    { 
+    public async Task<XElement?> GetCalculationOfAmpV3(List<long> subjectIds, long? timeLeftMs = null)
+    {
         var procName = _config.GetValue<string>("QbchCalcOfAmpV3:Procedures:CalculationOfAmp");
 
         if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchCalcOfAmpV3) || subjectIds.Count == 0)
@@ -205,10 +203,10 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         }
 
         var sql = $"SELECT {_schemaQbchCalcOfAmpV3}.{procName}(@subj_id)";
-        var value = await ExecuteScalarAsync(sql, procName, _calcOfAmpConnectionPool, timeLeftMs, cmd =>
+        var value = await ExecuteScalarAsync(sql, procName, _calcOfAmpConnectionPool, timeLeftMs ?? _calcOfAmpTimeout, cmd =>
         {
             cmd.Parameters.AddWithValue("subj_id", NpgsqlDbType.Array | NpgsqlDbType.Bigint, subjectIds);
-        }, procName);
+        }, nameof(GetCalculationOfAmpV3));
 
         if (value is string xml && !string.IsNullOrWhiteSpace(xml))
         {
@@ -224,14 +222,28 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
     /// <param name="subjectIds">Идентификаторы субъектов.</param>
     /// <param name="timeLeftMs">Оставшееся время выполнения, мс.</param>
     /// <returns>XML с блоком самозапрета для прямого маппинга в ответ 3.0.</returns>
-    public Task<XElement?> GetSelfProhibitionV3(List<long> subjectIds, long? timeLeftMs = null)
-        => ExecuteXmlProcedureV3(
-            _config.GetValue<string>("QbchSelfProhibitionV3:Procedures:GetSelfProhibition"),
-            _schemaQbchSelfProhibitionV3,
-            _selfProhibitionConnectionPool,
-            subjectIds,
-            timeLeftMs ?? _selfProhibitionTimeout,
-            "GetSelfProhibitionV3");
+    public async Task<XElement?> GetSelfProhibitionV3(List<long> subjectIds, long? timeLeftMs = null)
+    {
+        var procName = _config.GetValue<string>("QbchSelfProhibitionV3:Procedures:GetSelfProhibition");
+
+        if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchSelfProhibitionV3) || subjectIds.Count == 0)
+        {
+            return null;
+        }
+
+        var sql = $"SELECT {_schemaQbchSelfProhibitionV3}.{procName}(@subj_id)";
+        var value = await ExecuteScalarAsync(sql, procName, _selfProhibitionConnectionPool, timeLeftMs ?? _selfProhibitionTimeout, cmd =>
+        {
+            cmd.Parameters.AddWithValue("subj_id", NpgsqlDbType.Array | NpgsqlDbType.Bigint, subjectIds);
+        }, nameof(GetSelfProhibitionV3));
+
+        if (value is string xml && !string.IsNullOrWhiteSpace(xml))
+        {
+            return XElement.Parse(xml);
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Возвращает антифрод-записи по дате рождения и ИНН субъекта.
@@ -252,7 +264,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         var procedureFullName = procName.Contains('.') || string.IsNullOrWhiteSpace(_schemaQbchAntifraudV3)
             ? procName
             : $"{_schemaQbchAntifraudV3}.{procName}";
-
+        
         var sql = $"SELECT {procedureFullName}(@p_birth, @p_tax_num)";
 
         var value = await ExecuteScalarAsync(sql, procName, _antifraudConnectionPool, timeLeftMs ?? _antifraudTimeout, cmd =>
@@ -260,13 +272,14 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                 cmd.Parameters.AddWithValue("p_birth", NpgsqlDbType.Date, birthDate.Date);
                 cmd.Parameters.AddWithValue("p_tax_num", NpgsqlDbType.Text, inn);
             },
-            "GetAntifraudV3");
+            nameof(GetAntifraudV3));
 
-        var xml = value is string xmlString && !string.IsNullOrWhiteSpace(xmlString)
-            ? XElement.Parse(xmlString)
-            : null;
+        if (value is string xml && !string.IsNullOrWhiteSpace(xml))
+        {
+            return XElement.Parse(xml);
+        }
 
-        return xml;
+        return null;
     }
 
     /// <summary>
@@ -595,33 +608,6 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         }, nameof(AppealStageExistsForSubjectsV3));
 
         return value is bool b ? b : null;
-    }
-
-    private async Task<XElement?> ExecuteXmlProcedureV3(
-        string? procName,
-        string? schema,
-        string[] connectionPool,
-        List<long> subjectIds,
-        long timeoutMs,
-        string operationName)
-    {
-        if (string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(schema) || subjectIds.Count == 0)
-        {
-            return null;
-        }
-
-        var sql = $"SELECT {schema}.{procName}(@subj_id)";
-        var value = await ExecuteScalarAsync(sql, procName, connectionPool, timeoutMs, cmd =>
-        {
-            cmd.Parameters.AddWithValue("subj_id", NpgsqlDbType.Array | NpgsqlDbType.Bigint, subjectIds);
-        }, operationName);
-
-        if (value is string xml && !string.IsNullOrWhiteSpace(xml))
-        {
-            return XElement.Parse(xml);
-        }
-
-        return null;
     }
 
     private static string? NormalizeServiceNameForAccessCheck(string serviceName)
