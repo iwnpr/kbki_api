@@ -13,9 +13,4 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="6.0.0" />
     <PackageReference Include="Polly" Version="8.6.6" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Modules\" />
-  </ItemGroup>
-
 </Project>

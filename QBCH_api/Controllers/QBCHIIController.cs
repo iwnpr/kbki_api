@@ -17,7 +17,6 @@ using QBCH_lib.domain.aggregate;
 using QBCH_lib.qcb_xml.v2_0.Enums;
 using QBCH_lib.Services.Interfaces;
 using QBCHService_lib.Services.Interfaces;
-using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using XmlService_lib.Services.Interfaces;

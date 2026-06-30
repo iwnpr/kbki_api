@@ -81,17 +81,18 @@ public static class XMLRequestCollectionValidatorV3
                 "Порядковый номер запроса в пакете должен быть уникальным");
         }
 
-        for (var i = 1; i < parsedOrders.Count; i++)
-        {
-            var previousOrder = parsedOrders[i - 1].OrderNumber;
-            var currentOrder = parsedOrders[i].OrderNumber;
+        //NOTE: Изменения в постановке ЦБ по сравнению со второй версией нет. Прямого требования делать эту проверку в постановке нет. Во второй версии эта проверка отсутствует. Маша сказала лучше убрать эту проверку.
+        //for (var i = 1; i < parsedOrders.Count; i++)
+        //{
+        //    var previousOrder = parsedOrders[i - 1].OrderNumber;
+        //    var currentOrder = parsedOrders[i].OrderNumber;
 
-            if (currentOrder != previousOrder + 1)
-            {
-                AddPackageErrorIfMissing(transaction, currentOrder,
-                    "Порядковые номера запросов в пакете должны идти подряд без пропусков");
-            }
-        }
+        //    if (currentOrder != previousOrder + 1)
+        //    {
+        //        AddPackageErrorIfMissing(transaction, currentOrder,
+        //            "Порядковые номера запросов в пакете должны идти подряд без пропусков");
+        //    }
+        //}
     }
 
     private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)

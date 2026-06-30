@@ -32,7 +32,6 @@ public class QBCHProcessingCompleteHandler : INotificationHandler<QBCHProcessing
             var key = $"QBCH:{transaction.ServiceName}:{transaction.Id}";
             var processigResultData = await ConstractResultData(transaction);
             await _redisCache.AddHashArray(transaction.ServiceName, transaction.Id.ToString(), processigResultData);
-            await _redisCache.TrySetKeyExpiration(transaction.ServiceName, transaction.Id.ToString(), _contractOptions.ResponseRetentionHours * 60L, cancellationToken);
 
             // Попытка отправки в кафку                    
             if (!await _kafka.Produce(new Message<Null, string> { Value = key })) // 1.3 - 2.0 разделить

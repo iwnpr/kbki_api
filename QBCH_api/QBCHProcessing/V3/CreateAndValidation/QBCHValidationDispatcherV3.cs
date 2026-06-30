@@ -151,10 +151,15 @@ public static class QBCHValidationDispatcherV3
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
             return;
 
+        var requestV3 = transaction.GetRequest<ЗапросСведенийV3>();
+
+        if (requestV3 is null)
+            transaction.RiseCriticalError(AnswerErrorCode.Code99_OtherError("Отсутствуют данные запроса"));
+
         var requestINN = transaction.ClentRequest?.RequestINN;
         var requestOGRN = transaction.ClentRequest?.RequestOGRN;
-        var abonentINN = transaction.ClentRequest?.Request?.Абонент?.Requisites?.inn;
-        var abonentOGRN = transaction.ClentRequest?.Request?.Абонент?.Requisites?.ogrn;
+
+        var (abonentINN, abonentOGRN) = GetAbonentRequisitesV3(requestV3);
 
         // ИНН и ОГРН из сертификата сравнивается с ИНН и ОГРН в запросе
         if (requestINN != abonentINN || requestOGRN != abonentOGRN)

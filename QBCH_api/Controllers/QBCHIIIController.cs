@@ -2,7 +2,6 @@
 using Cache_lib.Interfaces;
 using CertManagement.Services.Interfaces;
 using Confluent.Kafka;
-
 //using Confluent.Kafka;
 using Crypto_lib.Service;
 using KafkaService_lib.Services.Interfaces;
@@ -13,6 +12,7 @@ using QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 using QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
 using QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 using QBCH_api.Services.Interfaces.V3;
+using qbch_lib;
 using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
@@ -22,7 +22,6 @@ using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
-using qbch_lib;
 using XmlService_lib.Services.Interfaces.V3;
 using АбонентИно = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
 using АбонентИП = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
@@ -42,7 +41,6 @@ public class QBCHIIIController(IMediator mediator,
         ITicketServiceV3 ticketServiceV3,
         IDlPutServiceV3 dlPutServiceV3,
         ICertManagementService certManagement,
-        //NOTE: Вернул запись в Kafka
         IKafkaService kafka,
         ApiV3ContractRules contractRules,
         IConfiguration config) : ControllerBase
@@ -57,8 +55,6 @@ public class QBCHIIIController(IMediator mediator,
     private readonly IDlPutServiceV3 _dlPutServiceV3 = dlPutServiceV3;
     private readonly ICertManagementService _certManagement = certManagement;
     private readonly ApiV3ContractRules _contractRules = contractRules;
-    private readonly IConfiguration _config = config;
-    //NOTE: Вернул запись в Kafka
     private readonly IKafkaService _kafka = kafka;
 
     private readonly string? _kafkaTopic = config.GetValue<string>("KafkaService:Topic");
@@ -66,9 +62,6 @@ public class QBCHIIIController(IMediator mediator,
     private readonly string? _ourBureauName = config.GetValue<string>("Bureau:Name");
 
     private const string DlPutAnswerV3ReadyField = "putanswer_v3_response_xml";
-    /// <summary>
-    /// Флаг Redis о наличии сохранённого ответа для /dlputanswer версии 3.
-    /// </summary>
     private const string DlPutAnswerV3ExistsField = "putanswer_v3_exists";
     private const string ReadyAtUtcField = "ready_at_utc";
     private const string ReadyAtMskField = "ready_at_msk";
@@ -119,7 +112,7 @@ public class QBCHIIIController(IMediator mediator,
 
             // Если все значения валидные — пишет их в Redis
             if (!string.IsNullOrWhiteSpace(requestId) && !string.IsNullOrWhiteSpace(requestOgrn) && requestDate.HasValue)
-                await _storageService.AddUniqueRequestId( RedisConstants.DlRequestV3Scope, requestId, requestOgrn, requestDate.Value);
+                await _storageService.AddUniqueRequestId(RedisConstants.DlRequestV3Scope, requestId, requestOgrn, requestDate.Value);
         }
         catch (Exception ex)
         {
@@ -134,8 +127,6 @@ public class QBCHIIIController(IMediator mediator,
         try
         {
             // Запускает основной pipeline обработки
-            //NOTE: Ну если количество параметров не совпадает с Артемом, то давай их на месте брать из конфига.
-            //NOTE: Отсутствующий _ourBureauPSRN это не опция, а серьезная ошибка конфига
             var processingResult = await _mediator.Send(new QBCHProcessedStartV3(transaction, _contractRules.ImmediateResponseDeadlineMs, _ourBureauPSRN!));
 
             Response.OnCompleted(async () => await _mediator.Publish(new QBCHProcessingCompleteV3(processingResult)));
@@ -143,9 +134,6 @@ public class QBCHIIIController(IMediator mediator,
             //NOTE: Изменил логику на артемовскую и экранировал логирование
             if (processingResult.Status == QBCHProcessingStatus.Accepted)
             {
-                //var statusCode = DetermineTicketStatusCode(processingResult.Response.TicketXML!);
-                //Response.StatusCode = statusCode;
-                //LogActionEnd(nameof(DlRequest_v_3), transaction.Id, statusCode, actionStopwatch.Elapsed);
                 LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status202Accepted, actionStopwatch.Elapsed);
                 return Accepted(new MemoryStream(processingResult.Response.SignedTicket!));
             }
@@ -177,12 +165,12 @@ public class QBCHIIIController(IMediator mediator,
                 });
 
                 // Попытка отправки в кафку                    
-                if (!await _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic)) // 1.3 - 2.0 разделить
+                if (!await _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic))
                     _logger.LogCritical("Lost key:{key}", transaction.Id);
             }
             catch (Exception e)
             {
-                _logger.LogCritical(e, "Критическая ошибка записи в redis");
+                _logger.LogCritical(e, "Критическая ошибка записи сообщения в kafka");
             }
 
             _logger.LogError(ex, "Ошибка формирования HTTP-ответа для идентификатора {Id}", transaction.Id);
@@ -301,7 +289,7 @@ public class QBCHIIIController(IMediator mediator,
                         serviceName,
                         guid,
                         16,
-                        "Данные по указанному идентификатору не найдены",
+                        "Указан некорректный идентификатор ответа",
                         StatusCodes.Status400BadRequest);
 
                     //NOTE: Убираю назначение переменных, оставшеся от Артема
@@ -312,51 +300,12 @@ public class QBCHIIIController(IMediator mediator,
                     return errorResult.ActionResult;
                 }
 
-                //NOTE: Не нашел положения из нормативки, предписиывающего эту логику
-                //await _storageService.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
-
-                //NOTE: Описание про 1 секунду после Ответ не Готов из норматики очень странное, и не факт, что нам надо это реализовывать.
-                //var nowUtc = DateTimeOffset.UtcNow;
-                //var firstPollAllowedAtUtc = await GetFirstPollAllowedAtUtcAsync(DlRequestV3Scope, id);
-
-                //if (firstPollAllowedAtUtc.HasValue && nowUtc < firstPollAllowedAtUtc.Value)
-                //{
-                //    var minIntervalSec = _contractRules.MinAnswerPollingIntervalSeconds;
-                //    _logger.LogWarning("Нарушение polling-ограничения /dlanswer v3 id={id}. Первый опрос разрешён с {firstPollAllowedAtUtc}, текущее UTC={nowUtc}.", id, firstPollAllowedAtUtc.Value, nowUtc);
-
-                //    await _storageService.AddHash(DlRequestV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
-                //    await _storageService.AddHash(DlRequestV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
-                //    await _storageService.ListSet([serviceName, "polling_violations", id], $"{nowUtc:O}|{ipAddress ?? "-"}|min_interval={minIntervalSec}s");
-                //    await _storageService.TrySetKeyExpiration(serviceName, $"polling_violations:{id}", _contractRules.ResponseRetentionMinutes);
-
-                //    var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 12, "Ответ не готов", ResolveDlAnswerStatusCodeByErrorCode(12));
-
-                //    responseXml = errorResult.ResponseXml;
-                //    signedResponse = errorResult.SignedResponse;
-
-                //    LogActionEnd(nameof(DlAnswer_v_3), id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
-                //    return errorResult.ActionResult;
-                //}
-
-                //if (_storageService.TryGetHashValue(DlRequestV3Scope, id, LastPollUtcField, out var lastPollRaw) &&
-                //    DateTimeOffset.TryParse(lastPollRaw?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var lastPollUtc) &&
-                //    !_contractRules.IsAnswerRetryAllowed(lastPollUtc, nowUtc))
-                //{
-                //    var minIntervalSec = _contractRules.MinAnswerPollingIntervalSeconds;
-                //    _logger.LogWarning("Нарушение polling-ограничения /dlanswer v3 id={id}. Последний опрос={lastPollUtc}, текущий UTC={nowUtc}, min={interval} сек.", id, lastPollUtc, nowUtc, minIntervalSec);
-                //    await _storageService.AddHash(DlRequestV3Scope, id, "polling_violation_utc", nowUtc.ToString("O"));
-                //    await _storageService.AddHash(DlRequestV3Scope, id, "polling_violation_ip", ipAddress ?? "-");
-                //}
-                //await _storageService.AddHash(DlRequestV3Scope, id, LastPollUtcField, nowUtc.ToString("O"));
-                //await _storageService.TrySetKeyExpiration(DlRequestV3Scope, id, _contractRules.ResponseRetentionMinutes);
-
                 await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
                 if (_storageService.TryGetHash(RedisConstants.DlRequestV3Scope, id, "qbch_tasks_aggregate_xml", out responseXml))
                 {
                     signedResponse = _cryptoService.SignMsg(responseXml);
-                    //NOTE поправил на код Артема
-                    return Accepted(new MemoryStream(signedResponse));
+                    return File(signedResponse, "application/octet-stream");
                 }
 
                 var error = AnswerErrorCode.Code12_ResponseIsIncomplete();
@@ -386,9 +335,8 @@ public class QBCHIIIController(IMediator mediator,
                     await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
                 await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-                //NOTE: Убрал странную логику
-                //await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
                 LogActionEnd(nameof(DlAnswer_v_3), guid, Response.StatusCode, actionStopwatch.Elapsed);
+
                 //NOTE: Вернул запись в Кафку
                 await _kafka.Produce(new Message<Null, string> { Value = $"QBCH:{serviceName}:{guid}" }, _kafkaTopic);
             }
@@ -515,7 +463,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!isXmlValid && xsdValidationResult is not null)
             {
                 var error = new AnswerErrorCode(xsdValidationResult.ErrorCode, xsdValidationResult.Error);
-    
+
                 var ticket = _ticketServiceV3.CreateResultV3Error(error);
                 responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                 signedResponse = _cryptoService.SignMsg(responseXml);
@@ -640,7 +588,6 @@ public class QBCHIIIController(IMediator mediator,
                     await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, FirstPollAllowedAtUtcField, firstPollAllowedAtUtc.ToString("O"));
                     await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, ResponseExpireAtUtcField, responseExpireAtUtc.ToString("O"));
                     await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, "response_guid", acceptedResponseId.ИдентификаторОтвета);
-                    await _storageService.TrySetKeyExpiration(serviceName, acceptedResponseId.ИдентификаторОтвета, _contractRules.ResponseRetentionMinutes);
                     await _storageService.AddHash(serviceName, guid, "response_guid", acceptedResponseId.ИдентификаторОтвета);
                 }
                 else
@@ -658,7 +605,6 @@ public class QBCHIIIController(IMediator mediator,
             await _storageService.AddUniqueRequestId(serviceName, requestId, requestOgrn, requestV3.ДатаЗапроса);
             await _storageService.AddHash(serviceName, dlPutResult.ReadyResult!.ИдентификаторОтвета, DlPutAnswerV3ReadyField, responseXml);
             await _storageService.AddHash(serviceName, dlPutResult.ReadyResult.ИдентификаторОтвета, DlPutAnswerV3ExistsField, "1");
-            await _storageService.TrySetKeyExpiration(serviceName, dlPutResult.ReadyResult.ИдентификаторОтвета, _contractRules.ResponseRetentionMinutes);
             await _storageService.AddHash(serviceName, guid, "response_guid", dlPutResult.ReadyResult.ИдентификаторОтвета);
 
             return File(signedResponse, "application/octet-stream");
@@ -692,7 +638,6 @@ public class QBCHIIIController(IMediator mediator,
                 await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
             await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
             LogActionEnd(nameof(DlPut_v_3), guid, Response.StatusCode, actionStopwatch.Elapsed);
         }
     }
@@ -799,7 +744,6 @@ public class QBCHIIIController(IMediator mediator,
                 return errorResult.ActionResult;
             }
 
-            await _storageService.TrySetKeyExpiration(RedisConstants.DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
             var nowUtc = DateTimeOffset.UtcNow;
             var firstPollAllowedAtUtc = await GetFirstPollAllowedAtUtcAsync(RedisConstants.DlPutV3Scope, id);
 
@@ -821,7 +765,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             await _storageService.AddHash(RedisConstants.DlPutV3Scope, id, LastPollUtcField, nowUtc.ToString("O"));
-            await _storageService.TrySetKeyExpiration(RedisConstants.DlPutV3Scope, id, _contractRules.ResponseRetentionMinutes);
 
             if (_storageService.TryGetHash(RedisConstants.DlPutV3Scope, id, DlPutAnswerV3ReadyField, out responseXml))
             {
@@ -856,7 +799,6 @@ public class QBCHIIIController(IMediator mediator,
                 await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
             await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
             LogActionEnd(nameof(DlPutAnswer_v_3), guid, Response.StatusCode, actionStopwatch.Elapsed);
         }
     }
@@ -1055,7 +997,6 @@ public class QBCHIIIController(IMediator mediator,
                 await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
             await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
             LogActionEnd(nameof(CertAdd_v_3), guid, Response.StatusCode, actionStopwatch.Elapsed);
         }
     }
@@ -1244,7 +1185,6 @@ public class QBCHIIIController(IMediator mediator,
                 await _storageService.AddHash(serviceName, guid, "validation_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
             await _storageService.AddHash(serviceName, guid, "response_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
-            await _storageService.TrySetKeyExpiration(serviceName, guid, _contractRules.ResponseRetentionMinutes);
         }
     }
 

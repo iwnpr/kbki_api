@@ -5,6 +5,7 @@ namespace QBCH.Lib.qcb_xml.v3_0
 {
     public partial class ТипСумма
     {
+        [System.Xml.Serialization.XmlIgnore]
         public decimal ЗначениеДесятичное
         {
             get => decimal.Parse(Value, CultureInfo.InvariantCulture);

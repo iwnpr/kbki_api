@@ -16,9 +16,9 @@ namespace QBCH.Lib.qcb_xml.v3_0
         private ItemsChoiceType[] itemsElementNameField;
         
         private string оГРНField;
-        
-        private System.DateTime поСостояниюНаField;
-        
+
+        private string поСостояниюНаField;   //NOTE: поменяли System.DateTime на string, но так делать плохо
+
         private string идентификаторОтветаField;
         
         private ОтветНаЗапросСведенийСведенияКБКИПризнакНаличияКИ признакНаличияКИField;
@@ -71,7 +71,8 @@ namespace QBCH.Lib.qcb_xml.v3_0
         
         /// <remarks/>
         [System.Xml.Serialization.XmlAttributeAttribute()]
-        public System.DateTime ПоСостояниюНа {
+        public string ПоСостояниюНа
+        {    //NOTE: поменяли System.DateTime на string, но так делать плохо
             get {
                 return this.поСостояниюНаField;
             }

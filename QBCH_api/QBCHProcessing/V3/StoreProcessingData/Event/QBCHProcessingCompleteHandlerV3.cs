@@ -2,19 +2,23 @@
 using Confluent.Kafka;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
+using Microsoft.Extensions.Options;
+using qbch_lib;
+using QBCH_lib.Configuration;
 using QBCH_lib.domain.aggregate;
 using System.Text;
 using System.Text.Json;
 
 namespace QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 
-public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandlerV3> logger, IKeyValueStorageService storageService, IKafkaService kafka) : INotificationHandler<QBCHProcessingCompleteV3>
+public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandlerV3> logger, IKeyValueStorageService storageService, IKafkaService kafka, IOptions<ApiV3ContractOptions> contractOptions) : INotificationHandler<QBCHProcessingCompleteV3>
 {
     private const string ApiVersion = "3.0";
 
     private readonly ILogger<QBCHProcessingCompleteHandlerV3> _logger = logger;
     private readonly IKeyValueStorageService _storageService = storageService;
     private readonly IKafkaService _kafka = kafka;
+    private readonly ApiV3ContractOptions _contractOptions = contractOptions.Value;
 
     public async Task Handle(QBCHProcessingCompleteV3 notification, CancellationToken cancellationToken)
     {
@@ -23,9 +27,9 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
         try
         {
             var resultData = await ConstructResultData(transaction);
-            await _storageService.AddHashArray(transaction.ServiceName, transaction.Id.ToString(), resultData);
+            await _storageService.AddHashArray(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), resultData);
 
-            var kafkaKey = $"QBCH:{transaction.ServiceName}:{transaction.Id}";
+            var kafkaKey = $"QBCH:{RedisConstants.DlRequestV3Scope}:{transaction.Id}";
             var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaKey });
 
             if (!isProduce)
@@ -93,7 +97,7 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
                 dict.Add("response_xml", transaction.Response.ResponseXML);
         }
 
-        if (!await _storageService.HashFieldExists(transaction.ServiceName, transaction.Id.ToString(), "ValidationTime"))
+        if (!await _storageService.HashFieldExists(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "ValidationTime"))
             dict.Add("validation_date_time", Encoding.UTF8.GetBytes(transaction.ValidateTime ?? DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff")));
 
         return dict;

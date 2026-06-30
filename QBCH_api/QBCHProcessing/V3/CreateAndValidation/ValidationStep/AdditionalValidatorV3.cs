@@ -1,15 +1,15 @@
-﻿using System.Text.RegularExpressions;
-using System.Xml.Linq;
+﻿using QBCH.Lib.qcb_xml.v3_0;
+using qbch_lib.domain.errors;
 using QBCH_lib.domain.aggregate;
-using СправочникРежимыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
-using СправочникДУЛV3 = QBCH.Lib.qcb_xml.v3_0.СправочникДУЛ;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using ЗапросСведенийЗапросV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийЗапрос;
-using ТипЦельКодЦелиV3 = QBCH.Lib.qcb_xml.v3_0.ТипЦельКодЦели;
-using ТипИПV3 = QBCH.Lib.qcb_xml.v3_0.ТипИП;
+using СправочникДУЛV3 = QBCH.Lib.qcb_xml.v3_0.СправочникДУЛ;
+using СправочникРежимыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 using ТипИностранныйПредпринимательV3 = QBCH.Lib.qcb_xml.v3_0.ТипИностранныйПредприниматель;
-using QBCH.Lib.qcb_xml.v3_0;
-using qbch_lib.domain.errors;
+using ТипИПV3 = QBCH.Lib.qcb_xml.v3_0.ТипИП;
+using ТипЦельКодЦелиV3 = QBCH.Lib.qcb_xml.v3_0.ТипЦельКодЦели;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 
@@ -21,6 +21,7 @@ public static class AdditionalValidatorV3
     private static readonly HashSet<ТипЦельКодЦелиV3> CreditTargets =
     [
         ТипЦельКодЦелиV3.Item1,
+        ТипЦельКодЦелиV3.Item11,
         ТипЦельКодЦелиV3.Item2,
         ТипЦельКодЦелиV3.Item3,
         ТипЦельКодЦелиV3.Item4,
@@ -85,7 +86,8 @@ public static class AdditionalValidatorV3
         ValidateSubjectBirthDate(transaction, requestMode, requestItem, orderNumber);
         ValidateSubjectDocumentsIssueDate(transaction, requestMode, requestItem, orderNumber);
         ValidateLoanObligations(transaction, requestMode, requestItem, orderNumber);
-        ValidateSnils(transaction, requestMode, requestItem, orderNumber);
+        //NOTE: Убрал проверку СНИЛС, так как поле старое и  аналогичная проверка есть в xsd
+        //ValidateSnils(transaction, requestMode, requestItem, orderNumber);
     }
 
     private static void ValidateDul999(

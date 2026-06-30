@@ -2,7 +2,6 @@
 using KafkaService_lib.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 using Polly;
 using Polly.Timeout;
 
@@ -47,6 +46,7 @@ namespace KafkaService_lib.Services.Implementation
 
         public bool IsAvailable()
         {
+            _logger.LogDebug("Kafka IsAvailable: проверка доступности брокера {bootstrapServers}", _bootstrapServers);
             using var adminClient = new AdminClientBuilder(new AdminClientConfig
             {
                 BootstrapServers = _bootstrapServers
@@ -54,12 +54,12 @@ namespace KafkaService_lib.Services.Implementation
 
             try
             {
-                // ReSharper disable once UnusedVariable
-                var meta = adminClient.GetMetadata(TimeSpan.FromSeconds(20));
+                var metaData = adminClient.GetMetadata(TimeSpan.FromSeconds(20));
+                _logger.LogDebug("Kafka IsAvailable: брокер доступен, brokers={brokerCount}", metaData.Brokers.Count);
             }
             catch (Exception e)
             {
-                _logger.LogCritical(e, "Error");
+                _logger.LogCritical(e, "Kafka IsAvailable: ошибка подключения к брокеру {bootstrapServers}", _bootstrapServers);
                 return false;
             }
 
@@ -68,6 +68,9 @@ namespace KafkaService_lib.Services.Implementation
 
         public async Task<bool> Produce(Message<Null, string> message, string? topic = null)
         {
+            var targetTopic = topic ?? _topic;
+            _logger.LogDebug("Kafka Produce (single): topic={topic}, valueLength={valueLength}", targetTopic, message.Value?.Length ?? 0);
+
             _producerMsg ??= new ProducerBuilder<Null, string>(new ProducerConfig
             {
                 BootstrapServers = _bootstrapServers,
@@ -91,7 +94,7 @@ namespace KafkaService_lib.Services.Implementation
                     _ => TimeSpan.FromMilliseconds(_produceRetryDelayMs),
                     (exception, delay, retryNumber, _) =>
                     {
-                        _logger.LogWarning(exception, "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Повтор через {delayMs} ms", message.Value, retryNumber, maxAttempts, (int)delay.TotalMilliseconds);
+                        _logger.LogWarning(exception, "Ошибка отправки в кафку {value}. Попытка {attempt}/{maxAttempts}. Повтор через {delayMs} ms", message.Value, retryNumber, maxAttempts, (int)delay.TotalMilliseconds);
                     });
 
             var policy = Policy.WrapAsync(timeoutPolicy, retryPolicy);
@@ -104,11 +107,12 @@ namespace KafkaService_lib.Services.Implementation
                     return true;
                 }, CancellationToken.None);
 
+                _logger.LogDebug("Kafka Produce успешно, сообщение отправлено: topic={topic}", topic);
                 return true;
             }
             catch (Exception e) when (e is ProduceException<Null, string> || e is TimeoutRejectedException)
             {
-                _logger.LogError(e, "Ошибка добавления в кафку {value}. Достигнут лимит ретраев/времени ({timeoutMs} ms)", message.Value, _produceRetryTotalTimeoutMs);
+                _logger.LogError(e, "Ошибка отправки в кафку {value}. Достигнут лимит ретраев/времени ({timeoutMs} ms)", message.Value, _produceRetryTotalTimeoutMs);
                 return false;
 
             }
@@ -116,6 +120,8 @@ namespace KafkaService_lib.Services.Implementation
 
         public async Task<bool> Produce(List<Message<string, string>> messages, string? topic = null)
         {
+            _logger.LogDebug("Kafka Produce (batch): messageCount={messageCount}, topic={topic}", messages.Count, topic ?? _topic);
+
             if (messages.Count == 0)
             {
                 _logger.LogDebug("Нет сообщений для отправки в кафку");
@@ -152,6 +158,8 @@ namespace KafkaService_lib.Services.Implementation
             }
 
             _producer.Flush(TimeSpan.FromSeconds(10));
+
+            _logger.LogDebug("Kafka Produce (batch) успешно: topic={topic}, messageCount={messageCount}", topic, messages.Count);
             return true;
         }
 

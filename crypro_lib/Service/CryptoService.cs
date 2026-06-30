@@ -39,6 +39,9 @@ namespace Crypto_lib.Service
         /// <returns>Результат проверки подписи</returns>
         public QBCH_lib.core.Result<CryptoServiceResult> ValidateMsg(byte[] msg, X509Certificate2? requestCert, byte[]? encodedSignature = null)
         {
+            _logger.LogDebug("Старт проверки подписи файла. Размер сообщения: {msgLength} байт, отсоединенная подпись: {hasDetachedSignature}, сертификат запроса: {hasRequestCert}", 
+                msg?.Length ?? 0, encodedSignature is not null, requestCert is not null);
+
             var result = new CryptoServiceResult();
 
             if (requestCert is null)
@@ -110,8 +113,9 @@ namespace Crypto_lib.Service
 
             List<AnswerErrorCode> errors = [];
 
-            while (enumerator.MoveNext()) //TODO нужно понять что тут происходит
+            while (enumerator.MoveNext())
             {
+                _logger.LogDebug("Обработка подписанта PKCS#7");
                 var current = enumerator.Current;
 
                 if (!IsValidCert)
@@ -150,11 +154,15 @@ namespace Crypto_lib.Service
             }
 
             if (!IsValidCert)
+            {
+                _logger.LogError("Валидная УЭП не найдена. Количество накопленных ошибок: {errorCount}", errors.Count);
                 return QBCH_lib.core.Result<CryptoServiceResult>.Failure(errors.First());
+            }
 
             result.Body = signedCms.ContentInfo.Content;
             result.SignedBody = msg;
 
+            _logger.LogDebug("ValidateMsg(Result) успешно завершен. Размер тела: {bodyLength} байт", result.Body?.Length ?? 0);
             return QBCH_lib.core.Result<CryptoServiceResult>.Success(result);
         }
 
@@ -166,6 +174,8 @@ namespace Crypto_lib.Service
         /// <returns>Результат проверки подписи</returns>
         public bool ValidateMsg(byte[] msg, X509Certificate2? requestCert, [NotNullWhen(false)] out CryptoServiceResult result, byte[]? encodedSignature = null)
         {
+            _logger.LogDebug("Старт проверки подписи файла. Размер сообщения: {msgLength} байт, отсоединенная подпись: {hasDetachedSignature}, сертификат запроса: {hasRequestCert}",
+                msg?.Length ?? 0, encodedSignature is not null, requestCert is not null);
             result = new CryptoServiceResult();
 
             if (requestCert is null)
@@ -188,8 +198,10 @@ namespace Crypto_lib.Service
             result.RequestOGRN = requestSubject.InnLE is not null ? requestSubject.Ogrn : requestSubject.OgrnIP ?? requestSubject.Ogrn;
             result.RequestThumbprint = requestCert.Thumbprint;
 
+            _logger.LogDebug("Субъект запроса разобран. ИНН: {inn}, ОГРН: {ogrn}, отпечаток: {thumbprint}", result.RequestINN, result.RequestOGRN, result.RequestThumbprint);
+
             /* 5. Истек срок действия сертификата УЭП.
-             * Дату сертификата необходимо проверять заранее, 
+             * Дату сертификата необходимо проверять заранее,
              * Т.к. метод validate у серфиса криптографии
              * Возвращает любые ошибки в виде exception
              * Это влечет за собой невозможность определния
@@ -197,6 +209,7 @@ namespace Crypto_lib.Service
              */
             if (requestCert?.NotAfter != null)
             {
+                _logger.LogDebug("Проверка срока действия сертификата. NotAfter: {notAfter}", requestCert.NotAfter);
                 if (requestCert.NotAfter <= DateTime.Now)
                 {
                     _logger.LogError("Истек срок сертификата УЭП");
@@ -219,15 +232,19 @@ namespace Crypto_lib.Service
                 // Для открепленной подписи требуется вызывать метод иначе
                 if (encodedSignature != null)
                 {
+                    _logger.LogDebug("Декодирование открепленной подписи");
                     var content = new ContentInfo(msg);
                     signedCms = new(content, true);
                     signedCms.Decode(encodedSignature);
                 }
                 else
                 {
+                    _logger.LogDebug("Декодирование присоединенной подписи");
                     signedCms = new();
                     signedCms.Decode(msg);
                 }
+
+                _logger.LogDebug("PKCS#7 сообщение успешно декодировано");
             }
             catch (Exception ex)
             {

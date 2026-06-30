@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using QBCH.Lib.qcb_xml.v3_0;
 using Qbch_db_lib.Services.Interfaces.V3;
+using qbch_lib;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
 using QBCH_lib.domain.aggregate;
@@ -13,7 +14,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using System.Xml.Linq;
-using qbch_lib;
 using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCHService_lib.Services.Implementations.V3;
@@ -89,9 +89,7 @@ public class QBCHServiceV3(
             var kbki = new ОтветНаЗапросСведенийСведенияКБКИ
             {
                 ОГРН = _ourBureauPsrn,
-                ПоСостояниюНа = DateTime.Now,
-                //NOTE: Артем идентификатор ответа при ошибках не заполнял. Не будем ломать эту практику. Перенес заполнение этого поля в ниже
-                //ИдентификаторОтвета = transaction.Id.ToString()
+                ПоСостояниюНа = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz")
             };
 
             var error = transaction.PackageValidationErrors.FirstOrDefault(x => x.Id.ToString() == requestItem.ПорядковыйНомер);
@@ -119,20 +117,43 @@ public class QBCHServiceV3(
 
             var xml = _xmlService.SerializeAsStringV3(template);
             var timer = Stopwatch.StartNew();
+
             var subjectKeys = await _qbchDb.GetSearchAllSubjectsV3(xml, timeLeft);
 
             timer.Stop();
             timeLeft -= timer.ElapsedMilliseconds;
 
-            var isSubjectFound = subjectKeys.Count != 0;
             var isInnVerified = IsInnVerified(requestItem.Субъект?.ИНН);
+
+            var includeAmp = package.КодСведений == СправочникВидыСведений.Item7;
             var includeAntifraud = package.КодСведений is СправочникВидыСведений.Item7 or СправочникВидыСведений.Item8;
 
-            var getAntifraudTask = includeAntifraud && isInnVerified
-                ? _qbchDb.GetAntifraudV3(requestItem.Субъект!.ДатаРождения, requestItem.Субъект.ИНН!.Value, timeLeft)
-                : null;
+            var pendingTasks = new List<Task<XElement?>>();
+            Task<XElement?>? getSelfProhibitionTask = null;
+            Task<XElement?>? getAmpTask = null;
 
-            if (!isSubjectFound && getAntifraudTask?.Result is null)
+            if (subjectKeys.Count != 0)
+            {
+                getSelfProhibitionTask = isInnVerified ? _qbchDb.GetSelfProhibitionV3(subjectKeys, timeLeft) : null;
+                if (getSelfProhibitionTask is not null)
+                    pendingTasks.Add(getSelfProhibitionTask);
+
+                getAmpTask = includeAmp ? _qbchDb.GetCalculationOfAmpV3(subjectKeys, timeLeft) : null;
+                if (getAmpTask is not null)
+                    pendingTasks.Add(getAmpTask);
+            }
+
+            var getAntifraudTask = includeAntifraud && isInnVerified
+              ? _qbchDb.GetAntifraudV3(requestItem.Субъект!.ДатаРождения, requestItem.Субъект.ИНН!.Value, timeLeft)
+              : null;
+            if (getAntifraudTask is not null)
+                pendingTasks.Add(getAntifraudTask);
+
+            await Task.WhenAll(pendingTasks);
+
+            bool antifraudTaskHasResult = (getAntifraudTask != null && getAntifraudTask.Result != null && getAntifraudTask.Result.Name == "СведенияДляПредупреждения");
+
+            if (subjectKeys.Count == 0 && !antifraudTaskHasResult)
             {
                 kbki.ПометитьКакСубъектНеНайден();
                 response.КБКИ = [kbki];
@@ -140,25 +161,8 @@ public class QBCHServiceV3(
                 continue;
             }
 
-            var getSelfProhibitionTask = _qbchDb.GetSelfProhibitionV3(subjectKeys, timeLeft);
-
-            var includeAmp = package.КодСведений == СправочникВидыСведений.Item7;
-
-            var getAmpTask = includeAmp ? _qbchDb.GetCalculationOfAmpV3(subjectKeys, timeLeft) : null;
-
-            var pendingTasks = new List<Task<XElement?>> { getSelfProhibitionTask };
-
-            if (getAmpTask is not null)
-                pendingTasks.Add(getAmpTask);
-
-            if (getAntifraudTask is not null)
-                pendingTasks.Add(getAntifraudTask);
-
-            await Task.WhenAll(pendingTasks);
-
-
             FillObligationsSection(kbki, includeAmp, getAmpTask?.Result);
-            FillSelfProhibitionSection(kbki, getSelfProhibitionTask.Result, isInnVerified);
+            FillSelfProhibitionSection(kbki, getSelfProhibitionTask?.Result, isInnVerified);
             FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result, isInnVerified);
 
             response.КБКИ = [kbki];
@@ -595,7 +599,7 @@ public class QBCHServiceV3(
             var kbki = new ОтветНаЗапросСведенийСведенияКБКИ
             {
                 ОГРН = psrn,
-                ПоСостояниюНа = DateTime.Now,
+                ПоСостояниюНа = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz")
                 //ИдентификаторОтвета = requestId,
             };
             kbki.УстановитьОшибку(int.TryParse(code, out var codeValue) ? codeValue : 99, message);
@@ -626,6 +630,12 @@ public class QBCHServiceV3(
             return;
         }
 
+        if (ampXml == null || ampXml.Name == "ОбязательствНет")
+        {
+            kbki.ДобавитьПризнакОтсутствияОбязательств();
+            return;
+        }
+
         var amp = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml);
 
         if (amp?.БКИ is { Length: > 0 })
@@ -641,6 +651,12 @@ public class QBCHServiceV3(
         if (!isInnVerified)
         {
             kbki.ДобавитьПризнакНепредоставленияСведенийОЗапрете();
+            return;
+        }
+
+        if (prohibitionXml == null || prohibitionXml.Name == "СведенийОЗапретеНет")
+        {
+            kbki.ДобавитьПризнакОтсутствияСведенийОЗапрете();
             return;
         }
 
@@ -665,6 +681,12 @@ public class QBCHServiceV3(
         if (!isInnVerified)
         {
             kbki.ДобавитьПризнакНепредоставленияАнтифродСведений();
+            return;
+        }
+
+        if (antifraudXml == null || antifraudXml.Name == "СведенийДляПредупрежденияНет")
+        {
+            kbki.ДобавитьПризнакОтсутствияАнтифродСведений();
             return;
         }
 
