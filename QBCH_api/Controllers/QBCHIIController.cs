@@ -114,7 +114,7 @@ public class QBCHIIController(IMediator mediator,
                           singnedResponse: signedResp);
 
             // Отправка события завершения обработки transaction в Kafka и Redis
-            await _mediator.Publish(new QBCHProcessing.V2.StoreProcessingData.Event.QBCHProcessingComplete(transaction));
+            await _mediator.Publish(new QBCHProcessingComplete(transaction));
 
             LogActionEnd(nameof(DlRequest_v_2), transaction.Id, StatusCodes.Status400BadRequest, actionStopwatch.Elapsed);
 
@@ -157,9 +157,8 @@ public class QBCHIIController(IMediator mediator,
                             )
                         );
 
-            // Выполняется после ответа на запрос в контроллере
             // Отправка события завершения обработки transaction в Kafka и Redis
-            Response.OnCompleted(async () => await _mediator.Publish(new QBCHProcessingComplete(processingResult)));
+            await _mediator.Publish(new QBCHProcessingComplete(processingResult));
 
             return processingResult.Status switch
             {

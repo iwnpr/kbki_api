@@ -194,14 +194,14 @@ public static class ConsentValidatorV3
             if (compareInn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"При наличии в согласии атрибута \"ОснованиеПередачи\" ИНН ({innAgreement}) лица, которому было выдано согласие, не должен совпадать с ИНН ({innSource}) источника."));
+                    $"Отсутствует действующее согласие Субъекта: При наличии в согласии атрибута \"ОснованиеПередачи\" ИНН ({innAgreement}) лица, которому было выдано согласие, не должен совпадать с ИНН ({innSource}) источника."));
                 return;
             }
 
             if (compareOgrn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"При наличии в согласии атрибута \"ОснованиеПередачи\" ОГРН лица ({ogrnAgreement}), которому было выдано согласие, не должен совпадать с ОГРН источника ({ogrnSource})."));
+                    $"Отсутствует действующее согласие Субъекта: При наличии в согласии атрибута \"ОснованиеПередачи\" ОГРН лица ({ogrnAgreement}), которому было выдано согласие, не должен совпадать с ОГРН источника ({ogrnSource})."));
                 return;
             }
         }
@@ -211,14 +211,14 @@ public static class ConsentValidatorV3
             if (!compareInn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"ИНН лица ({innAgreement}), которому было выдано согласие, должен совпадать с ИНН источника ({innSource})."));
+                    $"Отсутствует действующее согласие Субъекта: ИНН лица ({innAgreement}), которому было выдано согласие, должен совпадать с ИНН источника ({innSource})."));
                 return;
             }
 
             if (!compareOgrn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"ОГРН ({ogrnAgreement}) лица, которому было выдано согласие, должен совпадать с ОГРН ({ogrnSource}) источника."));
+                    $"Отсутствует действующее согласие Субъекта: ОГРН ({ogrnAgreement}) лица, которому было выдано согласие, должен совпадать с ОГРН ({ogrnSource}) источника."));
                 return;
             }
         }
