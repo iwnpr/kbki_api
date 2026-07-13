@@ -109,45 +109,58 @@ builder.Services.AddTransient<IDlPutServiceV3, DlPutServiceV3>();
 // Добавление http-клиентов в HttpClientFactory
 try
 {
-    var _searchValue = builder.Configuration.GetValue<string>("Signer:SearchValue");
-    var _storeLocation = builder.Configuration.GetValue<string>("Signer:StoreLocation");
-    var _storeName = builder.Configuration.GetValue<string>("Signer:StoreName");
-    var _findType = builder.Configuration.GetValue<string>("Signer:FindType");
+    // Signer:RequireCertificate=false отключает поиск сертификата подписанта и клиентские сертификаты http-клиентов
+    // (только для локального запуска без сертификатов). По умолчанию - true.
+    var requireCertificate = builder.Configuration.GetValue<bool?>("Signer:RequireCertificate") ?? true;
 
-    if (string.IsNullOrWhiteSpace(_searchValue))
+    X509Certificate2? foundCertColl = null;
+
+    if (!requireCertificate)
     {
-        serilog.Error("Отсутствует значение для поиска сертифката для подписи запросов КБКИ.");
-        return;
+        serilog.Warning("Signer:RequireCertificate=false - сертификат подписанта не используется. Режим допустим только для локальной разработки.");
     }
-
-    // Расположение хранилища сертифкатов
-    if (!Enum.TryParse<StoreLocation>(_storeLocation, true, out var storeLocation))
-        storeLocation = StoreLocation.LocalMachine;
-
-    // Директория в хранилище
-    if (!Enum.TryParse<StoreName>(_storeName, true, out var storeName))
-        storeName = StoreName.My;
-
-    // Определения параметра поиска
-    if (!Enum.TryParse<X509FindType>(_findType, true, out var findType))
-        findType = X509FindType.FindByThumbprint;
-
-    using X509Store store = new(storeName, storeLocation);
-    store.Open(OpenFlags.ReadOnly);
-
-    if (string.IsNullOrWhiteSpace(_searchValue))
+    else
     {
-        throw new Exception("Сертификат не найден");
-    }
+        var _searchValue = builder.Configuration.GetValue<string>("Signer:SearchValue");
+        var _storeLocation = builder.Configuration.GetValue<string>("Signer:StoreLocation");
+        var _storeName = builder.Configuration.GetValue<string>("Signer:StoreName");
+        var _findType = builder.Configuration.GetValue<string>("Signer:FindType");
 
-    // Находим сертификаты с нужным именем и добавляем в коллекцию.
-    var foundCertColl = store.Certificates.Find(findType, _searchValue, true).FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(_searchValue))
+        {
+            serilog.Error("Отсутствует значение для поиска сертифката для подписи запросов КБКИ.");
+            return;
+        }
 
-    // Сертификат не найден
-    if (foundCertColl == null)
-    {
-        serilog.Error("Отсутствует сертификат для подписания запросов в КБКИ.");
-        return;
+        // Расположение хранилища сертифкатов
+        if (!Enum.TryParse<StoreLocation>(_storeLocation, true, out var storeLocation))
+            storeLocation = StoreLocation.LocalMachine;
+
+        // Директория в хранилище
+        if (!Enum.TryParse<StoreName>(_storeName, true, out var storeName))
+            storeName = StoreName.My;
+
+        // Определения параметра поиска
+        if (!Enum.TryParse<X509FindType>(_findType, true, out var findType))
+            findType = X509FindType.FindByThumbprint;
+
+        using X509Store store = new(storeName, storeLocation);
+        store.Open(OpenFlags.ReadOnly);
+
+        if (string.IsNullOrWhiteSpace(_searchValue))
+        {
+            throw new Exception("Сертификат не найден");
+        }
+
+        // Находим сертификаты с нужным именем и добавляем в коллекцию.
+        foundCertColl = store.Certificates.Find(findType, _searchValue, true).FirstOrDefault();
+
+        // Сертификат не найден
+        if (foundCertColl == null)
+        {
+            serilog.Error("Отсутствует сертификат для подписания запросов в КБКИ.");
+            return;
+        }
     }
 
     // Добавление именованных http-клиентов в фабрику клиентов
@@ -198,7 +211,7 @@ app.MapControllers();
 app.Run();
 
 // Метод добавляющий http-client в фабрику клиентов
-static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog, X509Certificate2 certificate, IConfigurationSection section, int httpClientTimeoutSeconds)
+static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog, X509Certificate2? certificate, IConfigurationSection section, int httpClientTimeoutSeconds)
 {
     var clientName = section.GetValue<string>("Name");
     var url = section.GetValue<string>("Url");
@@ -251,12 +264,19 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
 
     HttpClientHandler CreateCertificateHandler()
     {
-        return new HttpClientHandler
+        var handler = new HttpClientHandler
         {
-            ClientCertificateOptions = ClientCertificateOption.Manual,
-            ClientCertificates = { certificate },
             ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
         };
+
+        // Без сертификата (Signer:RequireCertificate=false) клиент работает без клиентской аутентификации
+        if (certificate is not null)
+        {
+            handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+            handler.ClientCertificates.Add(certificate);
+        }
+
+        return handler;
     }
 
     httpClientBuilder.ConfigurePrimaryHttpMessageHandler(CreateCertificateHandler);

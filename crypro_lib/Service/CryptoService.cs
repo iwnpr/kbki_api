@@ -28,6 +28,11 @@ namespace Crypto_lib.Service
         private readonly string? _storeName = config.GetValue<string>("Signer:StoreName");
         private readonly string? _findType = config.GetValue<string>("Signer:FindType");
         private readonly string? _searchValue = config.GetValue<string>("Signer:SearchValue");
+        // Signer:RequireCertificate=false отключает подпись и криптографические проверки (только для локальной разработки)
+        private readonly bool _requireCertificate = config.GetValue<bool?>("Signer:RequireCertificate") ?? true;
+
+        // CertificateValidation:AllowMissingClientCertificate=true разрешает запросы без клиентского сертификата (только для локальной разработки)
+        private readonly bool _allowMissingClientCertificate = config.GetValue<bool?>("CertificateValidation:AllowMissingClientCertificate") ?? false;
         private readonly ILogger<CryptoService> _logger = logger;
         private readonly ITicketService _ticketService = ticketService;
 
@@ -43,6 +48,15 @@ namespace Crypto_lib.Service
                 msg?.Length ?? 0, encodedSignature is not null, requestCert is not null);
 
             var result = new CryptoServiceResult();
+
+
+            if (requestCert is null && _allowMissingClientCertificate)
+            {
+                _logger.LogWarning("Клиентский сертификат отсутствует, проверка подписи пропущена (CertificateValidation:AllowMissingClientCertificate=true). Тело запроса принято без снятия подписи.");
+                result.Body = msg;
+                result.SignedBody = msg;
+                return QBCH_lib.core.Result<CryptoServiceResult>.Success(result);
+            }
 
             if (requestCert is null)
             {
@@ -177,6 +191,14 @@ namespace Crypto_lib.Service
             _logger.LogDebug("Старт проверки подписи файла. Размер сообщения: {msgLength} байт, отсоединенная подпись: {hasDetachedSignature}, сертификат запроса: {hasRequestCert}",
                 msg?.Length ?? 0, encodedSignature is not null, requestCert is not null);
             result = new CryptoServiceResult();
+
+            if (requestCert is null && _allowMissingClientCertificate)
+            {
+                _logger.LogWarning("Клиентский сертификат отсутствует, проверка подписи пропущена (CertificateValidation:AllowMissingClientCertificate=true). Тело запроса принято без снятия подписи.");
+                result.Body = msg;
+                result.SignedBody = msg;
+                return true;
+            }
 
             if (requestCert is null)
             {
@@ -313,6 +335,14 @@ namespace Crypto_lib.Service
         {
             result = new CryptoServiceResult();
 
+            if (!_requireCertificate)
+            {
+                _logger.LogWarning("Проверка подписи пропущена (Signer:RequireCertificate=false). Сообщение принято без снятия подписи.");
+                result.Body = msg;
+                result.SignedBody = msg;
+                return true;
+            }
+
             // Создаем SignedCms для декодирования и проверки.
             CpSignedCms signedCms = new();
 
@@ -391,6 +421,13 @@ namespace Crypto_lib.Service
         /// <returns></returns>
         public bool ValidateCertificate(X509Certificate2? requestCert, [NotNullWhen(false)] out CryptoServiceResult? result)
         {
+            if (requestCert is null && _allowMissingClientCertificate)
+            {
+                _logger.LogWarning("Клиентский сертификат отсутствует, проверка пропущена (CertificateValidation:AllowMissingClientCertificate=true).");
+                result = null;
+                return true;
+            }
+
             if (requestCert is null)
             {
                 var error = AnswerErrorCode.Code99_OtherError("Отсутствует сертификат запроса");
@@ -433,6 +470,12 @@ namespace Crypto_lib.Service
         /// <returns>Подписанный файл</returns>
         public byte[] SignMsg(byte[] msg)
         {
+            if (!_requireCertificate)
+            {
+                _logger.LogWarning("Подпись сообщения пропущена (Signer:RequireCertificate=false). Ответ возвращается без подписи.");
+                return msg;
+            }
+
             // Создаем объект ContentInfo по сообщению.
             // Это необходимо для создания объекта SignedCms.
             ContentInfo contentInfo = new(msg);
