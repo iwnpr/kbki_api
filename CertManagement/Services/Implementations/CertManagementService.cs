@@ -37,7 +37,7 @@ namespace CertManagement.Services.Implementations
         public async Task<bool> AddCertificate(byte[] certificate, string? ogrn, string guid)
         {
             var abonentId = await repository.GetAbonentKeyIdByPSRN(ogrn);
-            X509Certificate2 cert = new(certificate);
+            using X509Certificate2 cert = new(certificate);
             return await repository.AddCertificate(abonentId.Value, cert.Thumbprint, DateTime.Parse(cert.GetExpirationDateString()));
         }
 
@@ -49,7 +49,7 @@ namespace CertManagement.Services.Implementations
         /// <returns>Успешность операции</returns>
         public async Task<bool> SetCertificateInactive(byte[] certificate, string guid)
         {
-            X509Certificate2 cert = new(certificate);
+            using X509Certificate2 cert = new(certificate);
             return await repository.SetCertificateInactive(cert.Thumbprint);
         }
     }

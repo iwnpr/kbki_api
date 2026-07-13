@@ -60,14 +60,6 @@ namespace XmlService_lib.Services.Interfaces
         Task<string> SerializeAsync<T>(T item) where T : class;
 
         /// <summary>
-        /// Сериализация в поток
-        /// </summary>
-        /// <typeparam name="T">Тип</typeparam>
-        /// <param name="item">Обект класса</param>
-        /// <returns>Класс в виде xml string</returns>
-        Stream SerializeAsStream<T>(T? item) where T : class;
-
-        /// <summary>
         /// Сериалищзация в строку
         /// </summary>
         /// <typeparam name="T"></typeparam>

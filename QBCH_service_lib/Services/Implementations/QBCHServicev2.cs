@@ -201,13 +201,17 @@ namespace QBCHService_lib.Services.Implementations
             // Добавляем файл с запросом в HttpContent
             var dlrequestBytes = _xmlService.SerializeAsByte(request);
             var signedDlrequestBytes = _cryptoService.SignMsg(dlrequestBytes);
-            ByteArrayContent dlrequestContent = new(signedDlrequestBytes);
-            HttpResponseMessage? responseMessage = null;
+            using ByteArrayContent dlrequestContent = new(signedDlrequestBytes);
+
+            // Статус и текст последнего ответа: сам HttpResponseMessage освобождается через using
+            // внутри итерации цикла, поэтому нужные за ее пределами поля копируются в переменные.
+            HttpStatusCode? lastStatusCode = null;
+            string? lastResponseText = null;
 
             // Токен ограниченный таймаутом для перезапроса метода dlrequest.
-            CancellationTokenSource ticketCts = new();
+            using CancellationTokenSource ticketCts = new();
             // Время ожидания проверки подписи в ответах метода dlrequest.
-            CancellationTokenSource ticketCPCts = new();
+            using CancellationTokenSource ticketCPCts = new();
             ticketCts.CancelAfter(TimeSpan.FromMilliseconds(_QBCHTicketTimeoutMs));
             ticketCPCts.CancelAfter(TimeSpan.FromMilliseconds(_QBCHTicketTimeoutMs - 1000));
 
@@ -236,7 +240,9 @@ namespace QBCHService_lib.Services.Implementations
                             DLRequestRedisMessage = DlRequestRedisMessage.Create(DateTime.Now, signedDlrequestBytes, dlrequestBytes);
 
                             _logger.LogDebug("{guid} {Bureau}: dlrequest send {dt}", guid, bureau.ogrn!, DateTime.Now);
-                            responseMessage = await client.PostAsync("dlrequest", dlrequestContent, ticketCts.Token);
+                            using var responseMessage = await client.PostAsync("dlrequest", dlrequestContent, ticketCts.Token);
+                            lastStatusCode = responseMessage.StatusCode;
+                            lastResponseText = await responseMessage.Content.ReadAsStringAsync(ticketCts.Token);
                             using MemoryStream ms = new();
                             DLRequestRedisMessage.SetResponseCode(responseMessage.StatusCode);
                             await responseMessage.Content.CopyToAsync(ms);
@@ -323,7 +329,7 @@ namespace QBCHService_lib.Services.Implementations
 
                                 // Вернулся хрен пойми какой код => Пишем данные в БД для информации, перезапрашиваем dlrequest
                                 default:
-                                    DLRequestRedisMessage.SetError("99", $"Код ответа: {responseMessage.StatusCode} Message:{await responseMessage.Content.ReadAsStringAsync()}").SetResponseTime(DateTime.Now);
+                                    DLRequestRedisMessage.SetError("99", $"Код ответа: {responseMessage.StatusCode} Message:{lastResponseText}").SetResponseTime(DateTime.Now);
                                     await _redisCache.ListSet(key: [DLRequestRedisMessage.Name, guid, bureau.ogrn!, DLRequestRedisMessage.Name], value: JsonSerializer.Serialize(DLRequestRedisMessage));
                                     break;
                             }
@@ -331,27 +337,26 @@ namespace QBCHService_lib.Services.Implementations
                         catch (HttpRequestException ex)
                         {
                             _logger.LogError(ex, "Не удалось установить соединение. КБКИ: {bureau}  address: {address}", bureau.Name, "/dlrequest");
-                            DLRequestRedisMessage.SetError("17", "Не удалось установить соединение.").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
+                            DLRequestRedisMessage.SetError("17", "Не удалось установить соединение.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                             await _redisCache.ListSet(key: [DLRequestRedisMessage.Name, guid, bureau.ogrn!, DLRequestRedisMessage.Name], value: JsonSerializer.Serialize(DLRequestRedisMessage));
                         }
                         catch (Exception ex)
                         {
                             _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ: {bureau}  address: {address}", bureau.Name, "/dlrequest");
-                            DLRequestRedisMessage.SetError("99", $"Код ответа: {responseMessage?.StatusCode} Message:{(responseMessage is not null ? await responseMessage.Content.ReadAsStringAsync() : string.Empty)}").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
-                            await _redisCache.ListSet(key: [DLRequestRedisMessage.Name, guid, bureau.ogrn!, DLRequestRedisMessage.Name], value: JsonSerializer.Serialize(DLRequestRedisMessage));
+                            DLRequestRedisMessage.SetError("99", $"Код ответа: {lastStatusCode} Message:{lastResponseText ?? string.Empty}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                         }
 
                         if (dlrequestResult is not null)
                             return dlrequestResult;
 
-                        await Task.Delay(_QBCHTicketDelayMs);
+                        await Task.Delay(_QBCHTicketDelayMs, ticketCts.Token);
                     }
                 }).WaitAsync(ticketCts.Token);
             }
             catch (TaskCanceledException ex)
             {
                 _logger.LogWarning(ex, "Запрос {guid} в бюро {bureauName} по адресу {baseAddress} был отменен по истечению таймаута {timeout}.", guid, bureau.Name, "/dlrequest", _QBCHTicketTimeoutMs);
-                DLRequestRedisMessage.SetError("18", "Время ожидания ответа истекло.").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
+                DLRequestRedisMessage.SetError("18", "Время ожидания ответа истекло.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                 await _redisCache.ListSet(key: [DLRequestRedisMessage.Name, guid, bureau.ogrn!, DLRequestRedisMessage.Name], value: JsonSerializer.Serialize(DLRequestRedisMessage));
                 dlrequestResult = ОтветНаЗапросСведений.CreateError(bureau.ogrn!, "18", "Время ожидания ответа истекло.", ПорядковыеНомера);
             }
@@ -365,9 +370,9 @@ namespace QBCHService_lib.Services.Implementations
                 return new(bureau.ogrn!, answer2: dlrequestResult);
 
             // Токен ограниченный таймаутом для перезапроса ответа по тикету.
-            CancellationTokenSource resendCts = new();
+            using CancellationTokenSource resendCts = new();
             // Токен ограниченный таймаутом для проверки подписи в ответе.
-            CancellationTokenSource resendCpCts = new();
+            using CancellationTokenSource resendCpCts = new();
 
             _logger.LogDebug("{guid} {Bureau}: РежимЗапроса {req}", guid, bureau.ogrn!, processing.ClentRequest.Request?.РежимЗапроса);
 
@@ -412,7 +417,7 @@ namespace QBCHService_lib.Services.Implementations
             {
                 _logger.LogWarning(ex, "Таймаут запроса в бюро {bureauName} по адресу {baseAddress}.", bureau.Name, $"/dlanswer?id={responseId}");
                 DLAnswerRedisMessage = DlAnswerRedisMessage.Create();
-                DLAnswerRedisMessage.SetError("18", "Время ожидания ответа истекло.").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
+                DLAnswerRedisMessage.SetError("18", "Время ожидания ответа истекло.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                 dlanswerResult = ОтветНаЗапросСведений.CreateError(bureau.ogrn!, "18", "Время ожидания ответа истекло.", ПорядковыеНомера);
                 await _redisCache.ListSet(key: [DLAnswerRedisMessage.Name, guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
             }
@@ -434,7 +439,10 @@ namespace QBCHService_lib.Services.Implementations
         /// <returns></returns>
         private async Task<ОтветНаЗапросСведений> ResendDlanswer(string responseId, HttpClient client, QBCHRequisite bureau, string guid, CancellationToken ct, int[] ПорядковыеНомера)
         {
-            HttpResponseMessage? responseMessage = null;
+            // Статус и текст последнего ответа: сам HttpResponseMessage освобождается через using
+            // внутри итерации цикла, поэтому нужные за ее пределами поля копируются в переменные.
+            HttpStatusCode? lastStatusCode = null;
+            string? lastResponseText = null;
             Результат? ticket;
             QBCHResult validationresult;
             ОтветНаЗапросСведений? dlanswerResult = null;
@@ -447,7 +455,9 @@ namespace QBCHService_lib.Services.Implementations
                     DLAnswerRedisMessage = DlAnswerRedisMessage.Create();
 
                     _logger.LogDebug("{guid} {Bureau}: dlanswer send {dt}", guid, bureau.ogrn!, DateTime.Now);
-                    responseMessage = await client.GetAsync($"dlanswer?id={responseId}", ct);
+                    using var responseMessage = await client.GetAsync($"dlanswer?id={responseId}", ct);
+                    lastStatusCode = responseMessage.StatusCode;
+                    lastResponseText = await responseMessage.Content.ReadAsStringAsync(ct);
                     using var ms = new MemoryStream();
                     await responseMessage.Content.CopyToAsync(ms);
                     DLAnswerRedisMessage.SetResponseCode(responseMessage.StatusCode).SetResponseTime(DateTime.Now);
@@ -520,7 +530,7 @@ namespace QBCHService_lib.Services.Implementations
                 catch (HttpRequestException ex)
                 {
                     _logger.LogError(ex, "Не удалось установить соединение. КБКИ: {bureau}  address: {address}", bureau.Name, $"/dlanswer?id={responseId}");
-                    DLAnswerRedisMessage.SetError("17", "Не удалось установить соединение.").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
+                    DLAnswerRedisMessage.SetError("17", "Не удалось установить соединение.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                     await _redisCache.ListSet(key: [DLAnswerRedisMessage.Name, guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
                     //dlanswerResult = ОтветНаЗапросСведений.CreateError(bureau.ogrn!, "17", "Не удалось установить соединение.", ПорядковыеНомера);
                 }
@@ -531,7 +541,7 @@ namespace QBCHService_lib.Services.Implementations
                 catch (Exception ex)
                 {
                     _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ: {bureau}  address: {address}", bureau.Name, $"/dlanswer?id={responseId}");
-                    DLAnswerRedisMessage.SetError("99", $"Код ответа: {responseMessage?.StatusCode} Message:{(responseMessage is not null ? await responseMessage.Content.ReadAsStringAsync() : string.Empty)}").SetResponseCode(responseMessage?.StatusCode).SetResponseTime(DateTime.Now);
+                    DLAnswerRedisMessage.SetError("99", $"Код ответа: {lastStatusCode} Message:{lastResponseText ?? string.Empty}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                     await _redisCache.ListSet(key: [DLAnswerRedisMessage.Name, guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
                 }
             }

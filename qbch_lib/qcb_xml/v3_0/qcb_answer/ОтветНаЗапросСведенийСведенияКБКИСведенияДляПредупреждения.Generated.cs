@@ -9,6 +9,7 @@ namespace QBCH.Lib.qcb_xml.v3_0
     [System.Diagnostics.DebuggerStepThroughAttribute()]
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true)]
+    [System.Xml.Serialization.XmlRootAttribute("СведенияДляПредупреждения", Namespace = "", IsNullable = false)]
     public partial class ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения {
         
         private ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупрежденияБКИ[] бКИField;

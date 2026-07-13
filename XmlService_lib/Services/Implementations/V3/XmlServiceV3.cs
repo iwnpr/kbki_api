@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Xml;
@@ -33,7 +34,7 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
         if (xml is null)
             return null;
 
-        var serializer = CreateSerializerV3<T>(xml.Name);
+        var serializer = CreateSerializerV3<T>();
         using var reader = xml.CreateReader();
 
         try
@@ -45,10 +46,6 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
             return default;
         }
     }
-
-    private static XmlSerializer CreateSerializerV3<T>(XName rootName) where T : class
-        => new(typeof(T), new XmlRootAttribute(rootName.LocalName) { Namespace = rootName.NamespaceName });
-
 
     public T? DeserializeV3<T>(byte[]? bytes) where T : class
     {
@@ -106,15 +103,17 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
 
     public BaseResult? ValidateXmlV3(MemoryStream memStream, string[] schemasFullPaths)
     {
-        var schemaSet = new XmlSchemaSet
-        {
-            XmlResolver = new XmlUrlResolver()
-        };
+        var cacheKey = $"3.0:schemaset:{string.Join('|', schemasFullPaths)}";
+
+        if (!_cache.TryGetValue(cacheKey, out XmlSchemaSet? schemaSet) || schemaSet is null)
+            schemaSet = new XmlSchemaSet {XmlResolver = new XmlUrlResolver()};
 
         foreach (var schemaPath in schemasFullPaths)
             schemaSet.Add(null, schemaPath);
 
+        _cache.Set(cacheKey, schemaSet, new MemoryCacheEntryOptions().SetPriority(CacheItemPriority.NeverRemove));
         return ValidateAgainstSchemaSet(memStream, schemaSet);
+
     }
 
     public bool ValidateXmlV3(MemoryStream memStream, string nameOfController, [NotNullWhen(false)] out BaseResult? result)
@@ -186,14 +185,14 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
         }
     }
 
-   private static BaseResult CreateSchemaError(int errorCode, string errorMessage) =>
-       new()
+    private static BaseResult CreateSchemaError(int errorCode, string errorMessage) =>
+        new()
         {
             IsError = true,
-           ErrorCode = errorCode,
-           Error = errorMessage,
-           ErrorMessage = errorMessage,
-       };
+            ErrorCode = errorCode,
+            Error = errorMessage,
+            ErrorMessage = errorMessage,
+        };
 
     private static XmlSerializer CreateSerializerV3<T>() where T : class
         => new(typeof(T));

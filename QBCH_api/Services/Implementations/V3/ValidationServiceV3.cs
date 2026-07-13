@@ -179,7 +179,7 @@ public class ValidationServiceV3(
             return 0;
         }
 
-        var certificate = new X509Certificate2(cert);
+        using var certificate = new X509Certificate2(cert);
 
         _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3: thumbprint={thumbprint}", certificate.Thumbprint);
         var result = await _repository.GetActiveCertificatesCountByThumbprint(certificate.Thumbprint ?? string.Empty);
@@ -195,7 +195,7 @@ public class ValidationServiceV3(
             return false;
         }
 
-        var certificate = new X509Certificate2(cert);
+        using var certificate = new X509Certificate2(cert);
         _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3: thumbprint={thumbprint}", certificate.Thumbprint);
         var success = await _repository.SetCertificateInactive(certificate.Thumbprint ?? string.Empty);
 

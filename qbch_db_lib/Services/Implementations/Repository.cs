@@ -105,8 +105,8 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("QbchSearchSubjects:Procedures:SearchAllSubjects");
             string pgcmd = $"SELECT {_schema_QbchSearchSubjects}.{_procname}(@request)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds((timeLeftMs ?? _SearchSubjects_Timeout) - 1000));
-            var ctsTotal = new CancellationTokenSource(TimeSpan.FromMilliseconds((timeLeftMs ?? _SearchSubjects_Timeout)));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds((timeLeftMs ?? _SearchSubjects_Timeout) - 1000));
+            using var ctsTotal = new CancellationTokenSource(TimeSpan.FromMilliseconds((timeLeftMs ?? _SearchSubjects_Timeout)));
 
             while (!ctsTotal.Token.IsCancellationRequested)
             {
@@ -205,7 +205,7 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("QbchCalcOfAmp:Procedures:CalculationOfAmp");
             var pgcmd = $"SELECT {_schema_QbchCalcOfAmp}.{_procname}(@subj_id)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeLeftMs ?? _CalcOfAmp_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeLeftMs ?? _CalcOfAmp_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -259,7 +259,7 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("QbchSelfProhibition:Procedures:GetSelfProhibition");
             var pgcmd = $"SELECT {_schema_QbchSelfProhibition}.{_procname}(@subj_id)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeLeftMs ?? _SelfProhibition_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeLeftMs ?? _SelfProhibition_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -331,7 +331,7 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("QbchDb:Procedures:GetInnOgrnByThumbprint");
             string pgcmd = $"SELECT {_schema_QbchDb}.{_procname}(@thumbprint)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -419,7 +419,7 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("QbchDb:Procedures:IsPermissionGranted");
             string pgcmd = $"SELECT {_schema_QbchDb}.{_procname}(@thumbprint,@serviceName)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             for (int i = 0; i < _QBCHDB_ConnectionPool.Length; i++)
             {
@@ -510,7 +510,7 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("Old:QbchDb:Procedures:IsPermissionGranted");
             string pgcmd = $"SELECT {_schema_QbchDb_old}.{_procname}(@thumbprint,@serviceName)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -609,7 +609,7 @@ namespace Qbch_db_lib.Services.Implementations
                 _logger.LogCritical(ex, "При проверке кэша abonentId в Redis, возникла ошибка.");
             }
 
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             // Запрос в БД
             while (!cts.Token.IsCancellationRequested)
@@ -684,10 +684,10 @@ namespace Qbch_db_lib.Services.Implementations
         public async Task<bool> IsCertExist(byte[] cert)
         {
             bool result = false;
-            X509Certificate2 certificate = new(cert);
+            using X509Certificate2 certificate = new(cert);
 
             string pgcmd = $"SELECT EXISTS(SELECT 1 FROM {_schema_QbchDb}.tr_abonent_certificates WHERE UPPER(thumbprint)=UPPER(@thumbprint));";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -743,7 +743,7 @@ namespace Qbch_db_lib.Services.Implementations
         public async Task<bool> AddCertificate(int abonentId, string thumbprint, DateTime expirationDate)
         {
             bool result = false;
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -787,7 +787,7 @@ namespace Qbch_db_lib.Services.Implementations
         public async Task<bool> SetCertificateInactive(string thumbprint)
         {
             bool result = false;
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -835,9 +835,8 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("Old:QbchSearchSubjects:Procedures:SearchAllSubjects");
             string pgcmd = $"SELECT {_schema_QbchSearchSubjects_old}.{_procname}(@request)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_SearchSubjects_Timeout));
-            var ctsTotal = new CancellationTokenSource(TimeSpan.FromMilliseconds(_SearchSubjects_TotalTimeout));
-
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_SearchSubjects_Timeout));
+            using var ctsTotal = new CancellationTokenSource(TimeSpan.FromMilliseconds(_SearchSubjects_TotalTimeout));
 
             while (!ctsTotal.Token.IsCancellationRequested)
             {
@@ -923,7 +922,7 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("old:QbchCalcOfAmp:Procedures:CalculationOfAmp");
             var pgcmd = $"SELECT {_schema_QbchCalcOfAmp_old}.{_procname}(@subj_id)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_CalcOfAmp_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_CalcOfAmp_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -997,7 +996,7 @@ namespace Qbch_db_lib.Services.Implementations
 
             var _procname = _config.GetValue<string>("Old:QbchDb:Procedures:GetInnOgrnByThumbprint");
             string pgcmd = $"SELECT {_schema_QbchDb_old}.{_procname}(@thumbprint)";
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             while (!cts.Token.IsCancellationRequested)
             {
@@ -1085,7 +1084,7 @@ namespace Qbch_db_lib.Services.Implementations
                 _logger.LogCritical(ex, "При проверке кэша abonentId в Redis, возникла ошибка.");
             }
 
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_QBCHDB_Timeout));
 
             // Запрос в БД
             while (!cts.Token.IsCancellationRequested)

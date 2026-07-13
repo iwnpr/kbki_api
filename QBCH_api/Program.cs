@@ -132,7 +132,7 @@ try
     if (!Enum.TryParse<X509FindType>(_findType, true, out var findType))
         findType = X509FindType.FindByThumbprint;
 
-    X509Store store = new(storeName, storeLocation);
+    using X509Store store = new(storeName, storeLocation);
     store.Open(OpenFlags.ReadOnly);
 
     if (string.IsNullOrWhiteSpace(_searchValue))

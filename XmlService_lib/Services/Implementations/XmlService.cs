@@ -132,28 +132,6 @@ namespace XmlService_lib.Services.Implementations
         }
 
         /// <summary>
-        /// Сериализация в Stream
-        /// </summary>
-        /// <typeparam name="T">Тип</typeparam>
-        /// <param name="item">Обект класса</param>
-        /// <returns>Stream</returns>
-        public Stream SerializeAsStream<T>(T? item) where T : class
-        {
-            using var ms = new MemoryStream();
-            if (item is null)
-                return ms;
-
-            var serializer = new XmlSerializer(typeof(T));
-            XmlSerializerNamespaces ns = new();
-            ns.Add("", "");
-
-            using var tw = XmlWriter.Create(ms);
-            serializer.Serialize(tw, item, ns);
-            ms.Position = 0;
-            return ms;
-        }
-
-        /// <summary>
         /// Сериалищзация в строку
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -213,7 +191,7 @@ namespace XmlService_lib.Services.Implementations
             XmlSerializerNamespaces ns = new();
             ns.Add("", "");
 
-            var ms = new MemoryStream();
+            using var ms = new MemoryStream();
             using var tw = XmlWriter.Create(ms);
             serializer.Serialize(tw, item, ns);
             ms.Position = 0;
@@ -231,14 +209,21 @@ namespace XmlService_lib.Services.Implementations
         {
             var standatError = AnswerErrorCode.Code9_InvalidRequestByScheme();
 
-            XmlSchemaSet schemaSet = new()
-            {
-                XmlResolver = new XmlUrlResolver()
-            };
+            var cacheKey = $"schemaset:{string.Join('|', xsdFullPaths)}";
 
-            foreach (var xsdFullPath in xsdFullPaths)
+            if (!_cache.TryGetValue(cacheKey, out XmlSchemaSet? schemaSet) || schemaSet is null)
             {
-                schemaSet.Add(null, xsdFullPath);
+                schemaSet = new()
+                {
+                    XmlResolver = new XmlUrlResolver()
+                };
+
+                foreach (var xsdFullPath in xsdFullPaths)
+                {
+                    schemaSet.Add(null, xsdFullPath);
+                }
+
+                _cache.Set(cacheKey, schemaSet, new MemoryCacheEntryOptions().SetPriority(CacheItemPriority.NeverRemove));
             }
 
             BaseResult? xsdError = null;

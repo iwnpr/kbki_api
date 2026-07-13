@@ -446,8 +446,12 @@ namespace Crypto_lib.Service
             // образом сообщение будет отделено от подписи.
             CpSignedCms signedCms = new(contentInfo, false);
 
+            // Сертификат держит нативный хендл — освобождаем его после вычисления подписи,
+            // иначе хендл утекает на каждом вызове SignMsg.
+            using var signerCertificate = GetCertificateFromStore();
+
             // Определяем подписывающего, объектом CmsSigner.
-            CpCmsSigner cmsSigner = new(GetCertificateFromStore());
+            CpCmsSigner cmsSigner = new(signerCertificate);
 
             // Подписываем CMS/PKCS #7 сообщение.
             try
@@ -519,7 +523,7 @@ namespace Crypto_lib.Service
             if (!Enum.TryParse<X509FindType>(_findType, true, out var findType))
                 findType = X509FindType.FindByThumbprint;
 
-            CpX509Store store = new(storeName, storeLocation);
+            using CpX509Store store = new(storeName, storeLocation);
             store.Open(OpenFlags.ReadOnly);
 
             if (string.IsNullOrWhiteSpace(_searchValue))
