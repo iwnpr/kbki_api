@@ -161,6 +161,9 @@ public static class QBCHValidationDispatcherV3
 
         var (abonentINN, abonentOGRN) = GetAbonentRequisitesV3(requestV3);
 
+        requestINN = abonentINN;
+        requestOGRN = abonentOGRN;
+
         // ИНН и ОГРН из сертификата сравнивается с ИНН и ОГРН в запросе
         if (requestINN != abonentINN || requestOGRN != abonentOGRN)
         {

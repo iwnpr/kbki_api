@@ -46,6 +46,9 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
     private readonly string? _schemaQbchSelfProhibitionV3 = config.GetValue<string>("QbchSelfProhibitionV3:Schema");
     private readonly string? _schemaQbchAntifraudV3 = config.GetValue<string>("QbchAntifraudV3:Schema");
 
+    // CertificateValidation:AllowMissingClientCertificate=true разрешает запросы без клиентского сертификата (только для локальной разработки)
+    private readonly bool _allowMissingClientCertificate = config.GetValue<bool?>("CertificateValidation:AllowMissingClientCertificate") ?? false;
+
     private const string PermissionsCacheName = "permissionsv3";
 
     /// <summary>
@@ -256,6 +259,13 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
     /// <returns><see langword="true"/>, если доступ разрешен.</returns>
     public async Task<bool> IsPermissionGrantedV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
     {
+        // Без сертификата отпечатка нет и проверить права невозможно - в локальном режиме доступ разрешается
+        if (string.IsNullOrWhiteSpace(thumbprint) && _allowMissingClientCertificate)
+        {
+            _logger.LogWarning("Проверка прав доступа пропущена: клиентский сертификат отсутствует (CertificateValidation:AllowMissingClientCertificate=true).");
+            return true;
+        }
+
         if (string.IsNullOrWhiteSpace(thumbprint) || string.IsNullOrWhiteSpace(serviceName) || string.IsNullOrWhiteSpace(_schemaQbchDbV3))
             return false;
 
