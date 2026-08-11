@@ -5,6 +5,7 @@ namespace QBCH.Lib.qcb_xml.v3_0
 {
     public partial class ТипСреднемесячныйПлатеж
     {
+        [System.Xml.Serialization.XmlIgnore]
         public long ЗначениеЦелое
         {
             get => long.Parse(Value, NumberStyles.Integer, CultureInfo.InvariantCulture);
@@ -21,7 +22,7 @@ namespace QBCH.Lib.qcb_xml.v3_0
             return new ТипСреднемесячныйПлатеж
             {
                 Валюта = валюта,
-                ДатаРасчета = датаРасчета.Date,
+                ДатаРасчета = DateTime.SpecifyKind(датаРасчета.Date, DateTimeKind.Unspecified),
                 ЗначениеЦелое = значение,
             };
         }

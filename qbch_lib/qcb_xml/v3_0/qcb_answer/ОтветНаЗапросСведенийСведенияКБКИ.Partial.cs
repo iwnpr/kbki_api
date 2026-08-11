@@ -21,6 +21,11 @@ namespace QBCH.Lib.qcb_xml.v3_0
             ItemsElementName = names.ToArray();
         }
 
+        //public void УстановитьДатуСостояния(DateTime дата)
+        //{
+        //    ПоСостояниюНа = дата.Date.ToString("O");
+        //}
+
         public void ОчиститьСекции()
         {
             Items = Array.Empty<object>();

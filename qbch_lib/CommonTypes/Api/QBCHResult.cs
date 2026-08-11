@@ -1,4 +1,6 @@
-﻿namespace QBCH_lib.CommonTypes.Api
+﻿using qbch_lib.CommonTypes.Api;
+
+namespace QBCH_lib.CommonTypes.Api
 {
     /// <summary>
     /// 

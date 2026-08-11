@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="domain\errors\Errors.cs" />
+    <None Include="domain\errors\AnswerErrorCode.cs" />
   </ItemGroup>
 
   <ItemGroup>

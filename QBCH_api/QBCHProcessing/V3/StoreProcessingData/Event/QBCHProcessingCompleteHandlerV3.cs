@@ -2,49 +2,67 @@
 using Confluent.Kafka;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
+using qbch_lib;
 using QBCH_lib.domain.aggregate;
 using System.Text;
 using System.Text.Json;
 
 namespace QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 
-public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandlerV3> logger, ICacheService redisCache, IKafkaService kafka) : INotificationHandler<QBCHProcessingCompleteV3>
+public class QBCHProcessingCompleteHandlerV3(
+    ILogger<QBCHProcessingCompleteHandlerV3> logger,
+    IKeyValueStorageService storageService,
+    IKafkaService kafka)
+    : INotificationHandler<QBCHProcessingCompleteV3>
 {
     private const string ApiVersion = "3.0";
 
     private readonly ILogger<QBCHProcessingCompleteHandlerV3> _logger = logger;
-    private readonly ICacheService _redisCache = redisCache;
+    private readonly IKeyValueStorageService _storageService = storageService;
     private readonly IKafkaService _kafka = kafka;
 
     public async Task Handle(QBCHProcessingCompleteV3 notification, CancellationToken cancellationToken)
     {
         var transaction = notification.Transaction;
+        if (!await TrySendDataToRedis(transaction))
+        {
+            _logger.LogCritical("Kafka-сообщение не отправлено, потому что результат не сохранён в Redis");   
+            return;
+        }
+        _ = SendDataToKafka(transaction);
+    }
 
+    private async Task<bool> TrySendDataToRedis(QBCHProcessingTransaction transaction)
+    {
         try
         {
             var resultData = await ConstructResultData(transaction);
-            await _redisCache.AddHashArray(transaction.ServiceName, transaction.Id.ToString(), resultData);
-
-            var (responseKind, schemaFamily) = ResolveResponseShape(transaction);
-            var kafkaPayload = JsonSerializer.Serialize(new
-            {
-                api_version = ApiVersion,
-                service = transaction.ServiceName,
-                id = transaction.Id,
-                redis_key = $"QBCH:{transaction.ServiceName}:{transaction.Id}",
-                versioned_key = $"QBCH:v{ApiVersion}:{transaction.ServiceName}:{transaction.Id}",
-                response_kind = responseKind,
-                schema_family = schemaFamily
-            });
-
-            if (!await _kafka.Produce(new Message<Null, string> { Value = kafkaPayload }))
-            {
-                _logger.LogCritical("Lost V3 kafka payload for key QBCH:{service}:{id}", transaction.ServiceName, transaction.Id);
-            }
+            await _storageService.AddHashArray(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), resultData);
+            return true;
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Критическая ошибка при сохранении API 3.0 результата в redis/kafka");
+            _logger.LogCritical(ex, "Критическая ошибка при сохранении результата в redis");
+            return false;
+        }
+    }
+
+    private async Task SendDataToKafka(QBCHProcessingTransaction transaction)
+    {
+        try
+        {
+            var kafkaKey = $"QBCH:{RedisConstants.DlRequestV3Scope}:{transaction.Id}";
+            var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaKey });
+            if (!isProduce)
+                _logger.LogCritical("Потеряно содержимое Kafka-сообщения для ключа QBCH:{serviceName}:{Transactionid}",
+                    transaction.ServiceName, transaction.Id);
+            else
+                _logger.LogDebug("Добавлено Kafka-сообщение для ключа QBCH:{serviceName}:{Transactionid}",
+                    transaction.ServiceName, transaction.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex, "Критическая ошибка при сохранении результата в kafka");
         }
     }
 
@@ -102,7 +120,7 @@ public class QBCHProcessingCompleteHandlerV3(ILogger<QBCHProcessingCompleteHandl
                 dict.Add("response_xml", transaction.Response.ResponseXML);
         }
 
-        if (!await _redisCache.HashFieldExists(transaction.ServiceName, transaction.Id.ToString(), "ValidationTime"))
+        if (!await _storageService.HashFieldExists(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "ValidationTime"))
             dict.Add("validation_date_time", Encoding.UTF8.GetBytes(transaction.ValidateTime ?? DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff")));
 
         return dict;

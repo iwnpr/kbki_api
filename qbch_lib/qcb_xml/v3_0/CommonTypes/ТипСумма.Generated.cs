@@ -11,9 +11,9 @@ namespace QBCH.Lib.qcb_xml.v3_0
     public partial class ТипСумма {
         
         private string валютаField;
-        
-        private double valueField;
-        
+
+        private string valueField;
+
         /// <remarks/>
         [System.Xml.Serialization.XmlAttributeAttribute()]
         public string Валюта {
@@ -27,7 +27,7 @@ namespace QBCH.Lib.qcb_xml.v3_0
         
         /// <remarks/>
         [System.Xml.Serialization.XmlTextAttribute()]
-        public double Value {
+        public string Value {
             get {
                 return this.valueField;
             }

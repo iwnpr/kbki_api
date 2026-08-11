@@ -1,7 +1,7 @@
-﻿using QBCH_lib.core;
+﻿using qbch_lib.domain.errors;
 using QBCH_lib.domain.aggregate;
-using РежимЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
+using РежимЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 
@@ -37,26 +37,21 @@ public static class XMLRequestCollectionValidatorV3
     private static void ValidateSingleMode(QBCHProcessingTransaction transaction, int requestCount)
     {
         if (requestCount != 1)
-        {
-            transaction.RiseCriticalError(Error.Code26_WrongBlockCount("Количество блоков \"Запрос\" не соответствует режиму запроса"));
-        }
+            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
     }
 
     private static void ValidatePackageMode(QBCHProcessingTransaction transaction, List<(string? OrderNumberRaw, int Position)> requests)
     {
         if (requests.Count == 0)
         {
-            transaction.RiseCriticalError(Error.Code26_WrongBlockCount("Количество блоков \"Запрос\" не соответствует режиму запроса"));
+            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
             return;
         }
 
         if (requests.Count > 10)
         {
-            foreach (var request in requests.Skip(10))
-            {
-                AddPackageErrorIfMissing(transaction, ParseOrderNumberOrPosition(request.OrderNumberRaw, request.Position),
-                    "Количество блоков \"Запрос\" не соответствует режиму запроса (не более 10 блоков)");
-            }
+            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
+            return;
         }
 
         var parsedOrders = requests
@@ -86,17 +81,18 @@ public static class XMLRequestCollectionValidatorV3
                 "Порядковый номер запроса в пакете должен быть уникальным");
         }
 
-        for (var i = 1; i < parsedOrders.Count; i++)
-        {
-            var previousOrder = parsedOrders[i - 1].OrderNumber;
-            var currentOrder = parsedOrders[i].OrderNumber;
+        //NOTE: Изменения в постановке ЦБ по сравнению со второй версией нет. Прямого требования делать эту проверку в постановке нет. Во второй версии эта проверка отсутствует. Маша сказала лучше убрать эту проверку.
+        //for (var i = 1; i < parsedOrders.Count; i++)
+        //{
+        //    var previousOrder = parsedOrders[i - 1].OrderNumber;
+        //    var currentOrder = parsedOrders[i].OrderNumber;
 
-            if (currentOrder != previousOrder + 1)
-            {
-                AddPackageErrorIfMissing(transaction, currentOrder,
-                    "Порядковые номера запросов в пакете должны идти подряд без пропусков");
-            }
-        }
+        //    if (currentOrder != previousOrder + 1)
+        //    {
+        //        AddPackageErrorIfMissing(transaction, currentOrder,
+        //            "Порядковые номера запросов в пакете должны идти подряд без пропусков");
+        //    }
+        //}
     }
 
     private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)
@@ -113,6 +109,6 @@ public static class XMLRequestCollectionValidatorV3
             return;
         }
 
-        transaction.SetPacakgeValidationError(orderNumber, Error.Code26_WrongBlockCount(message));
+        transaction.SetPacakgeValidationError(orderNumber, AnswerErrorCode.Code99_OtherError(message));
     }
 }

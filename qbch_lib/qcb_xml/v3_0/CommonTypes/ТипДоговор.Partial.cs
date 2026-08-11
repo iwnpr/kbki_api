@@ -38,8 +38,8 @@ namespace QBCH.Lib.qcb_xml.v3_0
 
 		public void УстановитьДатуПрекращения(DateTime дата)
 		{
-			ДатаПрекращения = дата.Date;
-			ДатаПрекращенияSpecified = true;
+            ДатаПрекращения = DateTime.SpecifyKind(дата.Date, DateTimeKind.Unspecified);
+            ДатаПрекращенияSpecified = true;
 		}
 	}
 }

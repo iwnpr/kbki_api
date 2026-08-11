@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using QBCH.Lib.qcb_xml.v3_0;
+using qbch_lib.domain.errors;
 using QBCH_lib.Services.Interfaces.V3;
 using System;
 
@@ -11,7 +12,7 @@ public class TicketServiceV3(IConfiguration config) : ITicketServiceV3
     private readonly string _BureauPSRN = "Bureau:PSRN";
     private readonly string _versionNumber = "3.0";
 
-    public Результат CreateResultV3Error(core.Error error)
+    public Результат CreateResultV3Error(AnswerErrorCode error)
     {
         var result = CreateResultV3Common();
         result.УстановитьОшибку(error.Code, error.Message);
@@ -25,10 +26,10 @@ public class TicketServiceV3(IConfiguration config) : ITicketServiceV3
         return result;
     }
 
-    public Результат CreateResultV3Accepted(string requestId, string responseId, DateTime requestDate, long? readyTime = null)
+    public Результат CreateResultV3Accepted(string requestId, string responseId, DateTime requestDate)
     {
         var result = CreateResultV3Common();
-        result.УстановитьИдентификаторОтвета(responseId, requestId, requestDate, readyTime);
+        result.УстановитьИдентификаторОтвета(responseId, requestId, requestDate);
         return result;
     }
 

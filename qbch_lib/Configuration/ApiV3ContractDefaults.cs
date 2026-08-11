@@ -35,7 +35,7 @@ public static class ApiV3ContractDefaults
     /// без перехода к асинхронной модели с квитанцией и идентификатором ответа.
     /// Значение задаётся в секундах.
     /// </summary>
-    public const int ImmediateResponseDeadlineSeconds = 4;
+    public const int ImmediateResponseDeadlineSeconds = 3;
 
     /// <summary>
     /// Таймаут исходящих HTTP-вызовов к другим КБКИ.

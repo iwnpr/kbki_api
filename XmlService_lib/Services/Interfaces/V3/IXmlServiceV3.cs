@@ -1,7 +1,5 @@
-﻿using QBCH_lib.CommonTypes.Api;
-using QBCH_lib.core;
+﻿using qbch_lib.CommonTypes.Api;
 using System.Diagnostics.CodeAnalysis;
-using System.Xml;
 using System.Xml.Linq;
 
 namespace XmlService_lib.Services.Interfaces.V3;
@@ -14,7 +12,7 @@ public interface IXmlServiceV3
     /// <typeparam name="T">Тип</typeparam>
     /// <param name="stream">Поток</param>
     /// <returns>Десериалиованный объект класса</returns>
-    T? DeserializeV3<T>(XDocument? xml) where T : class;
+    T? DeserializeV3<T>(XElement? xml) where T : class;
 
     /// <summary>
     /// Десериализация из xDocument
@@ -63,12 +61,4 @@ public interface IXmlServiceV3
     /// <param name="nameOfController">Имя контроллера для поиска Xsd в MemoryCache</param>
     /// <returns></returns>
     bool ValidateXmlV3(MemoryStream memStream, string nameOfController, [NotNullWhen(false)] out BaseResult? result);
-
-    /// <summary>
-    /// Валидация xml (перегрузка Result)
-    /// </summary>
-    /// <param name="memStream">Поток XDocument</param>
-    /// <param name="nameOfController">Имя контроллера для поиска Xsd в MemoryCache</param>
-    /// <returns></returns>
-    Result ValidateXmlV3(MemoryStream memStream, string nameOfController);
 }

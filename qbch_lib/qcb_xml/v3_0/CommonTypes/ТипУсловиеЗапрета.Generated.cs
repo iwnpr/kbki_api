@@ -10,17 +10,17 @@ namespace QBCH.Lib.qcb_xml.v3_0
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     public partial class ТипУсловиеЗапрета {
         
-        private System.DateTime датаЗаявленияField;
+        private string датаЗаявленияField;
         
-        private System.DateTime времяЗаявленияField;
+        private string времяЗаявленияField;
         
-        private System.DateTime началоДействияField;
+        private string началоДействияField;
         
         private СправочникУсловияЗапрета valueField;
-        
+
         /// <remarks/>
-        [System.Xml.Serialization.XmlAttributeAttribute(DataType="date")]
-        public System.DateTime ДатаЗаявления {
+        [System.Xml.Serialization.XmlAttribute()]
+        public string ДатаЗаявления {
             get {
                 return this.датаЗаявленияField;
             }
@@ -28,10 +28,10 @@ namespace QBCH.Lib.qcb_xml.v3_0
                 this.датаЗаявленияField = value;
             }
         }
-        
+
         /// <remarks/>
-        [System.Xml.Serialization.XmlAttributeAttribute(DataType="time")]
-        public System.DateTime ВремяЗаявления {
+        [System.Xml.Serialization.XmlAttribute()]
+        public string ВремяЗаявления {
             get {
                 return this.времяЗаявленияField;
             }
@@ -39,10 +39,10 @@ namespace QBCH.Lib.qcb_xml.v3_0
                 this.времяЗаявленияField = value;
             }
         }
-        
+
         /// <remarks/>
-        [System.Xml.Serialization.XmlAttributeAttribute(DataType="date")]
-        public System.DateTime НачалоДействия {
+        [System.Xml.Serialization.XmlAttribute()]
+        public string НачалоДействия {
             get {
                 return this.началоДействияField;
             }

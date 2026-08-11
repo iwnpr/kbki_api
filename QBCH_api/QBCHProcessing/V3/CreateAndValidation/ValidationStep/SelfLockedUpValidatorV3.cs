@@ -1,10 +1,10 @@
-﻿using QBCH_lib.core;
-using QBCH_lib.domain.aggregate;
+﻿using QBCH_lib.domain.aggregate;
 using СправочникВидыСведенийV3 = QBCH.Lib.qcb_xml.v3_0.СправочникВидыСведений;
 using СправочникРежимыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 using ТипИННФЛсПризнакомПризнакПроверкиV3 = QBCH.Lib.qcb_xml.v3_0.ТипИННФЛсПризнакомПризнакПроверки;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using ЗапросСведенийЗапросV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийЗапрос;
+using qbch_lib.domain.errors;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 
@@ -44,16 +44,15 @@ public static class SelfLockedUpValidatorV3
     {
         // Матрица ИНН/ПризнакПроверки:
         // Код 6: для "запрета" нужны ИНН и ПризнакПроверки=1.
-        // Код 7: при отсутствии ИНН или ПризнакПроверки=0 не предоставляются "запрет" и "антифрод".
-        // Код 8: те же правила, что и для кода 7.
+        // Код 7: при отсутствии ИНН или ПризнакПроверки=0 запрос не блокируется, в ответе не предоставляются "запрет" и "антифрод", но могут быть выданы платежи.
+        // Код 8: для "запрета" и "антифрода" нужны ИНН и ПризнакПроверки=1.
         var subjectInn = requestItem.Субъект?.ИНН;
         var hasInn = subjectInn is not null && !string.IsNullOrWhiteSpace(subjectInn.Value);
 
         var isInnBlocked = infoCode switch
         {
-            СправочникВидыСведенийV3.Item6 => !hasInn || subjectInn!.ПризнакПроверки != ТипИННФЛсПризнакомПризнакПроверкиV3.Item1,
-            СправочникВидыСведенийV3.Item7 or СправочникВидыСведенийV3.Item8
-                => !hasInn || subjectInn!.ПризнакПроверки == ТипИННФЛсПризнакомПризнакПроверкиV3.Item0,
+            СправочникВидыСведенийV3.Item6 or СправочникВидыСведенийV3.Item8
+                => !hasInn || subjectInn!.ПризнакПроверки != ТипИННФЛсПризнакомПризнакПроверкиV3.Item1,
             _ => false
         };
 
@@ -74,7 +73,6 @@ public static class SelfLockedUpValidatorV3
         // 7 — платежи + антифрод + запрет
         // 8 — антифрод + запрет
         return infoCode is СправочникВидыСведенийV3.Item6
-            or СправочникВидыСведенийV3.Item7
             or СправочникВидыСведенийV3.Item8;
     }
 
@@ -82,11 +80,11 @@ public static class SelfLockedUpValidatorV3
     {
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {
-            transaction.SetPacakgeValidationError(orderNumber, Error.Code25_SelfLockedUpError());
+            transaction.SetPacakgeValidationError(orderNumber, AnswerErrorCode.Code25_SelfLockedUpError_V3());
             return;
         }
 
-        transaction.RiseCriticalError(Error.Code25_SelfLockedUpError());
+        transaction.RiseCriticalError(AnswerErrorCode.Code25_SelfLockedUpError_V3());
     }
 
     private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)

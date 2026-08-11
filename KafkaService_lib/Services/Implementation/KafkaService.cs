@@ -2,7 +2,8 @@
 using KafkaService_lib.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
+using Polly;
+using Polly.Timeout;
 
 namespace KafkaService_lib.Services.Implementation
 {
@@ -45,6 +46,7 @@ namespace KafkaService_lib.Services.Implementation
 
         public bool IsAvailable()
         {
+            _logger.LogDebug("Kafka IsAvailable: проверка доступности брокера {bootstrapServers}", _bootstrapServers);
             using var adminClient = new AdminClientBuilder(new AdminClientConfig
             {
                 BootstrapServers = _bootstrapServers
@@ -52,34 +54,23 @@ namespace KafkaService_lib.Services.Implementation
 
             try
             {
-                // ReSharper disable once UnusedVariable
-                var meta = adminClient.GetMetadata(TimeSpan.FromSeconds(20));
+                var metaData = adminClient.GetMetadata(TimeSpan.FromSeconds(20));
+                _logger.LogDebug("Kafka IsAvailable: брокер доступен, brokers={brokerCount}", metaData.Brokers.Count);
             }
             catch (Exception e)
             {
-                _logger.LogCritical(e, "Error");
+                _logger.LogCritical(e, "Kafka IsAvailable: ошибка подключения к брокеру {bootstrapServers}", _bootstrapServers);
                 return false;
             }
 
             return true;
         }
-        //Обработка ошибки при доставке сообщения в топик
-
-        void DeliveryReportHandler(DeliveryReport<string, string> deliveryReport)
-        {
-
-            if (deliveryReport.Error.IsError || deliveryReport.Error.IsFatal || deliveryReport.Error.IsLocalError || deliveryReport.Error.IsBrokerError)
-            {
-                _logger.LogCritical($"Kafka Delivery Topic: {deliveryReport.Topic} Partition: {deliveryReport.Partition} Offset: {deliveryReport.Offset} Error: {deliveryReport.Error.Reason}");
-                throw new Exception($"Kafka Delivery Topic: {deliveryReport.Topic} Partition: {deliveryReport.Partition} Offset: {deliveryReport.Offset} Error: {deliveryReport.Error.Reason}");
-            }
-            else
-                _logger.LogDebug($"Kafka Delivery Topic: {deliveryReport.Topic} Partition: {deliveryReport.Partition} Offset: {deliveryReport.Offset}");
-        }
-
 
         public async Task<bool> Produce(Message<Null, string> message, string? topic = null)
         {
+            var targetTopic = topic ?? _topic;
+            _logger.LogDebug("Kafka Produce (single): topic={topic}, valueLength={valueLength}", targetTopic, message.Value?.Length ?? 0);
+
             _producerMsg ??= new ProducerBuilder<Null, string>(new ProducerConfig
             {
                 BootstrapServers = _bootstrapServers,
@@ -95,55 +86,42 @@ namespace KafkaService_lib.Services.Implementation
 
             topic ??= _topic;
             var maxAttempts = _produceRetryCount + 1;
-            var stopwatch = Stopwatch.StartNew();
+            var timeoutPolicy = Policy.TimeoutAsync(_produceRetryTotalTimeoutMs / 1000, TimeoutStrategy.Optimistic);
+            var retryPolicy = Policy
+                .Handle<ProduceException<Null, string>>()
+                .WaitAndRetryAsync(
+                    _produceRetryCount,
+                    _ => TimeSpan.FromMilliseconds(_produceRetryDelayMs),
+                    (exception, delay, retryNumber, _) =>
+                    {
+                        _logger.LogWarning(exception, "Ошибка отправки в кафку {value}. Попытка {attempt}/{maxAttempts}. Повтор через {delayMs} ms", message.Value, retryNumber, maxAttempts, (int)delay.TotalMilliseconds);
+                    });
 
-            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            var policy = Policy.WrapAsync(timeoutPolicy, retryPolicy);
+
+            try
             {
-                try
+                await policy.ExecuteAsync(async token =>
                 {
                     await _producerMsg.ProduceAsync(topic, message);
                     return true;
-                }
-                catch (ProduceException<Null, string> e)
-                {
-                    var elapsedMs = stopwatch.ElapsedMilliseconds;
-                    var hasAttemptsLeft = attempt < maxAttempts;
-                    var hasTimeLeft = elapsedMs < _produceRetryTotalTimeoutMs;
+                }, CancellationToken.None);
 
-                    if (!hasAttemptsLeft || !hasTimeLeft)
-                    {
-                        _logger.LogCritical(e,
-                            "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Достигнут лимит ретраев/времени ({elapsedMs} ms из {timeoutMs} ms)",
-                            message.Value,
-                            attempt,
-                            maxAttempts,
-                            elapsedMs,
-                            _produceRetryTotalTimeoutMs);
-                        return false;
-                    }
-
-                    _logger.LogWarning(e,
-                        "Ошибка добавления в кафку {value}. Попытка {attempt}/{maxAttempts}. Повтор через {delayMs} ms",
-                        message.Value,
-                        attempt,
-                        maxAttempts,
-                        _produceRetryDelayMs);
-
-                    if (_produceRetryDelayMs > 0)
-                    {
-                        var remainingTimeoutMs = _produceRetryTotalTimeoutMs - elapsedMs;
-                        var delayMs = (int)Math.Min(_produceRetryDelayMs, remainingTimeoutMs);
-                        if (delayMs > 0)
-                            await Task.Delay(delayMs);
-                    }
-                }
+                _logger.LogDebug("Kafka Produce успешно, сообщение отправлено: topic={topic}", topic);
+                return true;
             }
+            catch (Exception e) when (e is ProduceException<Null, string> || e is TimeoutRejectedException)
+            {
+                _logger.LogError(e, "Ошибка отправки в кафку {value}. Достигнут лимит ретраев/времени ({timeoutMs} ms)", message.Value, _produceRetryTotalTimeoutMs);
+                return false;
 
-            return false;
+            }
         }
 
         public async Task<bool> Produce(List<Message<string, string>> messages, string? topic = null)
         {
+            _logger.LogDebug("Kafka Produce (batch): messageCount={messageCount}, topic={topic}", messages.Count, topic ?? _topic);
+
             if (messages.Count == 0)
             {
                 _logger.LogDebug("Нет сообщений для отправки в кафку");
@@ -180,13 +158,15 @@ namespace KafkaService_lib.Services.Implementation
             }
 
             _producer.Flush(TimeSpan.FromSeconds(10));
+
+            _logger.LogDebug("Kafka Produce (batch) успешно: topic={topic}, messageCount={messageCount}", topic, messages.Count);
             return true;
         }
 
 
         public Message<string, string>? Consume()
         {
-            _logger.LogInformation("Начало получения сообщения из Kafka");
+            _logger.LogDebug("Начало получения сообщения из Kafka");
             _consumer ??= new ConsumerBuilder<string, string>(new ConsumerConfig
             {
                 GroupId = _groupId,
@@ -201,17 +181,17 @@ namespace KafkaService_lib.Services.Implementation
             try
             {
                 var cr = _consumer.Consume();
-                _logger.LogInformation("Offset =  {crOffset}, Partition = {crTopicPartitionOffset}, Topic = {crTopic}", cr.Offset, cr.TopicPartitionOffset.Partition.Value, cr.Topic);
+                _logger.LogDebug("Offset =  {crOffset}, Partition = {crTopicPartitionOffset}, Topic = {crTopic}", cr.Offset, cr.TopicPartitionOffset.Partition.Value, cr.Topic);
                 return cr.Message;
             }
             catch (ConsumeException e)
             {
-                _logger.LogCritical("Consume error occured: {eErrorReason}", e.Error.Reason);
+                _logger.LogError("Ошибка получения сообщения: {eErrorReason}", e.Error.Reason);
                 return null;
             }
             finally
             {
-                _logger.LogInformation("Завершение получения сообщения из Kafka");
+                _logger.LogDebug("Завершение получения сообщения из Kafka");
             }
         }
 

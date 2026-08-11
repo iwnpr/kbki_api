@@ -9,23 +9,15 @@ using KafkaService_lib.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.FeatureManagement;
 using Microsoft.OpenApi.Models;
-using QBCH_api.Services.Implementations;
 using QBCH_api.Services.Implementations.V3;
-using QBCH_api.Services.Interfaces;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Implementations;
-using Qbch_db_lib.Services.Implementations.V3;
 using Qbch_db_lib.Services.Interfaces;
-using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
-using QBCH_lib.Services.Implementations;
 using QBCH_lib.Services.Implementations.V3;
-using QBCH_lib.Services.Interfaces;
 using QBCH_lib.Services.Interfaces.V3;
-using QBCHService_lib.Services.Implementations;
 using QBCHService_lib.Services.Implementations.V3;
-using QBCHService_lib.Services.Interfaces;
 using QBCHService_lib.Services.Interfaces.V3;
 using Serilog;
 using Serilog.Core;
@@ -34,8 +26,6 @@ using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using XmlService_lib.Services.Implementations.V3;
 using XmlService_lib.Services.Interfaces.V3;
-using XmlService_lib.Services.Implementations;
-using XmlService_lib.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -85,18 +75,10 @@ builder.Services.AddTransient<ICryptoService, CryptoService>();
 builder.Services.AddTransient<ICertManagementService, CertManagementService>();
 builder.Services.AddSingleton<ICompressService, CompressService>();
 ThreadPool.SetMinThreads(200, 200);
-builder.Services.AddTransient<ICacheService, CacheService>();
+builder.Services.AddTransient<IKeyValueStorageService, KeyValueStorageService>();
 builder.Services.AddSingleton<IBKIRequisitsHandler, BKIRequsits>();
 builder.Services.AddSingleton<IKafkaService, KafkaService>();
 
-
-// V_2.0
-builder.Services.AddTransient<IXmlService, XmlService>();
-builder.Services.AddTransient<IValidationService, ValidationService>();
-builder.Services.AddTransient<IRepository, Repository>();
-builder.Services.AddTransient<IQBCHService, QBCHService>();
-builder.Services.AddTransient<ITransformer, Transformer>();
-builder.Services.AddTransient<ITicketService, TicketService>();
 
 // V_3.0
 builder.Services.AddTransient<IXmlServiceV3, XmlServiceV3>();
@@ -109,58 +91,64 @@ builder.Services.AddTransient<IDlPutServiceV3, DlPutServiceV3>();
 // Добавление http-клиентов в HttpClientFactory
 try
 {
-    var requireSignerCertificate = builder.Configuration.GetValue("Signer:RequireCertificate", true);
-    X509Certificate2? signerCertificate = null;
+    // Signer:RequireCertificate=false отключает поиск сертификата подписанта и клиентские сертификаты http-клиентов
+    // (только для локального запуска без сертификатов). По умолчанию - true.
+    var requireCertificate = builder.Configuration.GetValue<bool?>("Signer:RequireCertificate") ?? true;
 
-    if (requireSignerCertificate)
+    X509Certificate2? foundCertColl = null;
+
+    if (!requireCertificate)
     {
-        var searchValue = builder.Configuration.GetValue<string>("Signer:SearchValue");
-        var storeLocationValue = builder.Configuration.GetValue<string>("Signer:StoreLocation");
-        var storeNameValue = builder.Configuration.GetValue<string>("Signer:StoreName");
-        var findTypeValue = builder.Configuration.GetValue<string>("Signer:FindType");
-
-        if (string.IsNullOrWhiteSpace(searchValue))
-        {
-            serilog.Error("Отсутствует значение для поиска сертификата для подписи запросов КБКИ.");
-            return;
-        }
-
-        if (!Enum.TryParse<StoreLocation>(storeLocationValue, true, out var storeLocation))
-        {
-            storeLocation = StoreLocation.LocalMachine;
-        }
-
-        if (!Enum.TryParse<StoreName>(storeNameValue, true, out var storeName))
-        {
-            storeName = StoreName.My;
-        }
-
-        if (!Enum.TryParse<X509FindType>(findTypeValue, true, out var findType))
-        {
-            findType = X509FindType.FindByThumbprint;
-        }
-
-        using var store = new X509Store(storeName, storeLocation);
-        store.Open(OpenFlags.ReadOnly);
-
-        signerCertificate = store.Certificates
-            .Find(findType, searchValue, true)
-            .FirstOrDefault();
-
-        if (signerCertificate == null)
-        {
-            serilog.Error("Отсутствует сертификат для подписания запросов в КБКИ.");
-            return;
-        }
+        serilog.Warning("Signer:RequireCertificate=false - сертификат подписанта не используется. Режим допустим только для локальной разработки.");
     }
     else
     {
-        serilog.Warning("Проверка сертификата подписи отключена настройкой Signer:RequireCertificate=false.");
+    var _searchValue = builder.Configuration.GetValue<string>("Signer:SearchValue");
+    var _storeLocation = builder.Configuration.GetValue<string>("Signer:StoreLocation");
+    var _storeName = builder.Configuration.GetValue<string>("Signer:StoreName");
+    var _findType = builder.Configuration.GetValue<string>("Signer:FindType");
+
+    if (string.IsNullOrWhiteSpace(_searchValue))
+    {
+        serilog.Error("Отсутствует значение для поиска сертифката для подписи запросов КБКИ.");
+        return;
     }
 
+    // Расположение хранилища сертифкатов
+    if (!Enum.TryParse<StoreLocation>(_storeLocation, true, out var storeLocation))
+        storeLocation = StoreLocation.LocalMachine;
+
+    // Директория в хранилище
+    if (!Enum.TryParse<StoreName>(_storeName, true, out var storeName))
+        storeName = StoreName.My;
+
+    // Определения параметра поиска
+    if (!Enum.TryParse<X509FindType>(_findType, true, out var findType))
+        findType = X509FindType.FindByThumbprint;
+
+    using X509Store store = new(storeName, storeLocation);
+    store.Open(OpenFlags.ReadOnly);
+
+    if (string.IsNullOrWhiteSpace(_searchValue))
+    {
+        throw new Exception("Сертификат не найден");
+    }
+
+    // Находим сертификаты с нужным именем и добавляем в коллекцию.
+        foundCertColl = store.Certificates.Find(findType, _searchValue, true).FirstOrDefault();
+
+    // Сертификат не найден
+    if (foundCertColl == null)
+    {
+        serilog.Error("Отсутствует сертификат для подписания запросов в КБКИ.");
+        return;
+    }
+    }
+
+    // Добавление именованных http-клиентов в фабрику клиентов
     foreach (var item in builder.Configuration.GetSection("QBCH").GetChildren())
     {
-        AddHttpClientToFactory(builder, serilog, signerCertificate, item, contractOptions.HttpClientTimeoutSeconds);
+        AddHttpClientToFactory(builder, serilog, foundCertColl, item, contractOptions.HttpClientTimeoutSeconds);
     }
 }
 catch (Exception ex)
@@ -181,8 +169,6 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v3", new OpenApiInfo { Title = "API сервиса QBCH V3", Version = "v3.0" });
-    options.SwaggerDoc("v2", new OpenApiInfo { Title = "API сервиса QBCH V2", Version = "v2.0" });
-    options.SwaggerDoc("v1.3", new OpenApiInfo { Title = "API сервиса QBCH V1", Version = "v1.3" });
     options.EnableAnnotations();
     options.UseInlineDefinitionsForEnums();
 });
@@ -197,8 +183,6 @@ app.UseDeveloperExceptionPage();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("v1.3/swagger.json", "API сервиса QBCH V1");
-    c.SwaggerEndpoint("v2/swagger.json", "API сервиса QBCH V2");
     c.SwaggerEndpoint("v3/swagger.json", "API сервиса QBCH V3");
 });
 app.MapControllers();
@@ -209,7 +193,6 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
 {
     var clientName = section.GetValue<string>("Name");
     var url = section.GetValue<string>("Url");
-    var urlv2 = section.GetValue<string>("Urlv2");
 
     if (string.IsNullOrWhiteSpace(clientName))
     {
@@ -219,51 +202,32 @@ static void AddHttpClientToFactory(WebApplicationBuilder builder, Logger serilog
 
     if (string.IsNullOrEmpty(url))
     {
-        serilog.Fatal("Отсутствует BaseAddress для http-клиента {clientName}.", clientName);
+        serilog.Fatal("Отсутствует BaseAddress для http-клиента: {clientName}.", clientName);
         throw new NullReferenceException();
     }
 
-    if (string.IsNullOrEmpty(urlv2))
-    {
-        serilog.Fatal("Отсутствует BaseAddress для http-клиента v3: {clientName}.", clientName);
-        throw new NullReferenceException();
-    }
-
-    var httpClientBuilder = builder.Services.AddHttpClient(clientName, client =>
+    var httpClientBuilderV3 = builder.Services.AddHttpClient($"{clientName}v3", client =>
     {
         client.BaseAddress = new Uri(url);
         client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
     });
 
-    var httpClientBuilderV3 = builder.Services.AddHttpClient($"{clientName}v3", client =>
+    HttpClientHandler CreateCertificateHandler()
     {
-        client.BaseAddress = new Uri(urlv2);
-        client.Timeout = TimeSpan.FromSeconds(httpClientTimeoutSeconds);
-    });
+        var handler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+        };
 
-    if (certificate == null)
-    {
-        serilog.Warning("HttpClient {clientName} и {clientName}v3 зарегистрированы без клиентского сертификата.", clientName);
-        return;
+        // Без сертификата (Signer:RequireCertificate=false) клиент работает без клиентской аутентификации
+        if (certificate is not null)
+        {
+            handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+            handler.ClientCertificates.Add(certificate);
+        }
+
+        return handler;
     }
 
-    httpClientBuilder.ConfigurePrimaryHttpMessageHandler(() =>
-    {
-        return new HttpClientHandler
-        {
-            ClientCertificateOptions = ClientCertificateOption.Manual,
-            ClientCertificates = { certificate },
-            ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
-        };
-    });
-
-    httpClientBuilderV3.ConfigurePrimaryHttpMessageHandler(() =>
-    {
-        return new HttpClientHandler
-        {
-            ClientCertificateOptions = ClientCertificateOption.Manual,
-            ClientCertificates = { certificate },
-            ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
-        };
-    });
+    httpClientBuilderV3.ConfigurePrimaryHttpMessageHandler(CreateCertificateHandler);
 }

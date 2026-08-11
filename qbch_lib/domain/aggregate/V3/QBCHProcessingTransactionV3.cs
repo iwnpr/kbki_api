@@ -1,5 +1,5 @@
 ﻿using QBCH.Lib.qcb_xml.v3_0;
-using QBCH_lib.domain.entities.V3;
+using qbch_lib.domain.entities;
 
 namespace QBCH_lib.domain.aggregate.V3;
 
@@ -21,17 +21,9 @@ public class QBCHProcessingTransactionV3
     public QBCHProcessingTransaction Inner => _inner;
 
     /// <summary>
-    /// Обернуть существующую транзакцию.
-    /// </summary>
-    public static QBCHProcessingTransactionV3 From(QBCHProcessingTransaction transaction)
-    {
-        return new QBCHProcessingTransactionV3(transaction);
-    }
-
-    /// <summary>
     /// Получить запрос версии 3.0.
     /// </summary>
-    public ЗапросСведений? GetRequestV3()
+    public ЗапросСведений? GetRequest()
     {
         return _inner.ClentRequest.RequestPayload as ЗапросСведений;
     }
@@ -39,8 +31,8 @@ public class QBCHProcessingTransactionV3
     /// <summary>
     /// Получить обертку клиентского запроса версии 3.0.
     /// </summary>
-    public ClentRequestV3 GetClientRequestV3()
+    public ClentRequest GetClientRequest()
     {
-        return ClentRequestV3.From(_inner.ClentRequest);
+        return ClentRequest.From(_inner.ClentRequest);
     }
 }

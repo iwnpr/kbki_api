@@ -361,3 +361,18 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /z_tst_console
+
+# Common IntelliJ Platform excludes
+
+## JetBrains Rider / IntelliJ IDE items
+.idea/
+*.sln.iml
+*.suo
+
+# If you use RiderLink for Unreal Engine development
+.idea/RiderLink/
+
+# Keep these if you want to share specific settings with your team
+!.idea/runConfigurations/
+!.idea/indexLayout.xml
+!.idea/vcs.xml
