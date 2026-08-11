@@ -1,7 +1,5 @@
 ﻿using CertManagement.Services.Interfaces;
-using Microsoft.Extensions.Logging;
-using Qbch_db_lib.Services.Interfaces;
-using QBCH_lib.Services.Interfaces.V3;
+using Qbch_db_lib.Services.Interfaces.V3;
 using System.Security.Cryptography.X509Certificates;
 
 namespace CertManagement.Services.Implementations

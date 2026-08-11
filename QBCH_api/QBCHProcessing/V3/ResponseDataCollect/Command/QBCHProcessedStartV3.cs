@@ -1,5 +1,5 @@
 ﻿using MediatR;
-using QBCH_lib.domain.aggregate;
+using qbch_lib.domain.aggregate.V3;
 
 namespace QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
 
@@ -10,6 +10,6 @@ namespace QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
 /// <param name="ImmediateResponseDeadlineMs">Порог выдачи синхронного ответа в миллисекундах.</param>
 /// <param name="OurBureauPSRN">ОГРН нашего БКИ.</param>
 public sealed record QBCHProcessedStartV3(
-    QBCHProcessingTransaction Transaction,
+    QBCHProcessingTransactionV3 Transaction,
     int ImmediateResponseDeadlineMs,
-    string OurBureauPSRN) : IRequest<QBCHProcessingTransaction>;
+    string OurBureauPSRN) : IRequest<QBCHProcessingTransactionV3>;

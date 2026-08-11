@@ -13,10 +13,10 @@ using QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
 using QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 using QBCH_api.Services.Interfaces.V3;
 using qbch_lib;
+using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
-using QBCH_lib.domain.aggregate;
 using QBCH_lib.Services.Interfaces.V3;
 using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
@@ -56,7 +56,6 @@ public class QBCHIIIController(IMediator mediator,
     private readonly ICertManagementService _certManagement = certManagement;
     private readonly ApiV3ContractRules _contractRules = contractRules;
     private readonly IConfiguration _config = config;
-    //NOTE: Вернул запись в Kafka
     private readonly IKafkaService _kafka = kafka;
 
     private readonly string? _kafkaTopic = config.GetValue<string>("KafkaService:Topic");
@@ -81,8 +80,8 @@ public class QBCHIIIController(IMediator mediator,
         var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
         _logger.LogDebug("Начало = {Action} v{Version} в {RequestTime}", nameof(DlRequest_v_3), apiVersion, requestTime);
 
-        var transaction = await _mediator.Send(new CreateToValidateCommand(apiVersion, Request));
-        _logger.LogDebug("{guid} Request: {dt}", transaction.Id, requestTime);
+        var transaction = await _mediator.Send(new CreateToValidateCommandV3(apiVersion, Request));
+        _logger.LogDebug("{guid} Запрос: {dt}", transaction.Id, requestTime);
 
         if (transaction.ProcessingErrors.Count != 0)
         {
@@ -170,7 +169,7 @@ public class QBCHIIIController(IMediator mediator,
 
                 // Попытка отправки в кафку                    
                 if (!await _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic))
-                    _logger.LogCritical("Lost key:{key}", transaction.Id);
+                    _logger.LogCritical("Потерян ключ:{key}", transaction.Id);
             }
             catch (Exception e)
             {
@@ -197,7 +196,7 @@ public class QBCHIIIController(IMediator mediator,
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
 
-        _logger.LogDebug("Начало действия {Action} service={ServiceName} transactionId={id} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), id, serviceName, guid, requestTime);
+        _logger.LogDebug("Начало действия {Action} service={QbchService} transactionId={id} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, id, guid, requestTime);
 
         try
         {
@@ -209,23 +208,12 @@ public class QBCHIIIController(IMediator mediator,
             if (!string.IsNullOrWhiteSpace(ipAddress))
                 await _storageService.AddHash(serviceName, guid, "ip_address", ipAddress);
 
-            //NOTE: Вернул убранный try/catch, где в catch производится логирование в Kafka
             try
             {
-                // Ошибка 1: метод не GET — спецификация требует GET для /dlanswer
-                //NOTE: У тебя [HttpGet("dlanswer")] в атрибуте метода, зачем проверка на GET
                 if (!string.Equals(Request.Method, HttpMethods.Get, StringComparison.OrdinalIgnoreCase))
                 {
                     standartError = AnswerErrorCode.Code1_WrongRequestMethod();
-                    //NOTE: Убрал повторное логирование, в методе более подробное
-                    //_logger.LogError(standartError.Message);
-
-                    //NOTE: Назначение возвращаемого статус кода таким образом может быть и "красиво", но плохо читабельно и логика, имхо, слишком уж разнесена. 
                     var methodError = await BuildV3ErrorResponseAsync(serviceName, guid, standartError.Code, standartError.Message, StatusCodes.Status400BadRequest);
-
-                    //NOTE: Убираю назначение переменных, оставшеся от Артема
-                    //responseXml = methodError.ResponseXml;
-                    //signedResponse = methodError.SignedResponse;
 
                     return methodError.ActionResult;
                 }
@@ -233,15 +221,8 @@ public class QBCHIIIController(IMediator mediator,
                 if (string.IsNullOrWhiteSpace(id))
                 {
                     standartError = AnswerErrorCode.Code3_EmptyRequiredParameters(nameof(id));
-                    //NOTE: Убрал повторное логирование, в методе более подробное
-                    //_logger.LogError(standartError.Message);
-
                     var statusCode = ResolveDlAnswerStatusCodeByErrorCode(standartError.Code);
                     var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, standartError.Code, standartError.Message, statusCode);
-
-                    //NOTE: Убираю назначение переменных, оставшеся от Артема
-                    //responseXml = errorResult.ResponseXml;
-                    //signedResponse = errorResult.SignedResponse;
 
                     return errorResult.ActionResult;
                 }
@@ -251,25 +232,18 @@ public class QBCHIIIController(IMediator mediator,
                 if (!await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, RedisConstants.DlRequestV3Scope))
                 {
                     standartError = AnswerErrorCode.Code22_AccessDenied();
-                    //NOTE: Убрал повторное логирование, в методе более подробное
-                    //_logger.LogError(standartError.Message);
 
                     var statusCode = ResolveDlAnswerStatusCodeByErrorCode(standartError.Code);
                     var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, standartError.Code, standartError.Message, statusCode);
-                    //NOTE: Убираю назначение переменных, оставшеся от Артема
-                    //responseXml = errorResult.ResponseXml;
-                    //signedResponse = errorResult.SignedResponse;
 
                     return errorResult.ActionResult;
                 }
 
-
-                //NOTE: Мы разве если isCertificateValid = false и certValidationResult = null должны идти дальше?
                 var isCertificateValid = _validationServiceV3.ValidateCertificateV3(certificate, out var certValidationResult);
 
                 if (!isCertificateValid & certValidationResult is not null)
                 {
-                    //NOTE: А тут почему BuildV3ErrorResponseAsync не используется?
+
                     var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(certValidationResult.ErrorCode, certValidationResult.Error));
                     responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                     signedResponse = _cryptoService.SignMsg(responseXml);
@@ -282,20 +256,8 @@ public class QBCHIIIController(IMediator mediator,
 
                 if (!await _storageService.KeyExists([RedisConstants.DlRequestV3Scope, id]))
                 {
-                    //NOTE: Убрал повторное логирование, в методе более подробное
-                    //_logger.LogError("Данные по указанному идентификатору не найдены");
+                    var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, 16, "Указан некорректный идентификатор ответа", StatusCodes.Status400BadRequest);
 
-                    //NOTE: Стиль BuildV3ErrorResponseAsync отличается от стиля BuildV3ErrorResponseAsync в ошибках выше
-                    var errorResult = await BuildV3ErrorResponseAsync(
-                        serviceName,
-                        guid,
-                        16,
-                        "Указан некорректный идентификатор ответа",
-                        StatusCodes.Status400BadRequest);
-
-                    //NOTE: Убираю назначение переменных, оставшеся от Артема
-                    //responseXml = errorResult.ResponseXml;
-                    //signedResponse = errorResult.SignedResponse;
                     return errorResult.ActionResult;
                 }
 
@@ -342,7 +304,6 @@ public class QBCHIIIController(IMediator mediator,
         }
         catch (Exception ex)
         {
-            //NOTE: Вернул запись в Кафку
             var message = JsonSerializer.Serialize(
                    new
                    {
@@ -364,7 +325,6 @@ public class QBCHIIIController(IMediator mediator,
         }
     }
 
-    //NOTE: Код далее в проде сейчас не используется, пожтому я его не смотрел.
     [HttpPost("dlput")]
     public async Task<IActionResult> DlPut_v_3(ApiVersion apiVersion)
     {
@@ -1196,7 +1156,7 @@ public class QBCHIIIController(IMediator mediator,
 
     private async Task<V3ErrorResponseBuildResult> BuildV3ErrorResponseAsync(string serviceName, string guid, int code, string message, int statusCode)
     {
-        _logger.LogError("Ошибка обработки v3 service={ServiceName} guid={Guid} code={ErrorCode} status={StatusCode}: {ErrorMessage}", serviceName, guid, code, statusCode, message);
+        _logger.LogError("Ошибка обработки v3 service={QbchService} guid={Guid} code={QbchErrorCode} status={StatusCode}: {QbchErrorMessage}", serviceName, guid, code, statusCode, message);
         await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
         await _storageService.AddHash(serviceName, guid, "error_message", message);
 

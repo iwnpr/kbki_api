@@ -2,10 +2,10 @@
 using Crypto_lib.Service;
 using MediatR;
 using QBCH_api.Services.Interfaces.V3;
-using Qbch_db_lib.Services.Interfaces;
+using Qbch_db_lib.Services.Interfaces.V3;
+using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.entities;
 using QBCH_lib.CommonTypes.Api;
-using QBCH_lib.domain.aggregate;
 using QBCH_lib.domain.entities;
 using XmlService_lib.Services.Interfaces.V3;
 
@@ -21,7 +21,7 @@ public sealed class CreateAndValidateHandler(
     IRepositoryV3 repository,
     IKeyValueStorageService storageService,
     IBKIRequisitsHandler bKIRequisits,
-    ILogger<CreateAndValidateHandler> logger) : IRequestHandler<CreateToValidateCommand, QBCHProcessingTransaction>
+    ILogger<CreateAndValidateHandler> logger) : IRequestHandler<CreateToValidateCommandV3, QBCHProcessingTransactionV3>
 {
     private readonly IValidationServiceV3 _validationService = validationService;
     private readonly ICryptoService _cryptoService = cryptoService;
@@ -31,7 +31,7 @@ public sealed class CreateAndValidateHandler(
     private readonly IBKIRequisitsHandler _bKIRequisits = bKIRequisits;
     private readonly ILogger<CreateAndValidateHandler> _logger = logger;
 
-    public async Task<QBCHProcessingTransaction> Handle(CreateToValidateCommand request, CancellationToken cancellationToken)
+    public async Task<QBCHProcessingTransactionV3> Handle(CreateToValidateCommandV3 request, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Начало создания и валидации транзакции v3. Method={Method}, Path={Path}", request.Request.Method, request.Request.Path);
         request.Request.EnableBuffering();
@@ -55,7 +55,7 @@ public sealed class CreateAndValidateHandler(
 
         var requestBody = memoryStream.ToArray();
         var attachement = Attachment.Create(signedRequest: requestBody);
-        var transaction = QBCHProcessingTransaction.Create(DateTime.Now, clientRequest, attachement, _bKIRequisits.GetBureaList());
+        var transaction = QBCHProcessingTransactionV3.Create(DateTime.Now, clientRequest, attachement, _bKIRequisits.GetBureaList());
 
         var result = await transaction.ValidateV3(
             validationService: _validationService,

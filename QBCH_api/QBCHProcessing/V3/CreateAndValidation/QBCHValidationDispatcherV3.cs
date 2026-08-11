@@ -3,10 +3,10 @@ using Crypto_lib.Service;
 using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 using QBCH_api.Services.Interfaces.V3;
-using Qbch_db_lib.Services.Interfaces;
+using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib;
+using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
-using QBCH_lib.domain.aggregate;
 using XmlService_lib.Services.Interfaces.V3;
 using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
 using АбонентИПV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
@@ -21,8 +21,8 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation;
 /// </summary>
 public static class QBCHValidationDispatcherV3
 {
-    public static async Task<QBCHProcessingTransaction> ValidateV3(
-        this QBCHProcessingTransaction transaction,
+    public static async Task<QBCHProcessingTransactionV3> ValidateV3(
+        this QBCHProcessingTransactionV3 transaction,
         IValidationServiceV3 validationService,
         ICryptoService cryptoService,
         IXmlServiceV3 xmlService,
@@ -78,19 +78,19 @@ public static class QBCHValidationDispatcherV3
         return transaction;
     }
 
-    private static void ValidateRequestMethodV3(QBCHProcessingTransaction transaction)
+    private static void ValidateRequestMethodV3(QBCHProcessingTransactionV3 transaction)
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && !string.Equals(transaction.ClentRequest.RequestMethod, HttpMethods.Post, StringComparison.OrdinalIgnoreCase))
             transaction.RiseCriticalError(AnswerErrorCode.Code1_WrongRequestMethod());
     }
 
-    private static void ValidateRequestBodyV3(QBCHProcessingTransaction transaction)
+    private static void ValidateRequestBodyV3(QBCHProcessingTransactionV3 transaction)
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && (transaction.Attachment.SignedRequestBody is null || transaction.Attachment.SignedRequestBody.Length == 0))
             transaction.RiseCriticalError(AnswerErrorCode.Code2_EmptyRequestBody());
     }
 
-    private static void ValidateAntifraudOneWindowCompatibilityV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
+    private static void ValidateAntifraudOneWindowCompatibilityV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
             return;
@@ -102,7 +102,7 @@ public static class QBCHValidationDispatcherV3
     }
 
     private static void ProcessSignV3(
-       QBCHProcessingTransaction transaction,
+       QBCHProcessingTransactionV3 transaction,
        ICryptoService cryptoService,
        IValidationServiceV3 validationService)
     {
@@ -145,7 +145,7 @@ public static class QBCHValidationDispatcherV3
     }
 
 
-    private static async Task ValidateAbonentV3(QBCHProcessingTransaction transaction)
+    private static async Task ValidateAbonentV3(QBCHProcessingTransactionV3 transaction)
     {
         //Это проверка сравнения полей ИНН и ОГРН из сертификата с ИНН и ОГРН из запроса, а не из базы
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
@@ -168,13 +168,13 @@ public static class QBCHValidationDispatcherV3
         }
     }
 
-    private static async Task ValidateRightsV3(QBCHProcessingTransaction transaction, IRepositoryV3 repository, CancellationToken cancellationToken)
+    private static async Task ValidateRightsV3(QBCHProcessingTransactionV3 transaction, IRepositoryV3 repository, CancellationToken cancellationToken)
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && !await repository.IsPermissionGrantedV3(transaction.ClentRequest.Certificate?.Thumbprint, transaction.ServiceName, cancellationToken))
             transaction.RiseCriticalError(AnswerErrorCode.Code22_AccessDenied());
     }
 
-    private static void ValidateOneWindowV3(QBCHProcessingTransaction transaction)
+    private static void ValidateOneWindowV3(QBCHProcessingTransactionV3 transaction)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
             return;
@@ -192,7 +192,7 @@ public static class QBCHValidationDispatcherV3
     }
 
     private static async Task ValidateUniqueRequestIdV3(
-        QBCHProcessingTransaction transaction,
+        QBCHProcessingTransactionV3 transaction,
         IKeyValueStorageService cacheService,
         ЗапросСведенийV3? requestV3)
     {
@@ -210,7 +210,7 @@ public static class QBCHValidationDispatcherV3
         }
     }
 
-    private static void ValidateRequestDateV3(QBCHProcessingTransaction transaction, IValidationServiceV3 validationService, ЗапросСведенийV3? requestV3)
+    private static void ValidateRequestDateV3(QBCHProcessingTransactionV3 transaction, IValidationServiceV3 validationService, ЗапросСведенийV3? requestV3)
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && requestV3 is not null &&
             !validationService.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult))
@@ -219,17 +219,17 @@ public static class QBCHValidationDispatcherV3
         }
     }
 
-    private static void AdditionalValidationV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
+    private static void AdditionalValidationV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         transaction.AdditionalValidationV3(requestV3);
     }
 
-    private static void ValidateAgreementV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
+    private static void ValidateAgreementV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         transaction.ValidateConsentV3(requestV3);
     }
 
-    private static void ValidateInnAndSelfProhibitionV3(QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
+    private static void ValidateInnAndSelfProhibitionV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         transaction.ValidateInnAndSelfProhibitionV3(requestV3);
     }

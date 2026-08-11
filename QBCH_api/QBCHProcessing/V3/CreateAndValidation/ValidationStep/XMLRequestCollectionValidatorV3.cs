@@ -1,5 +1,5 @@
-﻿using qbch_lib.domain.errors;
-using QBCH_lib.domain.aggregate;
+﻿using qbch_lib.domain.aggregate.V3;
+using qbch_lib.domain.errors;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using РежимЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 
@@ -10,8 +10,8 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 /// </summary>
 public static class XMLRequestCollectionValidatorV3
 {
-    public static QBCHProcessingTransaction ValidateXmlRequestCollectionV3(
-        this QBCHProcessingTransaction transaction,
+    public static QBCHProcessingTransactionV3 ValidateXmlRequestCollectionV3(
+        this QBCHProcessingTransactionV3 transaction,
         ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
@@ -34,13 +34,13 @@ public static class XMLRequestCollectionValidatorV3
         return transaction;
     }
 
-    private static void ValidateSingleMode(QBCHProcessingTransaction transaction, int requestCount)
+    private static void ValidateSingleMode(QBCHProcessingTransactionV3 transaction, int requestCount)
     {
         if (requestCount != 1)
             transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
     }
 
-    private static void ValidatePackageMode(QBCHProcessingTransaction transaction, List<(string? OrderNumberRaw, int Position)> requests)
+    private static void ValidatePackageMode(QBCHProcessingTransactionV3 transaction, List<(string? OrderNumberRaw, int Position)> requests)
     {
         if (requests.Count == 0)
         {
@@ -102,7 +102,7 @@ public static class XMLRequestCollectionValidatorV3
             : position;
     }
 
-    private static void AddPackageErrorIfMissing(QBCHProcessingTransaction transaction, int orderNumber, string message)
+    private static void AddPackageErrorIfMissing(QBCHProcessingTransactionV3 transaction, int orderNumber, string message)
     {
         if (transaction.PackageValidationErrors.Any(x => x.Id == orderNumber && x.error_code == 26))
         {

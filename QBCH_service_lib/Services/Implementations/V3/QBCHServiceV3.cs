@@ -3,11 +3,11 @@ using Crypto_lib.Service;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using QBCH.Lib.qcb_xml.v3_0;
-using Qbch_db_lib.Services.Interfaces;
+using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib;
+using qbch_lib.domain.aggregate.V3;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
-using QBCH_lib.domain.aggregate;
 using QBCHService_lib.Models;
 using QBCHService_lib.Services.Interfaces.V3;
 using System.Diagnostics;
@@ -52,7 +52,7 @@ public class QBCHServiceV3(
     /// </summary>
     /// <param name="transaction">Транзакция с телом запроса и техническим контекстом обработки.</param>
     /// <returns>Результат обработки с ответом <c>ОтветНаЗапросСведений</c>.</returns>
-    public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransaction transaction)
+    public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransactionV3 transaction)
     {
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
@@ -180,7 +180,7 @@ public class QBCHServiceV3(
     /// <param name="client">HTTP-клиент для взаимодействия с внешним сервисом бюро.</param>
     /// <param name="bureau">Реквизиты целевого бюро кредитных историй.</param>
     /// <returns>Результат обработки, содержащий ответ бюро или информацию об ошибке.</returns>
-    public async Task<QBCHTaskResult> RequestFromExternalBureau(QBCHProcessingTransaction transaction, HttpClient client, QBCHRequisite bureau)
+    public async Task<QBCHTaskResult> RequestFromExternalBureau(QBCHProcessingTransactionV3 transaction, HttpClient client, QBCHRequisite bureau)
     {
         var request = transaction.GetRequest<ЗапросСведений>();
 
@@ -216,7 +216,6 @@ public class QBCHServiceV3(
         var dlrequestContent = new ByteArrayContent(signedDlrequestBytes);
 
         using var ticketCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_qbchTicketTimeoutMs));
-        //NOTE: Убрал Math.Max. На работу это не влияло, но смысл этого для меня большая загадка. Единственный вариант, это не доверие тому, кто будет заполнять конфиг.
         using var ticketCheckCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_qbchTicketTimeoutMs - 1000));
         var ticketTimer = Stopwatch.StartNew();
 
@@ -232,8 +231,6 @@ public class QBCHServiceV3(
 
         try
         {
-            //NOTE: Извиняюсь, но у меня нет времени анализировать правки логики одного из самых сложных и важных мест кода, где в третьей версии не должно быть изменений, кроме версии формата пересылаемых сообщений.
-            //Поэтому здесь я просто вернул код Артема.
             dlrequestResult = await Task.Run(async Task<ОтветНаЗапросСведений?>? () =>
             {
                 while (true)
@@ -242,7 +239,7 @@ public class QBCHServiceV3(
                     try
                     {
                         //NOTE: Куда-то исчезло все логирование, что странно так как именно здесь оно лишним никогда не будет.
-                        _logger.LogDebug("{guid} {Bureau}: dlrequest send {dt}", guid, bureau.ogrn!, DateTime.Now);
+                        _logger.LogDebug("{guid} {Bureau}: отправка dlrequest {dt}", guid, bureau.ogrn!, DateTime.Now);
                         using var responseMessage = await client.PostAsync("dlrequest", dlrequestContent, ticketCts.Token);
                         lastStatusCode = responseMessage.StatusCode;
                         lastResponseText = await responseMessage.Content.ReadAsStringAsync(ticketCts.Token);
@@ -250,7 +247,7 @@ public class QBCHServiceV3(
                         await responseMessage.Content.CopyToAsync(ms, ticketCts.Token);
                         redisMsg.SetResponseCode(responseMessage.StatusCode).SetResponseTime(DateTime.Now);
 
-                        _logger.LogDebug("{guid} {Bureau}: Status {Status}", guid, bureau.ogrn!, (int?)responseMessage.StatusCode);
+                        _logger.LogDebug("{guid} {Bureau}: Код ответа {Status}", guid, bureau.ogrn!, (int?)responseMessage.StatusCode);
 
                         switch (responseMessage.StatusCode)
                         {
@@ -258,7 +255,6 @@ public class QBCHServiceV3(
                                 var answerValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_answer.xsd", redisMsg, ticketCheckCts.Token);
                                 if (answerValidation.IsError)
                                 {
-                                    //NOTE: Возвратил пропавший код Артема
                                     _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, answerValidation.Error);
                                     redisMsg.SetError(answerValidation.ErrorCode.ToString(), answerValidation.Error!).SetResponseTime(DateTime.Now);
                                     await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
@@ -266,7 +262,6 @@ public class QBCHServiceV3(
                                     break;
                                 }
 
-                                //NOTE: Возвратил пропавший код Артема
                                 _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
                                 redisMsg.SetSignedResponse(ms.ToArray()).SetResponseXml(answerValidation.Body).SetResponseTime(DateTime.Now);
                                 dlrequestResult = _xmlService.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body);
@@ -278,7 +273,6 @@ public class QBCHServiceV3(
                                 var badValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", redisMsg, ticketCheckCts.Token);
                                 if (badValidation.IsError)
                                 {
-                                    //NOTE: Возвратил пропавший код Артема
                                     _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, badValidation.Error);
                                     redisMsg.SetError(badValidation.ErrorCode.ToString(), badValidation.Error!).SetResponseTime(DateTime.Now);
                                     await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
@@ -287,7 +281,7 @@ public class QBCHServiceV3(
                                 }
                                 _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
                                 var badTicket = _xmlService.DeserializeV3<Результат>(badValidation.Body);
-                                //NOTE: Возвратил пропавший код Артема. И безусловное приведение вместо сравнения, это ошибка. 
+
                                 if (badTicket?.Item is ТипОшибка badError)
                                 {
                                     redisMsg.SetError(badError.Код ?? "-", badError.Value ?? "-").SetResponseTime(DateTime.Now);
@@ -315,7 +309,6 @@ public class QBCHServiceV3(
                                 _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
                                 ticket = _xmlService.DeserializeV3<Результат>(ticketValidation.Body);
 
-                                //NOTE: Возвратил пропавший код Артема
                                 if (ticket?.Item is РезультатИдентификаторОтвета)
                                 {
                                     _logger.LogDebug("{guid} {Bureau}: Ticket", guid, bureau.ogrn);
@@ -333,7 +326,6 @@ public class QBCHServiceV3(
 
                             default:
                                 redisMsg.SetError("99", $"Код ответа: {responseMessage.StatusCode} Message:{lastResponseText}");
-                                // NOTE: Возвратил пропавший код Артема
                                 await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                                 break;
                         }
@@ -341,24 +333,16 @@ public class QBCHServiceV3(
                     catch (HttpRequestException ex)
                     {
                         _logger.LogError(ex, "Не удалось установить соединение. КБКИ: {bureau} address: {address}", bureau.Name, "/dlrequest");
-                        //NOTE: Возвратил пропавший код Артема
                         redisMsg.SetError("17", "Не удалось установить соединение.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now); ;
                         await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                     }
-                    //NOTE: Возвратил пропавший код Артема
                     catch (Exception ex)
                     {
                         _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ: {bureau}  address: {address}", bureau.Name, "/dlrequest");
                         redisMsg.SetError("99", $"Код ответа: {lastStatusCode} Message:{lastResponseText ?? string.Empty}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                         await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                     }
-                    //NOTE: Закомментил непонятный по логике код
-                    //finally
-                    //{
-                    //    await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
-                    //}
 
-                    //NOTE: Привел код в соответствие коду Артема
                     if (dlrequestResult is not null)
                         return dlrequestResult;
 
@@ -369,7 +353,6 @@ public class QBCHServiceV3(
         }
         catch (TaskCanceledException ex)
         {
-            //NOTE: Возвратил пропавший код Артема
             _logger.LogWarning(ex, "Запрос {guid} в бюро {bureauName} по адресу {baseAddress} был отменен по истечению таймаута {timeout}.", guid, bureau.Name, "/dlrequest", _qbchTicketTimeoutMs);
             redisMsg.SetError("18", "Время ожидания ответа истекло.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
             await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
@@ -381,7 +364,6 @@ public class QBCHServiceV3(
             return new QBCHTaskResult(bureau.ogrn!, answer3: dlrequestResult);
         }
 
-        //NOTE: Привел код в соответствие к коду Артема
         _logger.LogDebug("{guid} {Bureau}: РежимЗапроса {req}", guid, bureau.ogrn!, transaction.ClentRequest.Request?.РежимЗапроса);
 
         /* Таймауты для пакетных и непакетных запросов отличаются.

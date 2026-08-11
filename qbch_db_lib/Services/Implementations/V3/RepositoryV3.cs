@@ -3,13 +3,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
-using Qbch_db_lib.Services.Interfaces;
+using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.Configuration;
 using System.Data;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 
-namespace Qbch_db_lib.Services.Implementations;
+namespace Qbch_db_lib.Services.Implementations.V3;
 
 /// <summary>
 /// Репозиторий версии 3.0 для доступа к данным КБКИ

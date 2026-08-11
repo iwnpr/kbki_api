@@ -2,7 +2,7 @@
 using Crypto_lib.Model;
 using Crypto_lib.Service;
 using QBCH_api.Services.Interfaces.V3;
-using Qbch_db_lib.Services.Interfaces;
+using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib.CommonTypes.Api;
 using qbch_lib.domain.errors;
 using QBCH_lib.Services.Interfaces.V3;

@@ -1,8 +1,7 @@
 ﻿using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.Services.Interfaces.V3;
+using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
-using QBCH_lib.domain.aggregate;
-using QBCH_lib.domain.aggregate.V3;
 using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
@@ -12,7 +11,7 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 /// </summary>
 public static class XSDValidator
 {
-    public static QBCHProcessingTransaction ValidateXml(this QBCHProcessingTransaction transaction, IValidationServiceV3 validationService, IXmlServiceV3 xmlService)
+    public static QBCHProcessingTransactionV3 ValidateXml(this QBCHProcessingTransactionV3 transaction, IValidationServiceV3 validationService, IXmlServiceV3 xmlService)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
         {

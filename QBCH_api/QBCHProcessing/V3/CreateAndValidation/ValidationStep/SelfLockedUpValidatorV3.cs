@@ -1,10 +1,10 @@
-﻿using QBCH_lib.domain.aggregate;
-using СправочникВидыСведенийV3 = QBCH.Lib.qcb_xml.v3_0.СправочникВидыСведений;
+﻿using СправочникВидыСведенийV3 = QBCH.Lib.qcb_xml.v3_0.СправочникВидыСведений;
 using СправочникРежимыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникРежимыЗапроса;
 using ТипИННФЛсПризнакомПризнакПроверкиV3 = QBCH.Lib.qcb_xml.v3_0.ТипИННФЛсПризнакомПризнакПроверки;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using ЗапросСведенийЗапросV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийЗапрос;
 using qbch_lib.domain.errors;
+using qbch_lib.domain.aggregate.V3;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 
@@ -13,7 +13,7 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 /// </summary>
 public static class SelfLockedUpValidatorV3
 {
-    public static QBCHProcessingTransaction ValidateInnAndSelfProhibitionV3(this QBCHProcessingTransaction transaction, ЗапросСведенийV3? requestV3)
+    public static QBCHProcessingTransactionV3 ValidateInnAndSelfProhibitionV3(this QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
             return transaction;
@@ -40,7 +40,7 @@ public static class SelfLockedUpValidatorV3
         return transaction;
     }
 
-    private static void ValidateInnMatrix(QBCHProcessingTransaction transaction, СправочникВидыСведенийV3 infoCode, СправочникРежимыЗапросаV3 mode, ЗапросСведенийЗапросV3 requestItem, int orderNumber)
+    private static void ValidateInnMatrix(QBCHProcessingTransactionV3 transaction, СправочникВидыСведенийV3 infoCode, СправочникРежимыЗапросаV3 mode, ЗапросСведенийЗапросV3 requestItem, int orderNumber)
     {
         // Матрица ИНН/ПризнакПроверки:
         // Код 6: для "запрета" нужны ИНН и ПризнакПроверки=1.
@@ -76,7 +76,7 @@ public static class SelfLockedUpValidatorV3
             or СправочникВидыСведенийV3.Item8;
     }
 
-    private static void AddCode25(QBCHProcessingTransaction transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber)
+    private static void AddCode25(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber)
     {
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {

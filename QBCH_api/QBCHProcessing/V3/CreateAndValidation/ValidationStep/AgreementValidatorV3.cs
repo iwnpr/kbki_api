@@ -1,6 +1,6 @@
 ﻿using QBCH.Lib.qcb_xml.v3_0;
+using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
-using QBCH_lib.domain.aggregate;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using ЗапросСведенийЗапросV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийЗапрос;
 using СправочникВидыСведенийV3 = QBCH.Lib.qcb_xml.v3_0.СправочникВидыСведений;
@@ -19,8 +19,8 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 /// </summary>
 public static class ConsentValidatorV3
 {
-    public static QBCHProcessingTransaction ValidateConsentV3(
-        this QBCHProcessingTransaction transaction,
+    public static QBCHProcessingTransactionV3 ValidateConsentV3(
+        this QBCHProcessingTransactionV3 transaction,
         ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
@@ -55,7 +55,7 @@ public static class ConsentValidatorV3
     }
 
     private static void ValidateRequestConsent(
-        QBCHProcessingTransaction transaction,
+        QBCHProcessingTransactionV3 transaction,
         ЗапросСведенийV3 requestV3,
         ЗапросСведенийЗапросV3 requestItem,
         bool requiresAgreement,
@@ -162,7 +162,7 @@ public static class ConsentValidatorV3
     /// при его отсутствии — совпадать (согласие выдано самому источнику).
     /// </summary>
     private static void ValidateTransferringToAnotherPerson(
-        QBCHProcessingTransaction transaction,
+        QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
         ТипСогласиеV3 agreement,
@@ -238,7 +238,7 @@ public static class ConsentValidatorV3
     };
 
     private static bool HasError(
-        QBCHProcessingTransaction transaction,
+        QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         int orderNumber)
     {
@@ -248,7 +248,7 @@ public static class ConsentValidatorV3
     }
 
     private static void AddError(
-        QBCHProcessingTransaction transaction,
+        QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         int orderNumber,
         AnswerErrorCode error)

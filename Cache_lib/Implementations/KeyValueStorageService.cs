@@ -76,11 +76,11 @@ namespace Cache_lib.Implementations
                     pField == "request_signed_data" ||
                     pField == "response_signed_data" ? pData : Encoding.UTF8.GetString(pData)) ]); //TODO перенести
 
-                _logger.LogTrace("Redis add cache db key: {pGuid}", pKey);
+                _logger.LogTrace("Redis: запись в кэш по ключу {pGuid}", pKey);
             }
             catch (Exception e)
             {
-                _logger.LogCritical("Redis critical: {Message}", e.Message);
+                _logger.LogCritical("Критическая ошибка Redis: {errorMessage}", e.Message);
                 throw;
             }
         }
@@ -104,12 +104,12 @@ namespace Cache_lib.Implementations
                         entry.Key == "response_signed_data" ? entry.Value : Encoding.UTF8.GetString(entry.Value)) });
                 }
 
-                _logger.LogTrace("Redis add cache db key: {pGuid}", pKey);
+                _logger.LogTrace("Redis: запись в кэш по ключу {pGuid}", pKey);
                 await transaction.ExecuteAsync();
             }
             catch (Exception e)
             {
-                _logger.LogCritical("Redis critical: {Message}", e.Message);
+                _logger.LogCritical("Критическая ошибка Redis: {errorMessage}", e.Message);
                 throw;
             }
         }
@@ -147,7 +147,7 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Redis error");
+                _logger.LogCritical(ex, "Ошибка Redis при чтении поля хэша");
 
                 bytes = null;
                 return false;
@@ -195,7 +195,7 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Redis error");
+                _logger.LogCritical(ex, "Ошибка Redis при чтении значения поля хэша");
 
                 throw;
             }
@@ -215,7 +215,7 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Redis error");
+                _logger.LogCritical(ex, "Ошибка Redis при проверке существования ключа");
                 throw;
             }
         }
@@ -236,7 +236,7 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Redis error");
+                _logger.LogCritical(ex, "Ошибка Redis при сохранении уникального requestId");
             }
         }
 

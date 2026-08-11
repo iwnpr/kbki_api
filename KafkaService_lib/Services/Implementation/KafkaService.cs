@@ -69,7 +69,7 @@ namespace KafkaService_lib.Services.Implementation
         public async Task<bool> Produce(Message<Null, string> message, string? topic = null)
         {
             var targetTopic = topic ?? _topic;
-            _logger.LogDebug("Kafka Produce (single): topic={topic}, valueLength={valueLength}", targetTopic, message.Value?.Length ?? 0);
+            _logger.LogDebug("Kafka Produce (одиночное сообщение): topic={topic}, valueLength={valueLength}", targetTopic, message.Value?.Length ?? 0);
 
             _producerMsg ??= new ProducerBuilder<Null, string>(new ProducerConfig
             {
@@ -120,7 +120,7 @@ namespace KafkaService_lib.Services.Implementation
 
         public async Task<bool> Produce(List<Message<string, string>> messages, string? topic = null)
         {
-            _logger.LogDebug("Kafka Produce (batch): messageCount={messageCount}, topic={topic}", messages.Count, topic ?? _topic);
+            _logger.LogDebug("Kafka Produce (пакет сообщений): messageCount={messageCount}, topic={topic}", messages.Count, topic ?? _topic);
 
             if (messages.Count == 0)
             {
@@ -149,7 +149,7 @@ namespace KafkaService_lib.Services.Implementation
                 // В случае переполнения локальной очереди, необходимо выполнить отправку сообщений и сохранить последнее неотправленное сообщение
                 catch (ProduceException<string, string> pe)
                 {
-                    _logger.LogCritical("error: {peMessage} topic: {topic} message:{message}", pe.Message, topic, message.Key.Equals("compress") ? _compressService.Decompress(message.Value) : message);
+                    _logger.LogCritical("Ошибка отправки в Kafka: {peMessage} topic: {topic} message:{kafkaMessage}", pe.Message, topic, message.Key.Equals("compress") ? _compressService.Decompress(message.Value) : message);
                     _producer.Flush(TimeSpan.FromSeconds(10));
                     await _producer.ProduceAsync(topic, message);
 
@@ -159,7 +159,7 @@ namespace KafkaService_lib.Services.Implementation
 
             _producer.Flush(TimeSpan.FromSeconds(10));
 
-            _logger.LogDebug("Kafka Produce (batch) успешно: topic={topic}, messageCount={messageCount}", topic, messages.Count);
+            _logger.LogDebug("Kafka Produce (пакет сообщений) успешно: topic={topic}, messageCount={messageCount}", topic, messages.Count);
             return true;
         }
 
@@ -181,7 +181,7 @@ namespace KafkaService_lib.Services.Implementation
             try
             {
                 var cr = _consumer.Consume();
-                _logger.LogDebug("Offset =  {crOffset}, Partition = {crTopicPartitionOffset}, Topic = {crTopic}", cr.Offset, cr.TopicPartitionOffset.Partition.Value, cr.Topic);
+                _logger.LogDebug("Сообщение получено. Смещение = {crOffset}, Партиция = {crTopicPartitionOffset}, Топик = {crTopic}", cr.Offset, cr.TopicPartitionOffset.Partition.Value, cr.Topic);
                 return cr.Message;
             }
             catch (ConsumeException e)

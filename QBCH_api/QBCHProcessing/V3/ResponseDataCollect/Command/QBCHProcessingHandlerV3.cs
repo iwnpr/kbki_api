@@ -3,10 +3,10 @@ using Crypto_lib.Service;
 using MediatR;
 using QBCH.Lib.qcb_xml.v3_0;
 using qbch_lib;
+using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
-using QBCH_lib.domain.aggregate;
 using QBCH_lib.Services.Interfaces.V3;
 using QBCHService_lib.Models;
 using QBCHService_lib.Services.Interfaces.V3;
@@ -28,15 +28,8 @@ public class QBCHProcessingHandlerV3(
     IHttpClientFactory httpClientFactory,
     IBKIRequisitsHandler bkiRequisitsHandler,
     ApiV3ContractRules contractRules)
-    : IRequestHandler<QBCHProcessedStartV3, QBCHProcessingTransaction>
+    : IRequestHandler<QBCHProcessedStartV3, QBCHProcessingTransactionV3>
 {
-    //NOTE: Убрал логику про 1 секунду между запросами
-    //private const string ReadyAtUtcField = "ready_at_utc";
-    //private const string ReadyAtMskField = "ready_at_msk";
-    //private const string FirstPollAllowedAtUtcField = "first_poll_allowed_at_utc";
-    //private const string ResponseExpireAtUtcField = "response_expire_at_utc";
-    //private const string LastPollUtcField = "last_poll_utc";
-    //private const string ResponseGuidField = "response_guid";
     private readonly ILogger<QBCHProcessingHandlerV3> _logger = logger;
     private readonly IQBCHServiceV3 _qbchService = qbchService;
     private readonly IKeyValueStorageService _storageService = storageService;
@@ -46,16 +39,14 @@ public class QBCHProcessingHandlerV3(
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly List<QBCHRequisite> _qbchList = bkiRequisitsHandler.GetBureaList();
     private readonly ApiV3ContractRules _contractRules = contractRules;
-    //Вернул потоконезависимость. Не факт, что она тут нужна, но рисковать не хочется
     private readonly ConcurrentBag<Task<QBCHTaskResult>> _tasksList = [];
 
-    public async Task<QBCHProcessingTransaction> Handle(QBCHProcessedStartV3 request, CancellationToken cancellationToken)
+    public async Task<QBCHProcessingTransactionV3> Handle(QBCHProcessedStartV3 request, CancellationToken cancellationToken)
     {
         var transaction = request.Transaction;
         _logger.LogDebug("QBCHProcessingHandlerV3.Handle начало: TransactionId={TransactionId}, ImmediateDeadlineMs={ImmediateDeadlineMs}",
             transaction.Id, request.ImmediateResponseDeadlineMs);
 
-        //NOTE: переименовал, так как input слишком абстрактен
         var clientRequest = transaction.GetRequest<ЗапросСведений>();
 
         var requestId = clientRequest.ИдентификаторЗапроса;
@@ -63,7 +54,7 @@ public class QBCHProcessingHandlerV3(
         var requestType = clientRequest.ТипЗапроса;
         var requestMode = clientRequest.РежимЗапроса;
 
-        _logger.LogDebug("QBCHProcessingHandlerV3: RequestId={requestId}, RequestDate={requestDate}, RequestType={requestType}, RequestMode={requestMode}",
+        _logger.LogDebug("QBCHProcessingHandlerV3: параметры запроса RequestId={requestId}, RequestDate={requestDate}, RequestType={requestType}, RequestMode={requestMode}",
             requestId, requestDate, requestType, requestMode);
 
         byte[]? responseXml = null;
@@ -123,9 +114,9 @@ public class QBCHProcessingHandlerV3(
         return await CompleteAcceptedTransactionAsync(transaction, requestId, requestDate);
     }
 
-    private async Task StoreProcessingErrorAsync(QBCHProcessingTransaction transaction, AnswerErrorCode error)
+    private async Task StoreProcessingErrorAsync(QBCHProcessingTransactionV3 transaction, AnswerErrorCode error)
     {
-        _logger.LogDebug("QBCHProcessingHandlerV3.StoreProcessingErrorAsync: TransactionId={TransactionId}, errorCode={errorCode}, errorMessage={errorMessage}",
+        _logger.LogDebug("QBCHProcessingHandlerV3.StoreProcessingErrorAsync начало: TransactionId={TransactionId}, errorCode={errorCode}, errorMessage={errorMessage}",
             transaction.Id, error.Code, error.Message);
         var responseId = transaction.Id.ToString();
 
@@ -138,7 +129,7 @@ public class QBCHProcessingHandlerV3(
 
     private async Task<byte[]> BuildAndStoreAggregateResponseAsync(
         QBCHTaskResult[] results,
-        QBCHProcessingTransaction transaction,
+        QBCHProcessingTransactionV3 transaction,
         //NOTE: переименовал, так как input слишком абстрактен
         ЗапросСведений clientRequest,
         string ourBureauPsrn,
@@ -160,8 +151,6 @@ public class QBCHProcessingHandlerV3(
                 {
                     ПорядковыйНомер = x.ПорядковыйНомер,
                     ТитульнаяЧасть = x.Субъект,
-                    //NOTE: Зачем заполнять это поле, если мы его будем перезаписывать?
-                    //КБКИ = []
                 })
                 .ToArray()
         };
@@ -176,7 +165,6 @@ public class QBCHProcessingHandlerV3(
                     taskResult.BureauPSRN,
                     taskResult.Answer3?.Сведения?.Length ?? 0);
 
-                //NOTE: Вернул запись в redis
                 var TaskResultXml = _xmlService.SerializeAsStringV3(taskResult.Answer3);
                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_result_xml", TaskResultXml);
                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
@@ -192,10 +180,7 @@ public class QBCHProcessingHandlerV3(
                     {
                         ОГРН = taskResult.BureauPSRN,
                         ПоСостояниюНа = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz"),
-                        //NOTE: В версии Артема это поле при ошибке не заполнялось 
-                        //ИдентификаторОтвета = transaction.Id.ToString()
                     };
-                    //NOTE: Русские названия методов???
                     errorKbki.УстановитьОшибку(28, "В ответе КБКИ отсутствуют запрошенные сведения");
                     kbkiItems.Add(errorKbki);
                 }
@@ -212,18 +197,15 @@ public class QBCHProcessingHandlerV3(
         return responseXml;
     }
 
-    private async Task<QBCHProcessingTransaction> CompleteAcceptedTransactionAsync(QBCHProcessingTransaction transaction, string requestId, DateTime requestDate)
+    private async Task<QBCHProcessingTransactionV3> CompleteAcceptedTransactionAsync(QBCHProcessingTransactionV3 transaction, string requestId, DateTime requestDate)
     {
-        logger.LogDebug("QBCHProcessingHandlerV3.CompleteAcceptedTransactionAsync: TransactionId={TransactionId}, requestId={requestId}", transaction.Id, requestId);
-        //NOTE: ВНИМАНИЕ! Ни в коем случае не заполняй это поле. Не надо добрать на себя дополнительные обязательства по времени выдачи ответа, так как и за существующие приходится отвечать перед ЦБ. Убрал его заполнение из всех вызываемых методов
-        //var readyTimeMs = Math.Max(1L, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
+        logger.LogDebug("QBCHProcessingHandlerV3.CompleteAcceptedTransactionAsync начало: TransactionId={TransactionId}, requestId={requestId}", transaction.Id, requestId);
+
 
         var acceptedTicket = _ticketService.CreateResultV3Accepted(
             requestId: requestId,
             responseId: transaction.Id.ToString(),
             requestDate: requestDate
-            //NOTE: ВНИМАНИЕ! Ни в коем случае не заполняй это поле. Не надо добрать на себя дополнительные обязательства по времени выдачи ответа, так как и за существующие приходится отвечать перед ЦБ. Убрал его заполнение из всех вызываемых методов
-            //,readyTime: readyTimeMs
             );
 
         var ticketBytes = _xmlService.SerializeAsByteV3(acceptedTicket);

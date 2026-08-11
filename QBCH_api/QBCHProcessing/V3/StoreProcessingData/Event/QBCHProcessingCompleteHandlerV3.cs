@@ -3,7 +3,7 @@ using Confluent.Kafka;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
 using qbch_lib;
-using QBCH_lib.domain.aggregate;
+using qbch_lib.domain.aggregate.V3;
 using System.Text;
 using System.Text.Json;
 
@@ -32,7 +32,7 @@ public class QBCHProcessingCompleteHandlerV3(
         _ = SendDataToKafka(transaction);
     }
 
-    private async Task<bool> TrySendDataToRedis(QBCHProcessingTransaction transaction)
+    private async Task<bool> TrySendDataToRedis(QBCHProcessingTransactionV3 transaction)
     {
         try
         {
@@ -47,7 +47,7 @@ public class QBCHProcessingCompleteHandlerV3(
         }
     }
 
-    private async Task SendDataToKafka(QBCHProcessingTransaction transaction)
+    private async Task SendDataToKafka(QBCHProcessingTransactionV3 transaction)
     {
         try
         {
@@ -66,7 +66,7 @@ public class QBCHProcessingCompleteHandlerV3(
         }
     }
 
-    private async Task<Dictionary<string, byte[]>> ConstructResultData(QBCHProcessingTransaction transaction)
+    private async Task<Dictionary<string, byte[]>> ConstructResultData(QBCHProcessingTransactionV3 transaction)
     {
         var (responseKind, schemaFamily) = ResolveResponseShape(transaction);
 
@@ -126,7 +126,7 @@ public class QBCHProcessingCompleteHandlerV3(
         return dict;
     }
 
-    private static (string responseKind, string schemaFamily) ResolveResponseShape(QBCHProcessingTransaction transaction)
+    private static (string responseKind, string schemaFamily) ResolveResponseShape(QBCHProcessingTransactionV3 transaction)
     {
         if (string.Equals(transaction.ServiceName, "dlput", StringComparison.OrdinalIgnoreCase))
             return ("putanswer", "qcb_putanswer");
