@@ -1,5 +1,5 @@
 using QBCH_api.Services.Interfaces.V3;
-using Qbch_db_lib.Services.Interfaces.V3;
+using Qbch_db_lib.Services.Interfaces;
 using qbch_lib.domain.errors;
 using QBCH_lib.Configuration;
 using QBCH_lib.Services.Interfaces.V3;

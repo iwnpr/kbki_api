@@ -1,21 +1,18 @@
-﻿using QBCH_api.Services.Interfaces.V3;
+﻿using QBCH.Lib.qcb_xml.v3_0;
+using QBCH_api.Services.Interfaces.V3;
 using qbch_lib.domain.errors;
 using QBCH_lib.domain.aggregate;
 using QBCH_lib.domain.aggregate.V3;
 using XmlService_lib.Services.Interfaces.V3;
-using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 
 /// <summary>
-/// XSD-валидация и десериализация dlrequest для API 3.0.
+/// XSD-валидация и десериализация dlrequest
 /// </summary>
-public static class XSDValidatorV3
+public static class XSDValidator
 {
-    public static QBCHProcessingTransaction ValidateXmlV3(
-        this QBCHProcessingTransaction transaction,
-        IValidationServiceV3 validationService,
-        IXmlServiceV3 xmlService)
+    public static QBCHProcessingTransaction ValidateXml(this QBCHProcessingTransaction transaction, IValidationServiceV3 validationService, IXmlServiceV3 xmlService)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
         {
@@ -29,17 +26,18 @@ public static class XSDValidatorV3
         }
 
         using var xmlStream = new MemoryStream(transaction.Attachment.RequestBody);
+
         if (!validationService.ValidateXmlV3(xmlStream, transaction.ServiceName, out var xmlValidationResult))
         {
             transaction.RiseCriticalError(new AnswerErrorCode(xmlValidationResult!.ErrorCode, xmlValidationResult.Error));
             return transaction;
         }
 
-        ЗапросСведенийV3? requestV3;
+        ЗапросСведений? requestV3;
 
         try
         {
-            requestV3 = xmlService.DeserializeV3<ЗапросСведенийV3>(transaction.Attachment.RequestBody);
+            requestV3 = xmlService.DeserializeV3<ЗапросСведений>(transaction.Attachment.RequestBody);
         }
         catch(Exception ex)
         {
@@ -53,11 +51,10 @@ public static class XSDValidatorV3
             return transaction;
         }
 
-        var transactionV3 = QBCHProcessingTransactionV3.From(transaction);
-        var clientRequestV3 = transactionV3.GetClientRequestV3();
+        var clientRequest = transaction.ClentRequest;
 
-        clientRequestV3.SetRequestId(requestV3.ИдентификаторЗапроса);
-        clientRequestV3.SetRequestV3(requestV3);
+        clientRequest.SetRequestId(requestV3.ИдентификаторЗапроса);
+        clientRequest.SetRequest(requestV3);
 
         return transaction;
     }

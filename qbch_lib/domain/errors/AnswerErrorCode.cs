@@ -40,12 +40,11 @@ public class AnswerErrorCode : BaseError
     /// <returns></returns>
     public static AnswerErrorCode Code5_TheCertificateIsExpired() => new(5, "Истек срок сертификата УЭП");
 
-    //TODO: В описании ошибки должны быть указаны реквизиты УЭП и ожидаемые реквизиты
     /// <summary>
     /// Реквизиты абонента не совпадают
     /// </summary>
     /// <returns></returns>
-    public static AnswerErrorCode Code6_DetailsDoNotMatch() => new(6, "Реквизиты абонента не совпадают");
+    public static AnswerErrorCode Code6_DetailsDoNotMatch(string description) => new(6, $"Реквизиты абонента не совпадают: {description}");
 
     /// <summary>
     /// Некорректный формат запроса

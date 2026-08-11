@@ -1,4 +1,5 @@
-﻿using qbch_lib.domain.errors;
+﻿using qbch_lib.domain.entities;
+using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.core;
 using QBCH_lib.domain.DTOs;
@@ -97,6 +98,7 @@ public sealed class QBCHProcessingTransaction : AggregateRoot
     {
         return new QBCHProcessingTransaction(Guid.NewGuid(), requestTime, clentRequest, attachment, requisites);
     }
+
 
     /// <summary>
     /// 

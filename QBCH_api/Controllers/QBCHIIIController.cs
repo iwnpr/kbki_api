@@ -81,7 +81,7 @@ public class QBCHIIIController(IMediator mediator,
         var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
         _logger.LogDebug("Начало = {Action} v{Version} в {RequestTime}", nameof(DlRequest_v_3), apiVersion, requestTime);
 
-        var transaction = await _mediator.Send(new CreateToValidateCommandV3(apiVersion, Request));
+        var transaction = await _mediator.Send(new CreateToValidateCommand(apiVersion, Request));
         _logger.LogDebug("{guid} Request: {dt}", transaction.Id, requestTime);
 
         if (transaction.ProcessingErrors.Count != 0)
@@ -1118,7 +1118,7 @@ public class QBCHIIIController(IMediator mediator,
 
             if (!isUniqueRevoke)
             {
-                responseXml = _xmlServiceV3.SerializeAsByteV3(uniqueResult!.TicketV3!);
+                responseXml = _xmlServiceV3.SerializeAsByteV3(uniqueResult!.Ticket!);
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 await _storageService.AddHash(serviceName, guid, "error_code", uniqueResult.ErrorCode.ToString());
                 await _storageService.AddHash(serviceName, guid, "error_message", uniqueResult.Error ?? "-");

@@ -2,9 +2,9 @@
 using Crypto_lib.Model;
 using Crypto_lib.Service;
 using QBCH_api.Services.Interfaces.V3;
-using Qbch_db_lib.Services.Interfaces.V3;
+using Qbch_db_lib.Services.Interfaces;
+using qbch_lib.CommonTypes.Api;
 using qbch_lib.domain.errors;
-using QBCH_lib.CommonTypes.Api.V3;
 using QBCH_lib.Services.Interfaces.V3;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
@@ -29,7 +29,7 @@ public class ValidationServiceV3(
     private readonly ITicketServiceV3 _ticketService = ticketService;
     private readonly ILogger<ValidationServiceV3> _logger = logger;
 
-    public bool ValidateXmlV3(MemoryStream memoryStream, string nameOfController, [NotNullWhen(false)] out BaseResultV3? result)
+    public bool ValidateXmlV3(MemoryStream memoryStream, string nameOfController, [NotNullWhen(false)] out BaseResult? result)
     {
         _logger.LogDebug("ValidationServiceV3.ValidateXmlV3: controller={nameOfController}, streamLength={streamLength}", nameOfController, memoryStream.Length);
         var isValid = _xmlService.ValidateXmlV3(memoryStream, nameOfController, out var xmlResult);
@@ -48,7 +48,7 @@ public class ValidationServiceV3(
         return true;
     }
 
-    public bool ValidateEncodingV3(byte[] message, [NotNullWhen(false)] out BaseResultV3? result)
+    public bool ValidateEncodingV3(byte[] message, [NotNullWhen(false)] out BaseResult? result)
     {
         _logger.LogDebug("ValidationServiceV3.ValidateEncodingV3: messageLength={messageLength}", message.Length);
         try
@@ -70,7 +70,7 @@ public class ValidationServiceV3(
         return true;
     }
 
-    public bool ValidateRequestDateV3(DateTime? requestDate, [NotNullWhen(false)] out BaseResultV3? result)
+    public bool ValidateRequestDateV3(DateTime? requestDate, [NotNullWhen(false)] out BaseResult? result)
     {
         _logger.LogDebug("ValidationServiceV3.ValidateRequestDateV3: requestDate={requestDate}", requestDate);
         var currentMoscowDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, MoscowTimeZone).Date;
@@ -106,7 +106,7 @@ public class ValidationServiceV3(
     /// <param name="requestCert"></param>
     /// <param name="result"></param>
     /// <returns></returns>
-    public bool ValidateCertificateV3(X509Certificate2? requestCert, [NotNullWhen(false)] out BaseResultV3? result)
+    public bool ValidateCertificateV3(X509Certificate2? requestCert, [NotNullWhen(false)] out BaseResult? result)
     {
         _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: thumbprint={thumbprint}, notAfter={notAfter}",
             requestCert?.Thumbprint, requestCert?.NotAfter);
@@ -138,7 +138,7 @@ public class ValidationServiceV3(
         return isGranted;
     }
 
-    public async Task<(bool IsUnique, BaseResultV3? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
+    public async Task<(bool IsUnique, BaseResult? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
     {
         _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: requestId={requestId}, ogrn={ogrn}, method={methodName}", requestId, ogrn, methodName);
         var isUnique = await _cache.IsUniqueRequestId(requestId, ogrn, methodName);
@@ -202,15 +202,15 @@ public class ValidationServiceV3(
         _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3 результат: {success}, thumbprint={thumbprint}", success, certificate.Thumbprint);
         return success;
     }
-    private BaseResultV3 CreateErrorResult(AnswerErrorCode error)
+    private BaseResult CreateErrorResult(AnswerErrorCode error)
     {
-        return new BaseResultV3
+        return new BaseResult
         {
             IsError = true,
             ErrorCode = error.Code,
             Error = error.Message,
             ErrorMessage = error.Message,
-            TicketV3 = _ticketService.CreateResultV3Error(error)
+            Ticket = _ticketService.CreateResultV3Error(error)
         };
     }
 }

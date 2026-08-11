@@ -1,7 +1,7 @@
 ﻿using CertManagement.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 using Qbch_db_lib.Services.Interfaces;
-using QBCH_lib.Services.Interfaces;
+using QBCH_lib.Services.Interfaces.V3;
 using System.Security.Cryptography.X509Certificates;
 
 namespace CertManagement.Services.Implementations
@@ -9,22 +9,10 @@ namespace CertManagement.Services.Implementations
     /// <summary>
     /// Менеджмент сертификатов
     /// </summary>
-    /// <remarks>
-    /// Конструктор
-    /// </remarks>
-    /// <param name="logger">
-    /// Logger
-    /// </param>
     /// <param name="repository">
     /// Контекст БД
-    /// </param>        
-    /// <param name="ticketService">
-    /// Сервис тикетов
     /// </param>
-    public class CertManagementService(
-        ILogger<CertManagementService> logger,
-        IRepository repository,
-        ITicketService ticketService) : ICertManagementService
+    public class CertManagementService(IRepositoryV3 repository) : ICertManagementService
     {
 
         /// <summary>

@@ -1,129 +1,72 @@
-﻿using QBCH_lib.core;
-using QBCH_lib.qcb_xml.v2_0.qcb_request;
+﻿using QBCH.Lib.qcb_xml.v3_0;
 using System;
 using System.Security.Cryptography.X509Certificates;
 
-namespace QBCH_lib.domain.entities;
+namespace qbch_lib.domain.entities;
 
 /// <summary>
-/// клиентский запрос
+/// Обертка клиентского запроса
 /// </summary>
-public class ClentRequest : Entity
+public class ClentRequest
 {
-    /// <summary>
-    /// запроса
-    /// </summary>
-    public string? RequestId { get; private set; }
-    /// <summary>
-    /// Метод запроса
-    /// </summary>
-    public string? RequestMethod { get; private set; }
-    /// <summary>
-    /// Дата-время запроса
-    /// </summary>
-    public string? RequestTime { get; private set; }
-    /// <summary>
-    /// ip адрес
-    /// </summary>
-    public string? IpAddress { get; private set; }
-    /// <summary>
-    /// Сертификат с которым установлено соединение
-    /// </summary>
-    public X509Certificate2? Certificate { get; private set; }
-    /// <summary>
-    /// ОГРН из запроса
-    /// </summary>
-    public string? RequestOGRN { get; private set; }
-    /// <summary>
-    /// ИНН из запроса
-    /// </summary>
-    public string? RequestINN { get; private set; }
+    private readonly ClentRequest _inner;
 
-    /// <summary>
-    /// xml запроса
-    /// </summary>
-    public object? RequestPayload { get; private set; }
-
-    /// <summary>
-    /// xml запроса v3.0
-    /// </summary>
-    public ЗапросСведений? Request => RequestPayload as ЗапросСведений;
-
-    /// <summary>
-    /// Конструктор
-    /// </summary>
-    /// <param name="id"></param>
-    /// <param name="requestMethod"></param>
-    /// <param name="requestTime"></param>
-    /// <param name="ipAddress"></param>
-    /// <param name="certificate"></param>
-    private ClentRequest(Guid id,
-                        string requestMethod,
-                        DateTime requestTime,
-                        string? ipAddress,
-                        X509Certificate2? certificate) : base(id)
+    private ClentRequest(ClentRequest inner)
     {
-        RequestMethod = requestMethod;
-        RequestTime = requestTime.ToString("dd.MM.yyyy HH:mm:ss:ffff");
-        IpAddress = ipAddress;
-        Certificate = certificate;
+        _inner = inner;
     }
 
     /// <summary>
-    /// Создать клиентский запрос
+    /// Внутренний объект запроса.
     /// </summary>
-    /// <param name="requestMethod">Имя запроса</param>
-    /// <param name="requestTime">Время запроса</param>
-    /// <param name="ipAddress">ip адрес клиента</param>
-    /// <param name="certificate">Сертификат запроса</param>
-    /// <returns></returns>
+    public ClentRequest Inner => _inner;
+
+    public string? RequestId => _inner.RequestId;
+    public string? RequestMethod => _inner.RequestMethod;
+    public string? RequestTime => _inner.RequestTime;
+    public string? IpAddress => _inner.IpAddress;
+    public X509Certificate2? Certificate => _inner.Certificate;
+    public string? RequestOGRN => _inner.RequestOGRN;
+    public string? RequestINN => _inner.RequestINN;
+    public object? RequestPayload => _inner.RequestPayload;
+
+    /// <summary>
+    /// Десериализованная модель запроса версии 3.0.
+    /// </summary>
+    public ЗапросСведений? Request =>
+        _inner.RequestPayload as ЗапросСведений;
+
+    /// <summary>
+    /// Создать клиентский запрос для API 3.0.
+    /// </summary>
     public static ClentRequest Create(string requestMethod, DateTime requestTime, string? ipAddress, X509Certificate2? certificate)
     {
-        return new ClentRequest(Guid.NewGuid(),
-                                requestMethod,
-                                requestTime,
-                                ipAddress,
-                                certificate);
+        return new ClentRequest(ClentRequest.Create(requestMethod, requestTime, ipAddress, certificate));
     }
 
     /// <summary>
-    /// Уставновить запрос
+    /// Обернуть существующий клиентский запрос.
     /// </summary>
-    /// <param name="request">Запрос</param>
+    public static ClentRequest From(ClentRequest request)
+    {
+        return new ClentRequest(request);
+    }
+
+    /// <summary>
+    /// Установить десериализованную модель запроса версии 3.0.
+    /// </summary>
     public void SetRequest(ЗапросСведений request)
     {
-        RequestPayload ??= request;
+        _inner.SetRequest(request);
     }
 
-    /// <summary>
-    /// Установить десериализованную модель запроса без привязки к версии.
-    /// </summary>
-    /// <param name="request">Запрос</param>
-    public void SetRequest(object request)
-    {
-        RequestPayload ??= request;
-    }
-
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="requestThumbprint"></param>
-    /// <param name="requestInn"></param>
-    /// <param name="requestOgrn"></param>
     public void SetRequestCertificateData(string? requestThumbprint, string? requestInn, string? requestOgrn)
     {
-        RequestINN = requestInn;
-        RequestOGRN = requestOgrn;
+        _inner.SetRequestCertificateData(requestThumbprint, requestInn, requestOgrn);
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="requestId"></param>
     public void SetRequestId(string requestId)
     {
-        RequestId ??= requestId;
+        _inner.SetRequestId(requestId);
     }
-
-
 }

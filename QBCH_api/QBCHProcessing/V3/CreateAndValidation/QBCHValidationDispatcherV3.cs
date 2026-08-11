@@ -3,7 +3,7 @@ using Crypto_lib.Service;
 using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 using QBCH_api.Services.Interfaces.V3;
-using Qbch_db_lib.Services.Interfaces.V3;
+using Qbch_db_lib.Services.Interfaces;
 using qbch_lib;
 using qbch_lib.domain.errors;
 using QBCH_lib.domain.aggregate;
@@ -40,7 +40,7 @@ public static class QBCHValidationDispatcherV3
         ProcessSignV3(transaction, cryptoService, validationService);
 
         // xsd
-        transaction.ValidateXmlV3(validationService, xmlService);
+        transaction.ValidateXml(validationService, xmlService);
 
         var requestV3 = transaction.GetRequest<ЗапросСведенийV3>();
 
@@ -160,9 +160,6 @@ public static class QBCHValidationDispatcherV3
         var requestOGRN = transaction.ClentRequest?.RequestOGRN;
 
         var (abonentINN, abonentOGRN) = GetAbonentRequisitesV3(requestV3);
-
-        requestINN = abonentINN;
-        requestOGRN = abonentOGRN;
 
         // ИНН и ОГРН из сертификата сравнивается с ИНН и ОГРН в запросе
         if (requestINN != abonentINN || requestOGRN != abonentOGRN)

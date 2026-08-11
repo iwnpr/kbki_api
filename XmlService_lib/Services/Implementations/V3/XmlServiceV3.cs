@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using qbch_lib.CommonTypes.Api;
 using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using System.Collections.Concurrent;

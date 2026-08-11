@@ -1,9 +1,6 @@
-﻿using QBCH_lib.CommonTypes.Api;
-using QBCH_lib.core;
+﻿using qbch_lib.CommonTypes.Api;
 using System.Diagnostics.CodeAnalysis;
-using System.Xml;
 using System.Xml.Linq;
-using System.Xml.Serialization;
 
 namespace XmlService_lib.Services.Interfaces.V3;
 

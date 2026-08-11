@@ -33,8 +33,7 @@ public static class AdditionalValidatorV3
         ТипЦельКодЦелиV3.Item131,
         ТипЦельКодЦелиV3.Item14,
         ТипЦельКодЦелиV3.Item141,
-        ТипЦельКодЦелиV3.Item15,
-        ТипЦельКодЦелиV3.Item151
+        ТипЦельКодЦелиV3.Item15
     ];
 
     public static QBCHProcessingTransaction AdditionalValidationV3(
