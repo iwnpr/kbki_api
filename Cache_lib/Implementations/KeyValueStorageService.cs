@@ -78,9 +78,9 @@ namespace Cache_lib.Implementations
 
                 _logger.LogTrace("Redis: запись в кэш по ключу {pGuid}", pKey);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogCritical("Критическая ошибка Redis: {errorMessage}", e.Message);
+                _logger.LogCritical(ex, "Критическая ошибка Redis: {errorMessage}", ex.Message);
                 throw;
             }
         }
@@ -107,9 +107,9 @@ namespace Cache_lib.Implementations
                 _logger.LogTrace("Redis: запись в кэш по ключу {pGuid}", pKey);
                 await transaction.ExecuteAsync();
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogCritical("Критическая ошибка Redis: {errorMessage}", e.Message);
+                _logger.LogCritical(ex, "Критическая ошибка Redis: {errorMessage}", ex.Message);
                 throw;
             }
         }
@@ -170,7 +170,7 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Redis error");
+                _logger.LogCritical(ex, "Ошибка Redis при чтении поля хэша");
                 return Result<byte[]>.Failure(new AnswerErrorCode(500, ex.Message));
             }
         }

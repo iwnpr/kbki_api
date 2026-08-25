@@ -10,9 +10,7 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 /// </summary>
 public static class XMLRequestCollectionValidatorV3
 {
-    public static QBCHProcessingTransactionV3 ValidateXmlRequestCollectionV3(
-        this QBCHProcessingTransactionV3 transaction,
-        ЗапросСведенийV3? requestV3)
+    public static QBCHProcessingTransactionV3 ValidateXmlRequestCollectionV3(this QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
         {
@@ -24,33 +22,50 @@ public static class XMLRequestCollectionValidatorV3
         switch (requestV3.РежимЗапроса)
         {
             case РежимЗапросаV3.Item1:
-                ValidateSingleMode(transaction, requests.Length);
+                ValidateSingleMode(transaction, requests.Length, logger);
                 break;
             case РежимЗапросаV3.Item2:
-                ValidatePackageMode(transaction, requests.Select((request, index) => (request.ПорядковыйНомер, index + 1)).ToList());
+                ValidatePackageMode(transaction, requests.Select((request, index) => (request.ПорядковыйНомер, index + 1)).ToList(), logger);
                 break;
         }
 
         return transaction;
     }
 
-    private static void ValidateSingleMode(QBCHProcessingTransactionV3 transaction, int requestCount)
+    private static void ValidateSingleMode(QBCHProcessingTransactionV3 transaction, int requestCount, ILogger logger)
     {
         if (requestCount != 1)
-            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
+        {
+            var error = AnswerErrorCode.Code26_WrongBlockCount();
+
+            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: одиночный режим, блоков={RequestCount}, ожидался 1. transactionId: {TransactionId} code={QbchErrorCode}: {QbchErrorMessage}",
+                transaction.Id, requestCount, error.Code, error.Message);
+
+            transaction.RiseCriticalError(error);
+        }
     }
 
-    private static void ValidatePackageMode(QBCHProcessingTransactionV3 transaction, List<(string? OrderNumberRaw, int Position)> requests)
+    private static void ValidatePackageMode(QBCHProcessingTransactionV3 transaction, List<(string? OrderNumberRaw, int Position)> requests, ILogger logger)
     {
         if (requests.Count == 0)
         {
-            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
+            var error = AnswerErrorCode.Code26_WrongBlockCount();
+
+            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: пакетный режим без блоков Запрос. transactionId: {TransactionId}  code={QbchErrorCode}: {QbchErrorMessage}",
+                transaction.Id, error.Code, error.Message);
+
+            transaction.RiseCriticalError(error);
             return;
         }
 
         if (requests.Count > 10)
         {
-            transaction.RiseCriticalError(AnswerErrorCode.Code26_WrongBlockCount());
+            var error = AnswerErrorCode.Code26_WrongBlockCount();
+
+            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: пакетный режим, блоков={RequestCount}, допустимо не более 10. transactionId: {TransactionId} code={QbchErrorCode}: {QbchErrorMessage}",
+                transaction.Id, requests.Count, error.Code, error.Message);
+
+            transaction.RiseCriticalError(error);
             return;
         }
 
@@ -65,8 +80,7 @@ public static class XMLRequestCollectionValidatorV3
 
         if (parsedOrders[0].OrderNumber != 1)
         {
-            AddPackageErrorIfMissing(transaction, parsedOrders[0].OrderNumber,
-                "Порядковые номера запросов должны начинаться с \"1\"");
+            AddPackageErrorIfMissing(transaction, parsedOrders[0].OrderNumber, "Порядковые номера запросов должны начинаться с \"1\"", logger);
         }
 
         var duplicatedOrderNumbers = parsedOrders
@@ -77,22 +91,8 @@ public static class XMLRequestCollectionValidatorV3
 
         foreach (var duplicatedOrder in duplicatedOrderNumbers)
         {
-            AddPackageErrorIfMissing(transaction, duplicatedOrder.OrderNumber,
-                "Порядковый номер запроса в пакете должен быть уникальным");
+            AddPackageErrorIfMissing(transaction, duplicatedOrder.OrderNumber, "Порядковый номер запроса в пакете должен быть уникальным", logger);
         }
-
-        //NOTE: Изменения в постановке ЦБ по сравнению со второй версией нет. Прямого требования делать эту проверку в постановке нет. Во второй версии эта проверка отсутствует. Маша сказала лучше убрать эту проверку.
-        //for (var i = 1; i < parsedOrders.Count; i++)
-        //{
-        //    var previousOrder = parsedOrders[i - 1].OrderNumber;
-        //    var currentOrder = parsedOrders[i].OrderNumber;
-
-        //    if (currentOrder != previousOrder + 1)
-        //    {
-        //        AddPackageErrorIfMissing(transaction, currentOrder,
-        //            "Порядковые номера запросов в пакете должны идти подряд без пропусков");
-        //    }
-        //}
     }
 
     private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)
@@ -102,13 +102,18 @@ public static class XMLRequestCollectionValidatorV3
             : position;
     }
 
-    private static void AddPackageErrorIfMissing(QBCHProcessingTransactionV3 transaction, int orderNumber, string message)
+    private static void AddPackageErrorIfMissing(QBCHProcessingTransactionV3 transaction, int orderNumber, string message, ILogger logger)
     {
         if (transaction.PackageValidationErrors.Any(x => x.Id == orderNumber && x.error_code == 26))
         {
             return;
         }
 
-        transaction.SetPacakgeValidationError(orderNumber, AnswerErrorCode.Code99_OtherError(message));
+        var error = AnswerErrorCode.Code99_OtherError(message);
+
+        logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3 для запроса №{OrderNumber}. transactionId: {TransactionId}  code={QbchErrorCode}: {QbchErrorMessage}",
+            transaction.Id, orderNumber, error.Code, error.Message);
+
+        transaction.SetPacakgeValidationError(orderNumber, error);
     }
 }

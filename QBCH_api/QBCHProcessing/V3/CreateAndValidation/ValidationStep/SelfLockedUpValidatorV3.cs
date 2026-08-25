@@ -13,7 +13,7 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
 /// </summary>
 public static class SelfLockedUpValidatorV3
 {
-    public static QBCHProcessingTransactionV3 ValidateInnAndSelfProhibitionV3(this QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
+    public static QBCHProcessingTransactionV3 ValidateInnAndSelfProhibitionV3(this QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
             return transaction;
@@ -29,7 +29,7 @@ public static class SelfLockedUpValidatorV3
             if (mode == СправочникРежимыЗапросаV3.Item2 && transaction.PackageValidationErrors.Any(x => x.Id == orderNumber))
                 continue;
 
-            ValidateInnMatrix(transaction, requestV3.КодСведений, mode, requestItem, orderNumber);
+            ValidateInnMatrix(transaction, requestV3.КодСведений, mode, requestItem, orderNumber, logger);
 
             if (mode == СправочникРежимыЗапросаV3.Item1 &&
                 transaction.Status.Equals(QBCHProcessingStatus.Failure))
@@ -40,8 +40,8 @@ public static class SelfLockedUpValidatorV3
         return transaction;
     }
 
-    private static void ValidateInnMatrix(QBCHProcessingTransactionV3 transaction, СправочникВидыСведенийV3 infoCode, СправочникРежимыЗапросаV3 mode, ЗапросСведенийЗапросV3 requestItem, int orderNumber)
-    {
+    private static void ValidateInnMatrix(QBCHProcessingTransactionV3 transaction, СправочникВидыСведенийV3 infoCode, СправочникРежимыЗапросаV3 mode, ЗапросСведенийЗапросV3 requestItem, int orderNumber, ILogger logger)
+    { 
         // Матрица ИНН/ПризнакПроверки:
         // Код 6: для "запрета" нужны ИНН и ПризнакПроверки=1.
         // Код 7: при отсутствии ИНН или ПризнакПроверки=0 запрос не блокируется, в ответе не предоставляются "запрет" и "антифрод", но могут быть выданы платежи.
@@ -62,7 +62,7 @@ public static class SelfLockedUpValidatorV3
         }
 
         if (ShouldApplyInnMatrix(infoCode))
-            AddCode25(transaction, mode, orderNumber);
+            AddCode25(transaction, mode, orderNumber, infoCode, logger);
 
     }
 
@@ -76,15 +76,20 @@ public static class SelfLockedUpValidatorV3
             or СправочникВидыСведенийV3.Item8;
     }
 
-    private static void AddCode25(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber)
+    private static void AddCode25(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber, СправочникВидыСведенийV3 infoCode, ILogger logger)
     {
+        var error = AnswerErrorCode.Code25_SelfLockedUpError_V3();
+
+        logger.LogError("Не пройдена проверка ИНН и самозапрета dlrequest v3 для запроса №{OrderNumber}: КодСведений={КодСведений}, режим={RequestMode}, отсутствует ИНН субъекта или ПризнакПроверки не равен 1. transactionId: {TransactionId}  code={QbchErrorCode}: {QbchErrorMessage}",
+            transaction.Id, orderNumber, infoCode, requestMode, error.Code, error.Message);
+
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {
-            transaction.SetPacakgeValidationError(orderNumber, AnswerErrorCode.Code25_SelfLockedUpError_V3());
+            transaction.SetPacakgeValidationError(orderNumber, error);
             return;
         }
 
-        transaction.RiseCriticalError(AnswerErrorCode.Code25_SelfLockedUpError_V3());
+        transaction.RiseCriticalError(error);
     }
 
     private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)

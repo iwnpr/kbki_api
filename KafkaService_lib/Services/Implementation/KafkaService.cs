@@ -184,9 +184,9 @@ namespace KafkaService_lib.Services.Implementation
                 _logger.LogDebug("Сообщение получено. Смещение = {crOffset}, Партиция = {crTopicPartitionOffset}, Топик = {crTopic}", cr.Offset, cr.TopicPartitionOffset.Partition.Value, cr.Topic);
                 return cr.Message;
             }
-            catch (ConsumeException e)
+            catch (ConsumeException ex)
             {
-                _logger.LogError("Ошибка получения сообщения: {eErrorReason}", e.Error.Reason);
+                _logger.LogError(ex, "Ошибка получения сообщения: {eErrorReason}", ex.Error.Reason);
                 return null;
             }
             finally

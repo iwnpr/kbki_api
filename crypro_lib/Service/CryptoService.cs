@@ -114,7 +114,7 @@ namespace Crypto_lib.Service
             catch (Exception ex)
             {
                 var processingError = AnswerErrorCode.Code7_IncorrectRequestFormat();
-                _logger.LogError(processingError.Message);
+                _logger.LogError(ex, "Не удалось декодировать PKCS#7 сообщение: {Error}", processingError.Message);
 
                 result.Error = processingError.Message;
                 result.ErrorCode = processingError.Code;
@@ -163,7 +163,7 @@ namespace Crypto_lib.Service
                     {
                         var processingError = AnswerErrorCode.Code4_SignatureIsNotCorrect();
 
-                        _logger.LogError("УЭП некорректна: {Error}", ex.Message);
+                        _logger.LogError(ex, "УЭП некорректна: {Error}", ex.Message);
 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
@@ -279,7 +279,7 @@ namespace Crypto_lib.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError("Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
+                _logger.LogError(ex, "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
 
                 var error = AnswerErrorCode.Code7_IncorrectRequestFormat();
 
@@ -323,7 +323,7 @@ namespace Crypto_lib.Service
                     {
                         var processingError = AnswerErrorCode.Code4_SignatureIsNotCorrect();
 
-                        _logger.LogError("УЭП некорректна: {Error}", ex.Message);
+                        _logger.LogError(ex, "УЭП некорректна: {Error}", ex.Message);
 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
@@ -419,7 +419,7 @@ namespace Crypto_lib.Service
                     {
                         var processingError = AnswerErrorCode.Code4_SignatureIsNotCorrect();
 
-                        _logger.LogError("УЭП некорректна: {Error}", ex.Message);
+                        _logger.LogError(ex, "УЭП некорректна: {Error}", ex.Message);
 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;

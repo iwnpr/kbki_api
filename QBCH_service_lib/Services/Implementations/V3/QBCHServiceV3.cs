@@ -255,14 +255,14 @@ public class QBCHServiceV3(
                                 var answerValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_answer.xsd", redisMsg, ticketCheckCts.Token);
                                 if (answerValidation.IsError)
                                 {
-                                    _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, answerValidation.Error);
+                                    _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, answerValidation.Error);
                                     redisMsg.SetError(answerValidation.ErrorCode.ToString(), answerValidation.Error!).SetResponseTime(DateTime.Now);
                                     await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                                     dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, answerValidation.ErrorCode.ToString(), answerValidation.Error ?? "Ошибка валидации", orderNumbers);
                                     break;
                                 }
 
-                                _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
+                                _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 redisMsg.SetSignedResponse(ms.ToArray()).SetResponseXml(answerValidation.Body).SetResponseTime(DateTime.Now);
                                 dlrequestResult = _xmlService.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body);
                                 await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
@@ -273,13 +273,13 @@ public class QBCHServiceV3(
                                 var badValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", redisMsg, ticketCheckCts.Token);
                                 if (badValidation.IsError)
                                 {
-                                    _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, badValidation.Error);
+                                    _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, badValidation.Error);
                                     redisMsg.SetError(badValidation.ErrorCode.ToString(), badValidation.Error!).SetResponseTime(DateTime.Now);
                                     await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                                     dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, badValidation.ErrorCode.ToString(), badValidation.Error ?? "Ошибка валидации", orderNumbers);
                                     break;
                                 }
-                                _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
+                                _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 var badTicket = _xmlService.DeserializeV3<Результат>(badValidation.Body);
 
                                 if (badTicket?.Item is ТипОшибка badError)
@@ -300,18 +300,18 @@ public class QBCHServiceV3(
                                 var ticketValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", redisMsg, ticketCheckCts.Token);
                                 if (ticketValidation.IsError)
                                 {
-                                    _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, ticketValidation.Error);
+                                    _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, ticketValidation.Error);
                                     redisMsg.SetError(ticketValidation.ErrorCode.ToString(), ticketValidation.Error!).SetResponseTime(DateTime.Now);
                                     await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                                     dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, ticketValidation.ErrorCode.ToString(), ticketValidation.Error ?? "Ошибка валидации", orderNumbers);
                                     break;
                                 }
-                                _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
+                                _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 ticket = _xmlService.DeserializeV3<Результат>(ticketValidation.Body);
 
                                 if (ticket?.Item is РезультатИдентификаторОтвета)
                                 {
-                                    _logger.LogDebug("{guid} {Bureau}: Ticket", guid, bureau.ogrn);
+                                    _logger.LogDebug("{guid} {Bureau}: Получен тикет с идентификатором ответа", guid, bureau.ogrn);
                                     redisMsg.SetSignedResponse(ms.ToArray()).SetResponseXml(ticketValidation.Body).SetResponseTime(DateTime.Now);
                                 }
                                 else
@@ -413,7 +413,7 @@ public class QBCHServiceV3(
             await _storageService.ListSet(key: [DLAnswerRedisMessage.Name, guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
         }
 
-        _logger.LogDebug("{guid} {Bureau}: dlanswer response {dt}", guid, bureau.ogrn!, DateTime.Now);
+        _logger.LogDebug("{guid} {Bureau}: получен ответ dlanswer {dt}", guid, bureau.ogrn!, DateTime.Now);
 
         return new QBCHTaskResult(bureau.ogrn!, answer3: dlanswerResult);
 
@@ -432,7 +432,7 @@ public class QBCHServiceV3(
             try
             {
                 //NOTE: Вернул логирование Артема
-                _logger.LogDebug("{guid} {Bureau}: dlanswer send {dt}", guid, bureau.ogrn!, DateTime.Now);
+                _logger.LogDebug("{guid} {Bureau}: отправка dlanswer {dt}", guid, bureau.ogrn!, DateTime.Now);
                 using var responseMessage = await client.GetAsync($"dlanswer?id={responseId}", ct);
                 lastStatusCode = responseMessage.StatusCode;
                 lastResponseText = await responseMessage.Content.ReadAsStringAsync(ct);
@@ -440,7 +440,7 @@ public class QBCHServiceV3(
                 await responseMessage.Content.CopyToAsync(ms, ct);
 
                 redisMsg.SetResponseCode(responseMessage.StatusCode).SetResponseTime(DateTime.Now);
-                _logger.LogDebug("{guid} {Bureau}: Status {Status}", guid, bureau.ogrn!, (int?)responseMessage.StatusCode);
+                _logger.LogDebug("{guid} {Bureau}: Код ответа {Status}", guid, bureau.ogrn!, (int?)responseMessage.StatusCode);
 
                 switch (responseMessage.StatusCode)
                 {
@@ -449,7 +449,7 @@ public class QBCHServiceV3(
                         if (okValidation.IsError)
                         {
                             //NOTE: Возвратил пропавший код Артема
-                            _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, okValidation.Error);
+                            _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, okValidation.Error);
                             redisMsg.SetError(okValidation.ErrorCode.ToString(), okValidation.ErrorMessage).SetResponseTime(DateTime.Now);
                             await _storageService.ListSet(key: [RedisConstants.DlRequestV3Scope, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                             return CreateErrorAnswerV3(bureau.ogrn!, okValidation.ErrorCode.ToString(), okValidation.Error ?? "Ошибка валидации", orderNumbers);
@@ -467,18 +467,18 @@ public class QBCHServiceV3(
                         var ticketValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", redisMsg, ct);
                         if (ticketValidation.IsError)
                         {
-                            _logger.LogDebug("{guid} {Bureau}: InvalidAnswer {err}", guid, bureau.ogrn!, ticketValidation.Error);
+                            _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, ticketValidation.Error);
                             redisMsg.SetError(ticketValidation.ErrorCode.ToString(), ticketValidation.ErrorMessage).SetResponseTime(DateTime.Now);
                             await _storageService.ListSet(key: [RedisConstants.DlRequestV3Scope, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                             return CreateErrorAnswerV3(bureau.ogrn!, ticketValidation.ErrorCode.ToString(), ticketValidation.Error ?? "Ошибка валидации", orderNumbers);
                         }
 
-                        _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
+                        _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                         var ticket = _xmlService.DeserializeV3<Результат>(ticketValidation.Body);
                         //NOTE: Возвратил пропавший код Артема. И безусловное приведение вместо сравнения, это ошибка. 
                         if (ticket?.Item is ТипОшибка ticketError)
                         {
-                            _logger.LogDebug("{guid} {Bureau}: Error code {code} value {value}", guid, bureau.ogrn!, ticketError.Код, ticketError.Value);
+                            _logger.LogDebug("{guid} {Bureau}: Ошибка в тикете, код {code} описание {value}", guid, bureau.ogrn!, ticketError.Код, ticketError.Value);
                             redisMsg.SetError(ticketError.Код, ticketError.Value).SetResponseTime(DateTime.Now);
 
                             if (ticketError.Код != "12")

@@ -61,6 +61,7 @@ public sealed class CreateAndValidateHandler(
             validationService: _validationService,
             cryptoService: _cryptoService,
             xmlService: _xmlService,
+            logger: _logger,
             repository: _repository,
             cacheService: _storageService,
             cancellationToken: cancellationToken);

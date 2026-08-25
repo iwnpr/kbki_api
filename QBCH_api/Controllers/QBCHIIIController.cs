@@ -78,7 +78,7 @@ public class QBCHIIIController(IMediator mediator,
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
-        _logger.LogDebug("Начало = {Action} v{Version} в {RequestTime}", nameof(DlRequest_v_3), apiVersion, requestTime);
+        _logger.LogInformation("Начало = {Action} v{Version} в {RequestTime}", nameof(DlRequest_v_3), apiVersion, requestTime);
 
         var transaction = await _mediator.Send(new CreateToValidateCommandV3(apiVersion, Request));
         _logger.LogDebug("{guid} Запрос: {dt}", transaction.Id, requestTime);

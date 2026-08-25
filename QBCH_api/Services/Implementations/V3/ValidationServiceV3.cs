@@ -31,7 +31,7 @@ public class ValidationServiceV3(
 
     public bool ValidateXmlV3(MemoryStream memoryStream, string nameOfController, [NotNullWhen(false)] out BaseResult? result)
     {
-        _logger.LogDebug("ValidationServiceV3.ValidateXmlV3: controller={nameOfController}, streamLength={streamLength}", nameOfController, memoryStream.Length);
+        _logger.LogDebug("ValidationServiceV3.ValidateXmlV3: начало проверки XML, controller={nameOfController}, streamLength={streamLength}", nameOfController, memoryStream.Length);
         var isValid = _xmlService.ValidateXmlV3(memoryStream, nameOfController, out var xmlResult);
 
         if (!isValid)
@@ -72,7 +72,7 @@ public class ValidationServiceV3(
 
     public bool ValidateRequestDateV3(DateTime? requestDate, [NotNullWhen(false)] out BaseResult? result)
     {
-        _logger.LogDebug("ValidationServiceV3.ValidateRequestDateV3: requestDate={requestDate}", requestDate);
+        _logger.LogDebug("ValidationServiceV3.ValidateRequestDateV3: начало проверки даты запроса, requestDate={requestDate}", requestDate);
         var currentMoscowDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, MoscowTimeZone).Date;
 
         if (requestDate?.Date != currentMoscowDate)
@@ -91,7 +91,7 @@ public class ValidationServiceV3(
 
     public bool ValidateMsgV3(byte[] msg, X509Certificate2? requestCert, [NotNullWhen(false)] out CryptoServiceResult result, byte[]? encodedSignature = null)
     {
-        _logger.LogDebug("ValidationServiceV3.ValidateMsgV3: thumbprint={thumbprint}, msgLength={msgLength}, hasDetachedSignature={hasDetachedSignature}",
+        _logger.LogDebug("ValidationServiceV3.ValidateMsgV3:  начало проверки подписи сообщения, thumbprint={thumbprint}, msgLength={msgLength}, hasDetachedSignature={hasDetachedSignature}",
             requestCert?.Thumbprint, msg.Length, encodedSignature is not null);
 
         var isValid = _cryptoService.ValidateMsg(msg, requestCert, out result, encodedSignature);
@@ -108,7 +108,7 @@ public class ValidationServiceV3(
     /// <returns></returns>
     public bool ValidateCertificateV3(X509Certificate2? requestCert, [NotNullWhen(false)] out BaseResult? result)
     {
-        _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: thumbprint={thumbprint}, notAfter={notAfter}",
+        _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: начало проверки сертификата, thumbprint={thumbprint}, notAfter={notAfter}",
             requestCert?.Thumbprint, requestCert?.NotAfter);
 
         var isValid = _cryptoService.ValidateCertificate(requestCert, out CryptoServiceResult? certResult);
@@ -140,7 +140,7 @@ public class ValidationServiceV3(
 
     public async Task<(bool IsUnique, BaseResult? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
     {
-        _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: requestId={requestId}, ogrn={ogrn}, method={methodName}", requestId, ogrn, methodName);
+        _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: начало проверки уникальности идентификатора запроса, requestId={requestId}, ogrn={ogrn}, method={methodName}", requestId, ogrn, methodName);
         var isUnique = await _cache.IsUniqueRequestId(requestId, ogrn, methodName);
 
         if (isUnique)
@@ -155,7 +155,7 @@ public class ValidationServiceV3(
 
     public async Task<bool> IsCertExistsV3(byte[] cert)
     {
-        _logger.LogDebug("ValidationServiceV3.IsCertExistsV3: certLength={certLength}", cert.Length);
+        _logger.LogDebug("ValidationServiceV3.IsCertExistsV3: начало проверки наличия сертификата, certLength={certLength}", cert.Length);
         var exists = await _repository.IsCertExist(cert);
         _logger.LogDebug("ValidationServiceV3.IsCertExistsV3 результат: exists={exists}", exists);
         return exists;
@@ -163,7 +163,7 @@ public class ValidationServiceV3(
 
     public async Task<bool> IsCertActiveV3(string thumbprint)
     {
-        _logger.LogDebug("ValidationServiceV3.IsCertActiveV3: thumbprint={thumbprint}", thumbprint);
+        _logger.LogDebug("ValidationServiceV3.IsCertActiveV3: начало проверки активности сертификата, thumbprint={thumbprint}", thumbprint);
         var isActive = await _repository.IsCertActive(thumbprint);
         _logger.LogDebug("ValidationServiceV3.IsCertActiveV3 результат: isActive={isActive}, thumbprint={thumbprint}", isActive, thumbprint);
         return isActive;
@@ -171,7 +171,7 @@ public class ValidationServiceV3(
 
     public async Task<int> GetActiveCertificatesCountV3(byte[] cert)
     {
-        _logger.LogDebug("ValidationServiceV3.GetActiveCertificatesCountV3: certLength={certLength}", cert.Length);
+        _logger.LogDebug("ValidationServiceV3.GetActiveCertificatesCountV3: начало подсчета активных сертификатов, certLength={certLength}", cert.Length);
 
         if (cert.Length == 0)
         {
@@ -181,9 +181,9 @@ public class ValidationServiceV3(
 
         using var certificate = new X509Certificate2(cert);
 
-        _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3: thumbprint={thumbprint}", certificate.Thumbprint);
+        _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3: сертификат разобран, thumbprint={thumbprint}", certificate.Thumbprint);
         var result = await _repository.GetActiveCertificatesCountByThumbprint(certificate.Thumbprint ?? string.Empty);
-        _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3 Количество активных сертификатов: {success}, thumbprint={thumbprint}", result, certificate.Thumbprint);
+        _logger.LogDebug("ValidationServiceV3.GetActiveCertificatesCountV3: количество активных сертификатов: {success}, thumbprint={thumbprint}", result, certificate.Thumbprint);
         return result;
     }
 
@@ -196,7 +196,7 @@ public class ValidationServiceV3(
         }
 
         using var certificate = new X509Certificate2(cert);
-        _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3: thumbprint={thumbprint}", certificate.Thumbprint);
+        _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3: начало деактивации сертификата, thumbprint={thumbprint}", certificate.Thumbprint);
         var success = await _repository.SetCertificateInactive(certificate.Thumbprint ?? string.Empty);
 
         _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3 результат: {success}, thumbprint={thumbprint}", success, certificate.Thumbprint);

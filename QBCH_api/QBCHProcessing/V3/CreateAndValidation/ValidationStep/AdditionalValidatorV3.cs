@@ -36,16 +36,14 @@ public static class AdditionalValidatorV3
         ТипЦельКодЦелиV3.Item15
     ];
 
-    public static QBCHProcessingTransactionV3 AdditionalValidationV3(
-        this QBCHProcessingTransactionV3 transaction,
-        ЗапросСведенийV3? requestV3)
+    public static QBCHProcessingTransactionV3 AdditionalValidationV3(this QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
         {
             return transaction;
         }
 
-        ValidatePlaceOfBirthAbsence(transaction, requestV3.РежимЗапроса);
+        ValidatePlaceOfBirthAbsence(transaction, requestV3.РежимЗапроса, logger);
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
         {
             return transaction;
@@ -63,7 +61,7 @@ public static class AdditionalValidatorV3
                 continue;
             }
 
-            ValidateRequest(transaction, requestV3.РежимЗапроса, requestItem, orderNumber);
+            ValidateRequest(transaction, requestV3.РежимЗапроса, requestItem, orderNumber, logger);
 
             if (requestV3.РежимЗапроса == СправочникРежимыЗапросаV3.Item1 &&
                 transaction.Status.Equals(QBCHProcessingStatus.Failure))
@@ -79,28 +77,28 @@ public static class AdditionalValidatorV3
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber)
+        int orderNumber,
+        ILogger logger)
     {
-        ValidateDul999(transaction, requestMode, requestItem, orderNumber);
-        ValidateSubjectBirthDate(transaction, requestMode, requestItem, orderNumber);
-        ValidateSubjectDocumentsIssueDate(transaction, requestMode, requestItem, orderNumber);
-        ValidateLoanObligations(transaction, requestMode, requestItem, orderNumber);
-        //NOTE: Убрал проверку СНИЛС, так как поле старое и  аналогичная проверка есть в xsd
-        //ValidateSnils(transaction, requestMode, requestItem, orderNumber);
+        ValidateDul999(transaction, requestMode, requestItem, orderNumber, logger);
+        ValidateSubjectBirthDate(transaction, requestMode, requestItem, orderNumber, logger);
+        ValidateSubjectDocumentsIssueDate(transaction, requestMode, requestItem, orderNumber, logger);
+        ValidateLoanObligations(transaction, requestMode, requestItem, orderNumber, logger);
     }
 
     private static void ValidateDul999(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber)
+        int orderNumber,
+        ILogger logger)
     {
         if (TryGetSourceDocument(requestItem, out var document) &&
             document?.КодДУЛ == СправочникДУЛV3.Item999 &&
             string.IsNullOrWhiteSpace(document.НаименованиеДУЛ))
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData("При значении \"КодДУЛ\" = 999 поле \"НаименованиеДУЛ\" обязательно к заполнению"));
+                AnswerErrorCode.Code15_InvalidRequestData("При значении \"КодДУЛ\" = 999 поле \"НаименованиеДУЛ\" обязательно к заполнению"), logger);
         }
     }
 
@@ -120,18 +118,18 @@ public static class AdditionalValidatorV3
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber)
+        int orderNumber,
+        ILogger logger)
     {
         var birthDate = requestItem.Субъект?.ДатаРождения;
+
         if (birthDate is null)
-        {
-            return;
-        }
+                return;
 
         if (birthDate.Value.Date >= DateTime.Today)
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData($"Дата рождения {birthDate:dd.MM.yyyy} больше или равна текущей дате"));
+                AnswerErrorCode.Code15_InvalidRequestData($"Дата рождения {birthDate:dd.MM.yyyy} больше или равна текущей дате"), logger);
         }
     }
 
@@ -139,7 +137,8 @@ public static class AdditionalValidatorV3
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber)
+        int orderNumber,
+        ILogger logger)
     {
         var birthDate = requestItem.Субъект?.ДатаРождения;
         if (birthDate is null)
@@ -152,7 +151,8 @@ public static class AdditionalValidatorV3
             if (document.ДатаВыдачи.Date <= birthDate.Value.Date)
             {
                 AddError(transaction, requestMode, orderNumber,
-                    AnswerErrorCode.Code15_InvalidRequestData($"Дата выдачи ДУЛ {document.ДатаВыдачи:dd.MM.yyyy} более ранняя или равна дате рождения {birthDate:dd.MM.yyyy}"));
+                    AnswerErrorCode.Code15_InvalidRequestData($"Дата выдачи ДУЛ {document.ДатаВыдачи:dd.MM.yyyy} более ранняя или равна дате рождения {birthDate:dd.MM.yyyy}"), logger);
+
                 return;
             }
         }
@@ -162,7 +162,8 @@ public static class AdditionalValidatorV3
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber)
+         int orderNumber,
+        ILogger logger)
     {
         var hasCreditTarget = (requestItem.Цель ?? [])
             .Select(x => x.КодЦели)
@@ -171,32 +172,11 @@ public static class AdditionalValidatorV3
         if (hasCreditTarget && requestItem.СуммаОбязательства is null)
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData("Для кредитных целей \"СуммаОбязательства\" обязательна к заполнению"));
+                AnswerErrorCode.Code15_InvalidRequestData("Для кредитных целей \"СуммаОбязательства\" обязательна к заполнению"), logger);
         }
     }
 
-    private static void ValidateSnils(
-        QBCHProcessingTransactionV3 transaction,
-        СправочникРежимыЗапросаV3 requestMode,
-        ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber)
-    {
-        var snils = requestItem.Субъект?.СНИЛС;
-        if (string.IsNullOrWhiteSpace(snils))
-        {
-            return;
-        }
-
-        if (!Regex.IsMatch(snils, "^\\d{11}$"))
-        {
-            AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData("Поле \"СНИЛС\" должно содержать 11 цифр без дефисов и разделителей"));
-        }
-    }
-
-    private static void ValidatePlaceOfBirthAbsence(
-        QBCHProcessingTransactionV3 transaction,
-        СправочникРежимыЗапросаV3 requestMode)
+    private static void ValidatePlaceOfBirthAbsence(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, ILogger logger)
     {
         if (transaction.Attachment.RequestBody is null)
         {
@@ -217,17 +197,20 @@ public static class AdditionalValidatorV3
 
         if (hasPlaceOfBirthElements || hasPlaceOfBirthAttributes)
         {
-            transaction.RiseCriticalError(
-                AnswerErrorCode.Code15_InvalidRequestData("Поля и элементы \"МестоРождения\" не допускаются в запросах API 3.0"));
+            var error = AnswerErrorCode.Code15_InvalidRequestData("Поля и элементы \"МестоРождения\" не допускаются в запросах API 3.0");
+
+            logger.LogError("Не пройдена проверка отсутствия МестоРождения dlrequest v3. transactionId:{TransactionId}  code={QbchErrorCode}: {QbchErrorMessage}",
+                transaction.Id, error.Code, error.Message);
+
+            transaction.RiseCriticalError(error);
         }
     }
 
-    private static void AddError(
-        QBCHProcessingTransactionV3 transaction,
-        СправочникРежимыЗапросаV3 requestMode,
-        int orderNumber,
-        AnswerErrorCode error)
+    private static void AddError(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber, AnswerErrorCode error, ILogger logger)
     {
+        logger.LogError("Не пройдена дополнительная проверка dlrequest v3 для запроса №{OrderNumber}, режим={RequestMode}. transactionId:{TransactionId}  code={QbchErrorCode}: {QbchErrorMessage}",
+            transaction.Id, orderNumber, requestMode, error.Code, error.Message);
+
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {
             transaction.SetPacakgeValidationError(orderNumber, error);
