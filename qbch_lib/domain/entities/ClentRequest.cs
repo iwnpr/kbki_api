@@ -1,72 +1,118 @@
 ﻿using QBCH.Lib.qcb_xml.v3_0;
+using QBCH_lib.core;
 using System;
 using System.Security.Cryptography.X509Certificates;
 
 namespace qbch_lib.domain.entities;
 
 /// <summary>
-/// Обертка клиентского запроса
+/// Клиентский запрос
 /// </summary>
-public class ClentRequest
+public class ClentRequest : Entity
 {
-    private readonly ClentRequest _inner;
-
-    private ClentRequest(ClentRequest inner)
-    {
-        _inner = inner;
-    }
+    /// <summary>
+    /// Идентификатор запроса
+    /// </summary>
+    public string? RequestId { get; private set; }
+    /// <summary>
+    /// Метод запроса
+    /// </summary>
+    public string? RequestMethod { get; private set; }
+    /// <summary>
+    /// Дата-время запроса
+    /// </summary>
+    public string? RequestTime { get; private set; }
+    /// <summary>
+    /// ip адрес
+    /// </summary>
+    public string? IpAddress { get; private set; }
+    /// <summary>
+    /// Сертификат с которым установлено соединение
+    /// </summary>
+    public X509Certificate2? Certificate { get; private set; }
+    /// <summary>
+    /// ОГРН из запроса
+    /// </summary>
+    public string? RequestOGRN { get; private set; }
+    /// <summary>
+    /// ИНН из запроса
+    /// </summary>
+    public string? RequestINN { get; private set; }
 
     /// <summary>
-    /// Внутренний объект запроса.
+    /// xml запроса
     /// </summary>
-    public ClentRequest Inner => _inner;
-
-    public string? RequestId => _inner.RequestId;
-    public string? RequestMethod => _inner.RequestMethod;
-    public string? RequestTime => _inner.RequestTime;
-    public string? IpAddress => _inner.IpAddress;
-    public X509Certificate2? Certificate => _inner.Certificate;
-    public string? RequestOGRN => _inner.RequestOGRN;
-    public string? RequestINN => _inner.RequestINN;
-    public object? RequestPayload => _inner.RequestPayload;
+    public object? RequestPayload { get; private set; }
 
     /// <summary>
     /// Десериализованная модель запроса версии 3.0.
     /// </summary>
-    public ЗапросСведений? Request =>
-        _inner.RequestPayload as ЗапросСведений;
+    public ЗапросСведений? Request => RequestPayload as ЗапросСведений;
 
     /// <summary>
-    /// Создать клиентский запрос для API 3.0.
+    /// Конструктор
     /// </summary>
-    public static ClentRequest Create(string requestMethod, DateTime requestTime, string? ipAddress, X509Certificate2? certificate)
+    /// <param name="id">Идентификатор</param>
+    /// <param name="requestMethod">Метод запроса</param>
+    /// <param name="requestTime">Время запроса</param>
+    /// <param name="ipAddress">ip адрес клиента</param>
+    /// <param name="certificate">Сертификат запроса</param>
+    private ClentRequest(Guid id,
+                        string requestMethod,
+                        DateTime requestTime,
+                        string? ipAddress,
+                        X509Certificate2? certificate) : base(id)
     {
-        return new ClentRequest(ClentRequest.Create(requestMethod, requestTime, ipAddress, certificate));
+        RequestMethod = requestMethod;
+        RequestTime = requestTime.ToString("dd.MM.yyyy HH:mm:ss:ffff");
+        IpAddress = ipAddress;
+        Certificate = certificate;
     }
 
     /// <summary>
-    /// Обернуть существующий клиентский запрос.
+    /// Создать клиентский запрос
     /// </summary>
-    public static ClentRequest From(ClentRequest request)
+    /// <param name="requestMethod">Имя запроса</param>
+    /// <param name="requestTime">Время запроса</param>
+    /// <param name="ipAddress">ip адрес клиента</param>
+    /// <param name="certificate">Сертификат запроса</param>
+    /// <returns></returns>
+    public static ClentRequest Create(string requestMethod, DateTime requestTime, string? ipAddress, X509Certificate2? certificate)
     {
-        return new ClentRequest(request);
+        return new ClentRequest(Guid.NewGuid(),
+                                requestMethod,
+                                requestTime,
+                                ipAddress,
+                                certificate);
     }
 
     /// <summary>
     /// Установить десериализованную модель запроса версии 3.0.
     /// </summary>
+    /// <param name="request">Запрос</param>
     public void SetRequest(ЗапросСведений request)
     {
-        _inner.SetRequest(request);
+        RequestPayload ??= request;
     }
 
+    /// <summary>
+    /// Установить данные сертификата запроса
+    /// </summary>
+    /// <param name="requestThumbprint">Отпечаток</param>
+    /// <param name="requestInn">ИНН</param>
+    /// <param name="requestOgrn">ОГРН</param>
     public void SetRequestCertificateData(string? requestThumbprint, string? requestInn, string? requestOgrn)
     {
-        _inner.SetRequestCertificateData(requestThumbprint, requestInn, requestOgrn);
+        RequestINN = requestInn;
+        RequestOGRN = requestOgrn;
     }
 
+    /// <summary>
+    /// Установить идентификатор запроса
+    /// </summary>
+    /// <param name="requestId">Идентификатор</param>
     public void SetRequestId(string requestId)
     {
-        _inner.SetRequestId(requestId);
+        RequestId ??= requestId;
     }
 }
