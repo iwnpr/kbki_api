@@ -78,7 +78,7 @@ public class QBCHIIIController(IMediator mediator,
     {
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
-        _logger.LogInformation("Начало = {Action} v{Version} в {RequestTime}", nameof(DlRequest_v_3), apiVersion, requestTime);
+        _logger.LogInformation("Начало = {Action} {RequestTime}", nameof(DlRequest_v_3), requestTime);
 
         var transaction = await _mediator.Send(new CreateToValidateCommandV3(apiVersion, Request));
         _logger.LogDebug("{guid} Запрос: {dt}", transaction.Id, requestTime);
@@ -134,14 +134,12 @@ public class QBCHIIIController(IMediator mediator,
 
             await _mediator.Publish(new QBCHProcessingCompleteV3(processingResult));
 
-            //NOTE: Изменил логику на артемовскую и экранировал логирование
             if (processingResult.Status == QBCHProcessingStatus.Accepted)
             {
                 LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status202Accepted, actionStopwatch.Elapsed);
                 return Accepted(new MemoryStream(processingResult.Response.SignedTicket!));
             }
 
-            //NOTE: Сделал дополнительную обработку
             if (processingResult.Status == QBCHProcessingStatus.Failure)
             {
                 _logger.LogError("Обработка вернула статус Failure, что было не предусмотрено системой.", nameof(DlRequest_v_3), apiVersion, requestTime);
@@ -153,7 +151,6 @@ public class QBCHIIIController(IMediator mediator,
         }
         catch (Exception ex)
         {
-            //NOTE: Вернул запись в Kafka
             try
             {
                 var message = JsonSerializer.Serialize(new
@@ -196,7 +193,7 @@ public class QBCHIIIController(IMediator mediator,
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
 
-        _logger.LogDebug("Начало действия {Action} service={QbchService} transactionId={id} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, id, guid, requestTime);
+        _logger.LogInformation("Начало действия {Action} service={QbchService} transactionId={id} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, id, guid, requestTime);
 
         try
         {
@@ -1198,15 +1195,29 @@ public class QBCHIIIController(IMediator mediator,
         return null;
     }
 
+    /// <summary>
+    /// Логирует завершение действия.
+    /// </summary>
+    /// <param name="action">Имя действия контроллера.</param>
+    /// <param name="transactionId">Идентификатор транзакции.</param>
+    /// <param name="statusCode">HTTP-код ответа.</param>
+    /// <param name="elapsed">Время выполнения действия.</param>
+    /// <param name="guid">Технический идентификатор вызова, если он используется действием.</param>
+    /// </param>
     private void LogActionEnd(string action, object transactionId, int statusCode, TimeSpan elapsed, string? guid = null)
     {
+        var bureau = HttpContext.Connection.ClientCertificate?.GetNameInfo(X509NameType.SimpleName, false);
+        var elapsedMs = elapsed.TotalMilliseconds;
+        var isOnTime = elapsedMs <= _contractRules.ImmediateResponseDeadlineMs;
+
         if (guid is null)
         {
-            _logger.LogInformation("Выполнен запрос {Action} transactionId = {transactionId} status={StatusCode} elapsed={ElapsedMs}ms", action, transactionId, statusCode, elapsed.TotalMilliseconds);
+            _logger.LogInformation("Выполнен запрос {Action}, onTime={isOnTime}, transactionId={transactionId}, bureau={Bureau}, status={StatusCode}, elapsed={ElapsedMs}ms",
+                action, isOnTime, transactionId, bureau, statusCode, elapsedMs);
             return;
         }
 
-        _logger.LogInformation(
-            "Выполнен запрос {Action} transactionId = {transactionId} status={StatusCode} guid={Guid} elapsed={ElapsedMs}ms", action, transactionId, statusCode, guid, elapsed.TotalMilliseconds);
+        _logger.LogInformation("Выполнен запрос {Action}, onTime={isOnTime}, transactionId={transactionId}, bureau={Bureau}, status={StatusCode}, guid={Guid}, elapsed={ElapsedMs}ms",
+            action, isOnTime, transactionId, bureau, statusCode, guid, elapsedMs);
     }
 }

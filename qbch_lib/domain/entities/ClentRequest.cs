@@ -92,16 +92,15 @@ public class ClentRequest : Entity
     /// <param name="request">Запрос</param>
     public void SetRequest(ЗапросСведений request)
     {
-        RequestPayload ??= request;
+        RequestPayload = request;
     }
 
     /// <summary>
     /// Установить данные сертификата запроса
     /// </summary>
-    /// <param name="requestThumbprint">Отпечаток</param>
     /// <param name="requestInn">ИНН</param>
     /// <param name="requestOgrn">ОГРН</param>
-    public void SetRequestCertificateData(string? requestThumbprint, string? requestInn, string? requestOgrn)
+    public void SetRequestCertificateData(string? requestInn, string? requestOgrn)
     {
         RequestINN = requestInn;
         RequestOGRN = requestOgrn;
@@ -113,6 +112,6 @@ public class ClentRequest : Entity
     /// <param name="requestId">Идентификатор</param>
     public void SetRequestId(string requestId)
     {
-        RequestId ??= requestId;
+        RequestId = requestId;
     }
 }

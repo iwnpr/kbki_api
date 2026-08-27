@@ -75,7 +75,7 @@ public static class ConsentValidatorV3
         if (agreement.ДатаВыдачи > DateTime.Today)
         {
             AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                AnswerErrorCode.Code13_СonsentDenied($"Отсутствует действующее согласие Субъекта: Дата выдачи согласия {agreement.ДатаВыдачи:dd.MM.yyyy} больше текущей даты"), logger);
+                AnswerErrorCode.Code13_СonsentDenied($"Дата выдачи согласия {agreement.ДатаВыдачи:dd.MM.yyyy} больше текущей даты"), logger);
 
             return;
         }
@@ -93,7 +93,7 @@ public static class ConsentValidatorV3
                 if (DateTime.Today >= agreement.ДатаВыдачи.AddMonths(6).AddDays(1))
                 {
                     AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                        AnswerErrorCode.Code13_СonsentDenied("Отсутствует действующее согласие Субъекта: Дата окончания действия согласия (дата выдачи + 6 месяцев) меньше текущей даты"), logger);
+                        AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 6 месяцев) меньше текущей даты"), logger);
                 }
 
                 return;
@@ -102,7 +102,7 @@ public static class ConsentValidatorV3
                 if (DateTime.Today >= agreement.ДатаВыдачи.AddMonths(12).AddDays(1))
                 {
                     AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                       AnswerErrorCode.Code13_СonsentDenied("Отсутствует действующее согласие Субъекта: Дата окончания действия согласия (дата выдачи + 12 месяцев) меньше текущей даты"), logger);
+                       AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 12 месяцев) меньше текущей даты"), logger);
                 }
 
                 return;
@@ -111,7 +111,7 @@ public static class ConsentValidatorV3
                 if (agreement.Договор is null)
                 {
                     AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                        AnswerErrorCode.Code13_СonsentDenied("Отсутствует действующее согласие Субъекта: Элемент \"Договор\" обязателен, когда значение атрибута \"СрокДействия\" равно \"3\""), logger);
+                        AnswerErrorCode.Code13_СonsentDenied("Элемент \"Договор\" обязателен, когда значение атрибута \"СрокДействия\" равно \"3\""), logger);
                     return;
                 }
 
@@ -123,7 +123,7 @@ public static class ConsentValidatorV3
                 if (agreement.Договор is not null && agreement.Договор.Дата > DateTime.Today)
                 {
                     AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                        AnswerErrorCode.Code13_СonsentDenied($"Отсутствует действующее согласие Субъекта: Дата договора {agreement.Договор.Дата:dd.MM.yyyy} больше текущей даты"), logger);
+                        AnswerErrorCode.Code13_СonsentDenied($"Дата договора {agreement.Договор.Дата:dd.MM.yyyy} больше текущей даты"), logger);
                 }
 
                 return;
@@ -133,7 +133,7 @@ public static class ConsentValidatorV3
         if (requestItem.Цель?.Any(x => x.КодЦели == ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)) ?? false)
         {
             AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData($"Запрос содержит некорректные данные: Код цели запроса со значением \"99\" не содержит описания."), logger);
+                AnswerErrorCode.Code15_InvalidRequestData($"Код цели запроса со значением \"99\" не содержит описания."), logger);
             return;
         }
 
@@ -141,7 +141,7 @@ public static class ConsentValidatorV3
         if (requestItem?.Согласие?.Цель?.Any(x => x.КодЦели == ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)) ?? false)
         {
             AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                AnswerErrorCode.Code13_СonsentDenied($"Отсутствует действующее согласие Субъекта: Запрос содержит некорректные данные: Код цели согласия со значением \"99\" не содержит описания."), logger);
+                AnswerErrorCode.Code15_InvalidRequestData($"Код цели согласия со значением \"99\" не содержит описания."), logger);
             return;
         }
 
@@ -151,7 +151,7 @@ public static class ConsentValidatorV3
             if (!requestItem?.Согласие?.Цель?.Any(x => x.КодЦели == requestItem?.Цель[i].КодЦели) ?? false)
             {
                 AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                    AnswerErrorCode.Code13_СonsentDenied($"Отсутствует действующее согласие Субъекта: Одна или несколько целей, указанных в блоке «Запрос» отсутствует."), logger);
+                    AnswerErrorCode.Code13_СonsentDenied($"Одна или несколько целей, указанных в блоке «Запрос» отсутствует."), logger);
             }
         }
     }
@@ -175,14 +175,14 @@ public static class ConsentValidatorV3
         if (string.IsNullOrWhiteSpace(innAgreement))
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code13_СonsentDenied("Отсутствует действующее согласие Субъекта: В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие."), logger);
+                AnswerErrorCode.Code13_СonsentDenied("В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие."), logger);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(ogrnAgreement))
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code13_СonsentDenied("Отсутствует действующее согласие Субъекта: Отсутствуют реквизиты лица, которому было выдано согласие."), logger);
+                AnswerErrorCode.Code13_СonsentDenied("Отсутствуют реквизиты лица, которому было выдано согласие."), logger);
             return;
         }
 
@@ -195,14 +195,14 @@ public static class ConsentValidatorV3
             if (compareInn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"Отсутствует действующее согласие Субъекта: При наличии в согласии атрибута \"ОснованиеПередачи\" ИНН ({innAgreement}) лица, которому было выдано согласие, не должен совпадать с ИНН ({innSource}) источника."), logger);
+                    $"При наличии в согласии атрибута \"ОснованиеПередачи\" ИНН ({innAgreement}) лица, которому было выдано согласие, не должен совпадать с ИНН ({innSource}) источника."), logger);
                 return;
             }
 
             if (compareOgrn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                   $"Отсутствует действующее согласие Субъекта: При наличии в согласии атрибута \"ОснованиеПередачи\" ОГРН лица ({ogrnAgreement}), которому было выдано согласие, не должен совпадать с ОГРН источника ({ogrnSource})."), logger);
+                   $"При наличии в согласии атрибута \"ОснованиеПередачи\" ОГРН лица ({ogrnAgreement}), которому было выдано согласие, не должен совпадать с ОГРН источника ({ogrnSource})."), logger);
                 return;
             }
         }
@@ -212,14 +212,14 @@ public static class ConsentValidatorV3
             if (!compareInn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"Отсутствует действующее согласие Субъекта: ИНН лица ({innAgreement}), которому было выдано согласие, должен совпадать с ИНН источника ({innSource})."), logger);
+                    $"ИНН лица ({innAgreement}), которому было выдано согласие, должен совпадать с ИНН источника ({innSource})."), logger);
                 return;
             }
 
             if (!compareOgrn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"Отсутствует действующее согласие Субъекта: ОГРН ({ogrnAgreement}) лица, которому было выдано согласие, должен совпадать с ОГРН ({ogrnSource}) источника."), logger);
+                    $"ОГРН ({ogrnAgreement}) лица, которому было выдано согласие, должен совпадать с ОГРН ({ogrnSource}) источника."), logger);
                 return;
             }
         }

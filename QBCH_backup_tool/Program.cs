@@ -31,10 +31,16 @@ if (options.ShowHelp)
     return ExitOk;
 }
 
+// --- Логирование (Serilog: консоль + файл) ---
+// Конфигурация логирования берётся ТОЛЬКО из appsettings.json самой утилиты,
+// без файлов --config: иначе секция Serilog от API (со стойками Elasticsearch и т.п.,
+// которых нет в этой утилите) сломала бы инициализацию логгера.
 var loggingConfiguration = BuildConfiguration(options, includeExternalFiles: false);
 
 var loggerConfig = new LoggerConfiguration().ReadFrom.Configuration(loggingConfiguration);
 
+// Страховка: если секция Serilog отсутствует (нет appsettings.json), всё равно пишем в консоль,
+// чтобы утилита не оставалась «немой» во время инцидента.
 var hasConfiguredSinks = loggingConfiguration.GetSection("Serilog:WriteTo").GetChildren().Any();
 if (!hasConfiguredSinks)
 {

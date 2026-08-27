@@ -144,7 +144,6 @@ public static class QBCHValidationDispatcherV3
             signValidationResult.Value.SignINN,
             signValidationResult.Value.SignOGRN);
         transaction.ClentRequest.SetRequestCertificateData(
-            signValidationResult.Value.RequestThumbprint,
             signValidationResult.Value.RequestINN,
             signValidationResult.Value.RequestOGRN);
 
