@@ -26,7 +26,7 @@ public class QBCHProcessingCompleteHandlerV3(
         var transaction = notification.Transaction;
         if (!await TrySendDataToRedis(transaction))
         {
-            _logger.LogCritical("Kafka-сообщение не отправлено, потому что результат не сохранён в Redis");   
+            _logger.LogCritical("Kafka-сообщение не отправлено, потому что результат не сохранён в Redis");
             return;
         }
         _ = SendDataToKafka(transaction);
@@ -43,9 +43,48 @@ public class QBCHProcessingCompleteHandlerV3(
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Критическая ошибка при сохранении результата в redis");
+            await SaveBackupData(transaction);
             return false;
         }
     }
+
+    /// <summary>
+    /// Сохраняет данные транзакции в backup-файл <c>backup/{transaction.Id}.json</c>,
+    /// когда результат не удалось записать в Redis. Файлы восстанавливаются
+    /// консольной утилитой <c>qbch-backup-tool</c> (проект QBCH_backup_tool).
+    /// </summary>
+    private async Task SaveBackupData(QBCHProcessingTransactionV3 transaction)
+    {
+        try
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine(JsonSerializer.Serialize(new
+            {
+                RequestTime = transaction.RequestTime,
+                IpAddress = transaction.ClentRequest.IpAddress,
+                Thumbprint = transaction.ClentRequest.Certificate?.Thumbprint,
+                ErrorCode = transaction.ProcessingErrors.FirstOrDefault()?.Code,
+                ErrorMessage = transaction.ProcessingErrors.FirstOrDefault()?.Message,
+                SignedRequest = transaction.Attachment.SignedRequestBody,
+                request = transaction.Attachment.RequestBody,
+                RequestId = transaction.Id,
+                RequestType = transaction.ClentRequest.Request?.ТипЗапроса,
+                SignedResponse_Ticket = transaction.Response.SignedTicket,
+                ResponseXml_Ticket = transaction.Response.TicketXML,
+                ResponseXml = transaction.Response.ResponseXML,
+                ValidationTime = transaction.ValidateTime,
+                ResponseTime = transaction.ResponseTime
+            }));
+
+            Directory.CreateDirectory("backup");
+            await File.WriteAllTextAsync(Path.Combine("backup", $"{transaction.Id}.json"), sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Критическая ошибка при сохранении backup-файла {guid}", transaction.Id);
+        }
+    }
+
 
     private async Task SendDataToKafka(QBCHProcessingTransactionV3 transaction)
     {
