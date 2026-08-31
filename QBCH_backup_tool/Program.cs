@@ -71,7 +71,7 @@ try
 
     var redisConnectionString = configuration.GetConnectionString("Redis");
     if (string.IsNullOrWhiteSpace(redisConnectionString) &&
-        settings.Target is RecoveryTarget.Both or RecoveryTarget.Redis)
+        settings.Target is RecoveryTarget.Auto or RecoveryTarget.Redis)
     {
         appLogger.LogCritical(
             "Не задана строка подключения к Redis (ConnectionStrings:Redis). " +
@@ -79,10 +79,10 @@ try
         return ExitFatal;
     }
 
-    // --- Подключение к Redis (только если Redis является целью) ---
+    // --- Подключение к Redis (в режиме Auto нужно и для проверки состояния записи) ---
     ConnectionMultiplexer? multiplexer = null;
     Cache_lib.Interfaces.IKeyValueStorageService redis;
-    if (settings.Target is RecoveryTarget.Both or RecoveryTarget.Redis)
+    if (settings.Target is RecoveryTarget.Auto or RecoveryTarget.Redis)
     {
         try
         {
@@ -201,7 +201,7 @@ static RecoverySettings BuildSettings(CliOptions options, IConfiguration configu
 
     var target = options.Target
                  ?? ParseTargetFromConfig(configuration.GetValue<string?>("BackupTool:Target"))
-                 ?? RecoveryTarget.Both;
+                 ?? RecoveryTarget.Auto;
 
     var serviceName = options.ServiceName
                       ?? configuration.GetValue<string?>("BackupTool:ServiceName")
@@ -222,7 +222,7 @@ static RecoverySettings BuildSettings(CliOptions options, IConfiguration configu
 static RecoveryTarget? ParseTargetFromConfig(string? value) => value?.Trim().ToLowerInvariant() switch
 {
     null or "" => null,
-    "both" or "all" => RecoveryTarget.Both,
+    "auto" or "both" or "all" => RecoveryTarget.Auto,
     "redis" => RecoveryTarget.Redis,
     "kafka" => RecoveryTarget.Kafka,
     _ => null

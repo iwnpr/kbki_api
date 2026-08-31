@@ -48,11 +48,6 @@ public class QBCHProcessingCompleteHandlerV3(
         }
     }
 
-    /// <summary>
-    /// Сохраняет данные транзакции в backup-файл <c>backup/{transaction.Id}.json</c>,
-    /// когда результат не удалось записать в Redis. Файлы восстанавливаются
-    /// консольной утилитой <c>qbch-backup-tool</c> (проект QBCH_backup_tool).
-    /// </summary>
     private async Task SaveBackupData(QBCHProcessingTransactionV3 transaction)
     {
         try
@@ -71,6 +66,7 @@ public class QBCHProcessingCompleteHandlerV3(
                 RequestType = transaction.ClentRequest.Request?.ТипЗапроса,
                 SignedResponse_Ticket = transaction.Response.SignedTicket,
                 ResponseXml_Ticket = transaction.Response.TicketXML,
+                SignedResponse = transaction.Response.SignedResponse,
                 ResponseXml = transaction.Response.ResponseXML,
                 ValidationTime = transaction.ValidateTime,
                 ResponseTime = transaction.ResponseTime
@@ -81,10 +77,9 @@ public class QBCHProcessingCompleteHandlerV3(
         }
         catch (Exception ex)
         {
-            logger.LogCritical(ex, "Критическая ошибка при сохранении backup-файла {guid}", transaction.Id);
+            _logger.LogCritical(ex, "Критическая ошибка при сохранении backup-файла для {guid}", transaction.Id);
         }
     }
-
 
     private async Task SendDataToKafka(QBCHProcessingTransactionV3 transaction)
     {

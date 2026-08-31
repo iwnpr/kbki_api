@@ -11,7 +11,11 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Include="appsettings.json" />
+		<!-- appsettings.json — файл конфигурации, а не исходник: компилировать его нельзя,
+         но он должен лежать рядом с exe, т.к. читается из AppContext.BaseDirectory. -->
+		<None Update="appsettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />

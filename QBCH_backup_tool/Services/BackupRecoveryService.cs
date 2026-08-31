@@ -106,65 +106,77 @@ public sealed class BackupRecoveryService
 
         _logger.LogInformation("Обработка записи {id} из {file}.", id, Path.GetFileName(file));
 
-        var redisOk = false;
-        var kafkaOk = false;
+        // --- Что именно доставлять ---
+        // В режиме Auto решение принимается по состоянию Redis: данных нет — упал Redis,
+        // восстанавливаем и данные, и уведомление; данные есть — упала Kafka, шлём только ключ.
+        // Режимы Redis/Kafka принудительные: состояние Redis не проверяется.
+        bool writeRedis;
+        bool produceKafka;
+
+        if (settings.Target == RecoveryTarget.Auto)
+        {
+            var exists = await TryKeyExistsAsync(settings.ServiceName, id);
+            if (exists is null)
+            {
+                _logger.LogError("Запись {id}: не удалось проверить наличие данных в Redis. Файл {file} сохранён для повторной попытки.",
+                    id, Path.GetFileName(file));
+                return FileOutcome.Failed;
+            }
+
+            writeRedis = !exists.Value;
+            produceKafka = true;
+
+            if (writeRedis)
+                _logger.LogInformation("Запись {id}: данных в Redis нет — восстанавливаем данные и уведомление.", id);
+            else
+                _logger.LogInformation("Запись {id}: данные в Redis уже есть — переотправляем только ключ в Kafka.", id);
+        }
+        else
+        {
+            writeRedis = settings.Target == RecoveryTarget.Redis;
+            produceKafka = settings.Target == RecoveryTarget.Kafka;
+        }
+
+        // Пропущенный шаг считается успешным и не мешает удалить файл.
+        var redisOk = true;
+        var kafkaOk = true;
 
         // --- Redis ---
-        if (settings.Target is RecoveryTarget.Both or RecoveryTarget.Redis)
+        if (writeRedis)
         {
             var dict = BuildRedisPayload(record, id);
             if (settings.DryRun)
             {
                 _logger.LogInformation("[DRY-RUN] Redis: записал бы {count} полей в ключ QBCH:{service}:{id} ({fields}).",
                     dict.Count, settings.ServiceName, id, string.Join(", ", dict.Keys));
-                redisOk = true;
             }
             else
             {
                 redisOk = await TryWriteRedisAsync(settings.ServiceName, id, dict);
             }
         }
-        else
-        {
-            redisOk = true; // Redis не является целью — не блокирует удаление.
-        }
 
         // --- Kafka ---
-        var kafkaIsTarget = settings.Target is RecoveryTarget.Both or RecoveryTarget.Kafka;
-        if (kafkaIsTarget)
+        if (produceKafka)
         {
-            // В режиме Both уведомление в Kafka имеет смысл только после успешной записи в Redis.
-            if (settings.Target == RecoveryTarget.Both && !redisOk)
+            // Уведомление имеет смысл только тогда, когда данные в Redis есть:
+            // либо они уже были, либо мы их только что успешно записали.
+            if (!redisOk)
             {
                 _logger.LogWarning("Запись {id}: пропуск Kafka, т.к. данные не сохранены в Redis.", id);
+                kafkaOk = false;
             }
             else
             {
                 var kafkaKey = $"QBCH:{settings.ServiceName}:{id}";
                 if (settings.DryRun)
-                {
                     _logger.LogInformation("[DRY-RUN] Kafka: отправил бы сообщение с ключом-значением '{key}'.", kafkaKey);
-                    kafkaOk = true;
-                }
                 else
-                {
                     kafkaOk = await TryProduceKafkaAsync(kafkaKey, id);
-                }
             }
         }
-        else
-        {
-            kafkaOk = true; // Kafka не является целью — не блокирует удаление.
-        }
 
-        var success = settings.Target switch
-        {
-            RecoveryTarget.Redis => redisOk,
-            RecoveryTarget.Kafka => kafkaOk,
-            _ => redisOk && kafkaOk
-        };
-
-        if (!success)
+        if (!redisOk || !kafkaOk)
         {
             _logger.LogError("Запись {id}: восстановление не выполнено (redis={redis}, kafka={kafka}). Файл {file} сохранён для повторной попытки.",
                 id, redisOk, kafkaOk, Path.GetFileName(file));
@@ -193,6 +205,24 @@ public sealed class BackupRecoveryService
         {
             _logger.LogError(ex, "Запись {id} восстановлена, но не удалось удалить файл {file}. Удалите его вручную, чтобы избежать повторной обработки.", id, file);
             return FileOutcome.Failed;
+        }
+    }
+
+    /// <summary>
+    /// Проверяет, есть ли в Redis данные по записи.
+    /// <see langword="true"/> — данные на месте (упала Kafka), <see langword="false"/> — данных нет (упал Redis),
+    /// <see langword="null"/> — проверить не удалось, решение принимать нельзя.
+    /// </summary>
+    private async Task<bool?> TryKeyExistsAsync(string serviceName, Guid id)
+    {
+        try
+        {
+            return await _redis.KeyExists([serviceName, id.ToString()]);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Запись {id}: ошибка проверки ключа QBCH:{service}:{id} в Redis.", id, serviceName, id);
+            return null;
         }
     }
 

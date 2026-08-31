@@ -2,6 +2,7 @@
 using Cache_lib.Interfaces;
 using CertManagement.Services.Interfaces;
 using Confluent.Kafka;
+//using Confluent.Kafka;
 using Crypto_lib.Service;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;

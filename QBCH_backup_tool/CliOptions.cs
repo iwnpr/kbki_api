@@ -5,13 +5,16 @@
 /// </summary>
 public enum RecoveryTarget
 {
-    /// <summary>Записать данные в Redis и отправить уведомление в Kafka (полное восстановление).</summary>
-    Both,
+    /// <summary>
+    /// Решение по состоянию Redis: данных нет — записать их и отправить уведомление в Kafka;
+    /// данные есть — отправить в Kafka только ключ.
+    /// </summary>
+    Auto,
 
-    /// <summary>Только записать данные в Redis.</summary>
+    /// <summary>Только записать данные в Redis (принудительно, без проверки).</summary>
     Redis,
 
-    /// <summary>Только отправить уведомление в Kafka.</summary>
+    /// <summary>Только отправить уведомление в Kafka (принудительно, без проверки).</summary>
     Kafka
 }
 
@@ -144,10 +147,10 @@ public sealed class CliOptions
 
     private static RecoveryTarget ParseTarget(string value) => value.Trim().ToLowerInvariant() switch
     {
-        "both" or "all" => RecoveryTarget.Both,
+        "auto" or "both" or "all" => RecoveryTarget.Auto,
         "redis" => RecoveryTarget.Redis,
         "kafka" => RecoveryTarget.Kafka,
-        _ => throw new ArgumentException($"Недопустимое значение --target: '{value}'. Допустимо: both | redis | kafka.")
+        _ => throw new ArgumentException($"Недопустимое значение --target: '{value}'. Допустимо: auto | redis | kafka.")
     };
 
     private static void AddOverride(CliOptions options, string keyValue)
@@ -165,10 +168,12 @@ public sealed class CliOptions
         qbch-backup-tool — консольная утилита восстановления данных fallback-сценария QBCH.
 
         НАЗНАЧЕНИЕ
-          Если QBCH_api не смог сохранить результат обработки в Redis, он записывает
-          данные в backup-файл (backup/{RequestId}.json). Эта утилита вычитывает такие
-          файлы, повторно отправляет данные в Redis и уведомление в Kafka, и при успехе
-          удаляет обработанный файл. Запускается вручную в случае инцидента.
+          Если QBCH_api не смог сохранить результат обработки, он записывает данные в
+          backup-файл (backup/{RequestId}.json). Эта утилита вычитывает такие файлы и по
+          состоянию Redis определяет, что именно нужно долить:
+            - данных в Redis нет  => упал Redis: пишет данные в Redis и ключ в Kafka;
+            - данные в Redis есть => упала Kafka: отправляет в Kafka только ключ.
+          При успехе обработанный файл удаляется. Запускается вручную в случае инцидента.
 
         ИСПОЛЬЗОВАНИЕ
           qbch-backup-tool [опции]
@@ -177,7 +182,9 @@ public sealed class CliOptions
           -d, --backup-dir <путь>   Каталог с backup-файлами (по умолчанию: backup).
           -f, --file <путь>         Обработать конкретный файл. Можно указывать несколько раз.
                                     Если задано — каталог не сканируется.
-          -t, --target <цель>       Куда отправлять: both | redis | kafka (по умолчанию: both).
+          -t, --target <цель>       auto   — решать по состоянию Redis (по умолчанию);
+                                    redis  — принудительно записать только в Redis;
+                                    kafka  — принудительно отправить только ключ в Kafka.
           --service-name <имя>      Имя сервиса / redis-scope (по умолчанию: dlrequest).
           -c, --config <путь>       Доп. json-файл конфигурации с настройками Redis/Kafka
                                     (например, appsettings.Production.json от API).
