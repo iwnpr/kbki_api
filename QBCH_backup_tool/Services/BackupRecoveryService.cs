@@ -1,8 +1,5 @@
 ﻿using System.Text;
 using System.Text.Json;
-using Cache_lib.Interfaces;
-using Confluent.Kafka;
-using KafkaService_lib.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 using QBCH_backup_tool.Models;
 
@@ -20,13 +17,17 @@ public sealed class BackupRecoveryService
     };
 
     private readonly ILogger<BackupRecoveryService> _logger;
-    private readonly IKeyValueStorageService _redis;
-    private readonly IKafkaService _kafka;
+    private readonly RedisBackupStore? _redis;
+    private readonly KafkaNotifier _kafka;
 
+    /// <param name="redis">
+    /// Подключение к Redis. <see langword="null"/> допустимо только в режиме
+    /// <see cref="RecoveryTarget.Kafka"/>, где Redis не нужен.
+    /// </param>
     public BackupRecoveryService(
         ILogger<BackupRecoveryService> logger,
-        IKeyValueStorageService redis,
-        IKafkaService kafka)
+        RedisBackupStore? redis,
+        KafkaNotifier kafka)
     {
         _logger = logger;
         _redis = redis;
@@ -168,11 +169,11 @@ public sealed class BackupRecoveryService
             }
             else
             {
-                var kafkaKey = $"QBCH:{settings.ServiceName}:{id}";
+                var kafkaKey = RedisBackupStore.BuildKey(settings.ServiceName, id);
                 if (settings.DryRun)
                     _logger.LogInformation("[DRY-RUN] Kafka: отправил бы сообщение с ключом-значением '{key}'.", kafkaKey);
                 else
-                    kafkaOk = await TryProduceKafkaAsync(kafkaKey, id);
+                    kafkaOk = await TryProduceKafkaAsync(kafkaKey, id, ct);
             }
         }
 
@@ -217,11 +218,11 @@ public sealed class BackupRecoveryService
     {
         try
         {
-            return await _redis.KeyExists([serviceName, id.ToString()]);
+            return await Redis.KeyExistsAsync(serviceName, id);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Запись {id}: ошибка проверки ключа QBCH:{service}:{id} в Redis.", id, serviceName, id);
+            _logger.LogError(ex, "Запись {id}: ошибка проверки ключа {key} в Redis.", id, RedisBackupStore.BuildKey(serviceName, id));
             return null;
         }
     }
@@ -230,8 +231,8 @@ public sealed class BackupRecoveryService
     {
         try
         {
-            await _redis.AddHashArray(serviceName, id.ToString(), dict);
-            _logger.LogInformation("Запись {id}: {count} полей сохранены в Redis (ключ QBCH:{service}:{id}).", id, dict.Count, serviceName, id);
+            await Redis.WriteHashAsync(serviceName, id, dict);
+            _logger.LogInformation("Запись {id}: {count} полей сохранены в Redis (ключ {key}).", id, dict.Count, RedisBackupStore.BuildKey(serviceName, id));
             return true;
         }
         catch (Exception ex)
@@ -241,15 +242,13 @@ public sealed class BackupRecoveryService
         }
     }
 
-    private async Task<bool> TryProduceKafkaAsync(string kafkaKey, Guid id)
+    private async Task<bool> TryProduceKafkaAsync(string kafkaKey, Guid id, CancellationToken ct)
     {
         try
         {
-            var produced = await _kafka.Produce(new Message<Null, string> { Value = kafkaKey });
+            var produced = await _kafka.ProduceAsync(kafkaKey, ct);
             if (produced)
                 _logger.LogInformation("Запись {id}: уведомление отправлено в Kafka ('{key}').", id, kafkaKey);
-            else
-                _logger.LogError("Запись {id}: Kafka не подтвердила отправку сообщения '{key}'.", id, kafkaKey);
             return produced;
         }
         catch (Exception ex)
@@ -258,6 +257,12 @@ public sealed class BackupRecoveryService
             return false;
         }
     }
+
+    /// <summary>
+    /// Подключение к Redis. Обращение в режиме <c>--target kafka</c> — ошибка в логике утилиты.
+    /// </summary>
+    private RedisBackupStore Redis => _redis
+        ?? throw new InvalidOperationException("Redis не подключён: утилита запущена с целью только Kafka (--target kafka).");
 
     /// <summary>
     /// Восстанавливает набор полей redis-хэша по backup-записи.
@@ -396,3 +401,5 @@ public sealed class RecoverySummary
     /// <summary>Не обработано из-за ошибки.</summary>
     public int Failed { get; set; }
 }
+
+

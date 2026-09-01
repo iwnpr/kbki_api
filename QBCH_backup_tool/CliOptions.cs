@@ -29,9 +29,6 @@ public sealed class CliOptions
     /// <summary>Явно указанные файлы (обрабатываются вместо сканирования каталога).</summary>
     public List<string> Files { get; } = new();
 
-    /// <summary>Дополнительные json-файлы конфигурации (например, appsettings API).</summary>
-    public List<string> ConfigFiles { get; } = new();
-
     /// <summary>Произвольные переопределения конфигурации (ключ=значение).</summary>
     public Dictionary<string, string?> ConfigOverrides { get; } = new();
 
@@ -86,11 +83,6 @@ public sealed class CliOptions
                 case "-f":
                 case "--file":
                     options.Files.Add(RequireValue(args, ref i, arg));
-                    break;
-
-                case "-c":
-                case "--config":
-                    options.ConfigFiles.Add(RequireValue(args, ref i, arg));
                     break;
 
                 case "-e":
@@ -169,11 +161,13 @@ public sealed class CliOptions
 
         НАЗНАЧЕНИЕ
           Если QBCH_api не смог сохранить результат обработки, он записывает данные в
-          backup-файл (backup/{RequestId}.json). Эта утилита вычитывает такие файлы и по
-          состоянию Redis определяет, что именно нужно долить:
+          backup-файл (backup/{RequestId}.json). Эта утилита работает в фоне: с заданным
+          интервалом просматривает каталог backup и по состоянию Redis определяет, что
+          именно нужно долить:
             - данных в Redis нет  => упал Redis: пишет данные в Redis и ключ в Kafka;
             - данные в Redis есть => упала Kafka: отправляет в Kafka только ключ.
-          При успехе обработанный файл удаляется. Запускается вручную в случае инцидента.
+          При успехе обработанный файл удаляется, при ошибке остаётся до следующего прохода.
+          Работает бесконечно; остановка — средствами хостинга (служба, systemd, kill).
 
         ИСПОЛЬЗОВАНИЕ
           qbch-backup-tool [опции]
@@ -186,9 +180,6 @@ public sealed class CliOptions
                                     redis  — принудительно записать только в Redis;
                                     kafka  — принудительно отправить только ключ в Kafka.
           --service-name <имя>      Имя сервиса / redis-scope (по умолчанию: dlrequest).
-          -c, --config <путь>       Доп. json-файл конфигурации с настройками Redis/Kafka
-                                    (например, appsettings.Production.json от API).
-                                    Можно указывать несколько раз.
           -e, --environment <env>   Окружение для appsettings.{env}.json.
           -D, --define <Ключ=Знач>  Переопределить параметр конфигурации.
                                     Напр.: -D ConnectionStrings:Redis=host:6379,...
@@ -199,38 +190,45 @@ public sealed class CliOptions
           -h, --help                Показать эту справку.
 
         КОНФИГУРАЦИЯ (порядок применения, каждый следующий переопределяет предыдущий)
-          1. appsettings.json рядом с утилитой (логирование Serilog, значения по умолчанию).
-          2. appsettings.{environment}.json (если указано -e/--environment).
-          3. Файлы, указанные через -c/--config.
-          4. Переменные окружения.
-          5. Переопределения -D/--define.
+          1. appsettings.json рядом с утилитой — основной и единственный файл настроек.
+          2. appsettings.{environment}.json рядом с утилитой (если указано -e/--environment).
+          3. Переменные окружения.
+          4. Переопределения -D/--define.
 
-          Обязательные параметры подключения:
+          Утилита автономна: настройки берутся ТОЛЬКО из её собственных файлов,
+          конфигурация веб-приложения не читается.
+
+          Параметры подключения (заполняются в appsettings.json утилиты):
             ConnectionStrings:Redis        строка подключения StackExchange.Redis
             RedisCache:DBIndex             индекс БД Redis (по умолчанию 0)
             KafkaService:BootstrapServers  адрес брокера Kafka
             KafkaService:Topic             топик уведомлений
-          (эти параметры совпадают с параметрами QBCH_api — проще всего передать
-           appsettings нужного окружения через --config).
+            BackupTool:BackupDirectory     каталог backup приложения
+            BackupTool:IntervalSeconds     период проверки каталога (по умолчанию 60)
 
         КОДЫ ВОЗВРАТА
-          0  все записи обработаны успешно (или обрабатывать нечего)
-          1  одна или несколько записей не обработаны
+          0  показана справка
           2  ошибка запуска / конфигурации
+          (при штатной работе утилита не завершается)
 
         ПРИМЕРЫ
-          # Восстановить все записи, взяв настройки из appsettings API:
-          qbch-backup-tool --config /opt/qbch_api/appsettings.Production.json
+          # Штатный запуск в фоне (настройки — из appsettings.json рядом с утилитой):
+          qbch-backup-tool
 
           # Посмотреть, что будет сделано, без отправки и удаления:
-          qbch-backup-tool -c appsettings.Production.json --dry-run --verbose
+          qbch-backup-tool --dry-run --verbose
 
-          # Восстановить один файл только в Redis:
-          qbch-backup-tool -c appsettings.Production.json -t redis -f backup/8f1c...json
+          # Настройки для конкретного окружения (appsettings.Production.json утилиты):
+          qbch-backup-tool -e Production
 
-          # Указать подключение к Redis напрямую:
+          # Восстановить один файл принудительно только в Redis:
+          qbch-backup-tool -t redis -f backup/8f1c...json
+
+          # Разовое переопределение подключения без правки файла:
           qbch-backup-tool -D ConnectionStrings:Redis="10.10.100.84:6379,password=***,abortConnect=false" \
                            -D KafkaService:BootstrapServers=10.10.100.71:9092 \
                            -D KafkaService:Topic=RedisMessagesTopicv2
         """;
 }
+
+

@@ -1,6 +1,4 @@
-﻿using Cache_lib.Implementations;
-using KafkaService_lib.Services.Implementation;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using QBCH_backup_tool;
 using QBCH_backup_tool.Services;
@@ -9,9 +7,9 @@ using Serilog.Events;
 using Serilog.Extensions.Logging;
 using StackExchange.Redis;
 
-// Коды возврата: 0 — успех, 1 — часть записей не обработана, 2 — ошибка запуска/конфигурации.
+// Утилита работает бесконечно, поэтому штатного завершения нет.
+// Коды возврата: 0 — показана справка, 2 — ошибка запуска/конфигурации.
 const int ExitOk = 0;
-const int ExitPartial = 1;
 const int ExitFatal = 2;
 
 CliOptions options;
@@ -31,17 +29,25 @@ if (options.ShowHelp)
     return ExitOk;
 }
 
-// --- Логирование (Serilog: консоль + файл) ---
-// Конфигурация логирования берётся ТОЛЬКО из appsettings.json самой утилиты,
-// без файлов --config: иначе секция Serilog от API (со стойками Elasticsearch и т.п.,
-// которых нет в этой утилите) сломала бы инициализацию логгера.
-var loggingConfiguration = BuildConfiguration(options, includeExternalFiles: false);
+// Вся конфигурация — из собственных файлов утилиты. Настройки веб-приложения не читаются:
+// утилита запускается отдельно и не должна зависеть от его окружения.
+IConfigurationRoot configuration;
+try
+{
+    configuration = BuildConfiguration(options);
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"Ошибка загрузки конфигурации: {ex.Message}");
+    return ExitFatal;
+}
 
-var loggerConfig = new LoggerConfiguration().ReadFrom.Configuration(loggingConfiguration);
+// --- Логирование (Serilog: консоль + файл) ---
+var loggerConfig = new LoggerConfiguration().ReadFrom.Configuration(configuration);
 
 // Страховка: если секция Serilog отсутствует (нет appsettings.json), всё равно пишем в консоль,
 // чтобы утилита не оставалась «немой» во время инцидента.
-var hasConfiguredSinks = loggingConfiguration.GetSection("Serilog:WriteTo").GetChildren().Any();
+var hasConfiguredSinks = configuration.GetSection("Serilog:WriteTo").GetChildren().Any();
 if (!hasConfiguredSinks)
 {
     loggerConfig
@@ -56,16 +62,6 @@ var appLogger = loggerFactory.CreateLogger("QBCH_backup_tool");
 
 try
 {
-    IConfigurationRoot configuration;
-    try
-    {
-        configuration = BuildConfiguration(options, includeExternalFiles: true);
-    }
-    catch (Exception ex)
-    {
-        appLogger.LogCritical(ex, "Ошибка загрузки конфигурации.");
-        return ExitFatal;
-    }
     // --- Настройки запуска ---
     var settings = BuildSettings(options, configuration);
 
@@ -75,13 +71,13 @@ try
     {
         appLogger.LogCritical(
             "Не задана строка подключения к Redis (ConnectionStrings:Redis). " +
-            "Укажите её через --config <appsettings> или -D ConnectionStrings:Redis=...");
+            "Заполните её в appsettings.json утилиты или передайте -D ConnectionStrings:Redis=...");
         return ExitFatal;
     }
 
     // --- Подключение к Redis (в режиме Auto нужно и для проверки состояния записи) ---
     ConnectionMultiplexer? multiplexer = null;
-    Cache_lib.Interfaces.IKeyValueStorageService redis;
+    RedisBackupStore? redis = null;
     if (settings.Target is RecoveryTarget.Auto or RecoveryTarget.Redis)
     {
         try
@@ -93,18 +89,28 @@ try
             appLogger.LogCritical(ex, "Не удалось подключиться к Redis по строке подключения.");
             return ExitFatal;
         }
-        redis = new KeyValueStorageService(configuration, loggerFactory.CreateLogger<KeyValueStorageService>(), multiplexer);
-    }
-    else
-    {
-        redis = new NullKeyValueStorageService();
+
+        redis = new RedisBackupStore(
+            loggerFactory.CreateLogger<RedisBackupStore>(),
+            multiplexer,
+            configuration.GetValue<int?>("RedisCache:DBIndex") ?? 0);
     }
 
-    // --- Kafka ---
-    var kafka = new KafkaService(
-        loggerFactory.CreateLogger<KafkaService>(),
-        configuration,
-        new CompressService());
+    // --- Kafka (только если она является целью: в режиме --target redis не нужна) ---
+    KafkaNotifier? kafka = null;
+    if (settings.Target is RecoveryTarget.Auto or RecoveryTarget.Kafka)
+    {
+        try
+        {
+            kafka = new KafkaNotifier(loggerFactory.CreateLogger<KafkaNotifier>(), configuration);
+        }
+        catch (Exception ex)
+        {
+            appLogger.LogCritical(ex, "Не удалось настроить продюсер Kafka.");
+            multiplexer?.Dispose();
+            return ExitFatal;
+        }
+    }
 
     // --- Восстановление ---
     var service = new BackupRecoveryService(
@@ -112,34 +118,34 @@ try
         redis,
         kafka);
 
-    using var cts = new CancellationTokenSource();
-    Console.CancelKeyPress += (_, e) =>
-    {
-        e.Cancel = true;
-        appLogger.LogWarning("Получен сигнал прерывания — завершаем текущую запись и останавливаемся.");
-        cts.Cancel();
-    };
+    // --- Фоновый цикл ---
+    // Утилита работает как служба: периодически просматривает каталог backup и доливает
+    // найденное. Остановка — средствами хостинга (служба, systemd, kill), вручную ничем
+    // не управляется.
+    var interval = TimeSpan.FromSeconds(configuration.GetValue<int?>("BackupTool:IntervalSeconds") ?? 60);
+    appLogger.LogInformation("Запуск в фоновом режиме, интервал проверки: {interval}.", interval);
 
-    RecoverySummary summary;
     try
     {
-        summary = await service.RunAsync(settings, cts.Token);
-    }
-    catch (OperationCanceledException)
-    {
-        appLogger.LogWarning("Обработка прервана пользователем.");
-        return ExitPartial;
+        while (true)
+        {
+            var summary = await service.RunAsync(settings);
+
+            // Пустые проходы не засоряют лог: итог пишется, только если что-то было.
+            if (summary.Total > 0)
+                appLogger.LogInformation(
+                    "Итог прохода: всего {total}, восстановлено {recovered}, пропущено {skipped}, ошибок {failed}.",
+                    summary.Total, summary.Recovered, summary.Skipped, summary.Failed);
+
+            await Task.Delay(interval);
+        }
     }
     finally
     {
+        // Flush продюсера обязателен: иначе последние уведомления могут не уйти.
+        kafka?.Dispose();
         multiplexer?.Dispose();
     }
-
-    appLogger.LogInformation(
-        "Итог: всего {total}, восстановлено {recovered}, пропущено {skipped}, ошибок {failed}.",
-        summary.Total, summary.Recovered, summary.Skipped, summary.Failed);
-
-    return summary.Failed > 0 ? ExitPartial : ExitOk;
 }
 catch (Exception ex)
 {
@@ -153,9 +159,9 @@ finally
 
 // ---------- Локальные функции ----------
 
-// includeExternalFiles=false собирает конфигурацию только из appsettings утилиты
-// (используется для логирования); =true добавляет файлы --config (используется для подключений).
-static IConfigurationRoot BuildConfiguration(CliOptions options, bool includeExternalFiles)
+// Конфигурация утилиты: только её собственные appsettings рядом с exe,
+// переменные окружения и переопределения -D. Файлы веб-приложения не подключаются.
+static IConfigurationRoot BuildConfiguration(CliOptions options)
 {
     var environment = options.Environment
                       ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
@@ -167,18 +173,6 @@ static IConfigurationRoot BuildConfiguration(CliOptions options, bool includeExt
 
     if (!string.IsNullOrWhiteSpace(environment))
         builder.AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: false);
-
-    // Внешние файлы конфигурации (например, appsettings API) — по указанным путям.
-    if (includeExternalFiles)
-    {
-        foreach (var configFile in options.ConfigFiles)
-        {
-            var fullPath = Path.GetFullPath(configFile);
-            if (!File.Exists(fullPath))
-                throw new FileNotFoundException($"Файл конфигурации не найден: {fullPath}");
-            builder.AddJsonFile(fullPath, optional: false, reloadOnChange: false);
-        }
-    }
 
     builder.AddEnvironmentVariables();
 
@@ -195,9 +189,11 @@ static IConfigurationRoot BuildConfiguration(CliOptions options, bool includeExt
 
 static RecoverySettings BuildSettings(CliOptions options, IConfiguration configuration)
 {
-    var backupDir = options.BackupDirectory
-                    ?? configuration.GetValue<string?>("BackupTool:BackupDirectory")
-                    ?? "backup";
+    // Путь к backup приводится к абсолютному так же, как в API: относительный
+    // разворачивается от каталога утилиты, а не от текущего рабочего каталога процесса.
+    var backupDir = ResolveBackupDirectory(
+        options.BackupDirectory
+        ?? configuration.GetValue<string?>("BackupTool:BackupDirectory"));
 
     var target = options.Target
                  ?? ParseTargetFromConfig(configuration.GetValue<string?>("BackupTool:Target"))
@@ -219,6 +215,14 @@ static RecoverySettings BuildSettings(CliOptions options, IConfiguration configu
     };
 }
 
+static string ResolveBackupDirectory(string? configured)
+{
+    var directory = string.IsNullOrWhiteSpace(configured) ? "backup" : configured;
+    return Path.IsPathRooted(directory)
+        ? directory
+        : Path.Combine(AppContext.BaseDirectory, directory);
+}
+
 static RecoveryTarget? ParseTargetFromConfig(string? value) => value?.Trim().ToLowerInvariant() switch
 {
     null or "" => null,
@@ -227,3 +231,5 @@ static RecoveryTarget? ParseTargetFromConfig(string? value) => value?.Trim().ToL
     "kafka" => RecoveryTarget.Kafka,
     _ => null
 };
+
+

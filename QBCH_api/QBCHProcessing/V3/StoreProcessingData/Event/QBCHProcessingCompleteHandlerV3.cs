@@ -17,6 +17,12 @@ public class QBCHProcessingCompleteHandlerV3(
 {
     private const string ApiVersion = "3.0";
 
+    /// <summary>
+    /// Каталог backup-файлов — подкаталог рядом с exe приложения, а не относительно
+    /// текущего рабочего каталога: под IIS/systemd он может быть каким угодно.
+    /// </summary>
+    private static readonly string BackupDirectory = Path.Combine(AppContext.BaseDirectory, "backup");
+
     private readonly ILogger<QBCHProcessingCompleteHandlerV3> _logger = logger;
     private readonly IKeyValueStorageService _storageService = storageService;
     private readonly IKafkaService _kafka = kafka;
@@ -72,12 +78,17 @@ public class QBCHProcessingCompleteHandlerV3(
                 ResponseTime = transaction.ResponseTime
             }));
 
-            Directory.CreateDirectory("backup");
-            await File.WriteAllTextAsync(Path.Combine("backup", $"{transaction.Id}.json"), sb.ToString());
+            Directory.CreateDirectory(BackupDirectory);
+
+            var path = Path.Combine(BackupDirectory, $"{transaction.Id}.json");
+            await File.WriteAllTextAsync(path, sb.ToString());
+
+            // Полный путь в логе: по нему оператор находит файлы для утилиты восстановления.
+            _logger.LogCritical("Результат обработки сохранён в backup-файл {path}", path);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Критическая ошибка при сохранении backup-файла для {guid}", transaction.Id);
+            _logger.LogCritical(ex, "Критическая ошибка при сохранении backup файла {guid}", transaction.Id);
         }
     }
 
@@ -88,8 +99,11 @@ public class QBCHProcessingCompleteHandlerV3(
             var kafkaKey = $"QBCH:{RedisConstants.DlRequestV3Scope}:{transaction.Id}";
             var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaKey });
             if (!isProduce)
+            {
                 _logger.LogCritical("Потеряно содержимое Kafka-сообщения для ключа QBCH:{serviceName}:{Transactionid}",
                     transaction.ServiceName, transaction.Id);
+                await SaveBackupData(transaction);
+            }
             else
                 _logger.LogDebug("Добавлено Kafka-сообщение для ключа QBCH:{serviceName}:{Transactionid}",
                     transaction.ServiceName, transaction.Id);
@@ -97,6 +111,7 @@ public class QBCHProcessingCompleteHandlerV3(
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Критическая ошибка при сохранении результата в kafka");
+            await SaveBackupData(transaction);
         }
     }
 
@@ -172,3 +187,5 @@ public class QBCHProcessingCompleteHandlerV3(
         return ("answer", "qcb_answer");
     }
 }
+
+
