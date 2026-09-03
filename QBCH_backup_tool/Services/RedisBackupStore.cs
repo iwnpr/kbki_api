@@ -36,15 +36,24 @@ public sealed class RedisBackupStore
         _db = multiplexer.GetDatabase(dbIndex);
     }
 
+    /// <summary>
+    /// Признак того, что результат обработки уже сохранён обработчиком завершения.
+    /// Проверять существование самого ключа нельзя: хэш создаётся раньше, на этапе
+    /// агрегации ответов (<c>qbch_tasks_aggregate_xml</c> и др.), и существует всегда.
+    /// Это поле пишет только <c>ConstructResultData</c>.
+    /// </summary>
+    private const string ResultMarkerField = "api_version";
+
     /// <summary>Формат ключа записи: <c>QBCH:{serviceName}:{id}</c>.</summary>
     public static string BuildKey(string serviceName, Guid id) => $"QBCH:{serviceName}:{id}";
 
-    /// <summary>Есть ли в Redis запись по ключу.</summary>
-    public async Task<bool> KeyExistsAsync(string serviceName, Guid id)
+    /// <summary>Сохранён ли в Redis результат обработки по этой записи.</summary>
+    public async Task<bool> ResultExistsAsync(string serviceName, Guid id)
     {
         var key = BuildKey(serviceName, id);
-        var exists = await _db.KeyExistsAsync(key);
-        _logger.LogDebug("Redis: ключ {key} {state}.", key, exists ? "существует" : "отсутствует");
+        var exists = await _db.HashExistsAsync(key, ResultMarkerField);
+        _logger.LogDebug("Redis: поле {field} ключа {key} {state}.",
+            ResultMarkerField, key, exists ? "заполнено" : "отсутствует");
         return exists;
     }
 
@@ -65,4 +74,3 @@ public sealed class RedisBackupStore
         _logger.LogDebug("Redis: в ключ {key} записано {count} полей.", key, entries.Length);
     }
 }
-

@@ -7,8 +7,7 @@ using Serilog.Events;
 using Serilog.Extensions.Logging;
 using StackExchange.Redis;
 
-// Утилита работает бесконечно, поэтому штатного завершения нет.
-// Коды возврата: 0 — показана справка, 2 — ошибка запуска/конфигурации.
+
 const int ExitOk = 0;
 const int ExitFatal = 2;
 
@@ -29,8 +28,6 @@ if (options.ShowHelp)
     return ExitOk;
 }
 
-// Вся конфигурация — из собственных файлов утилиты. Настройки веб-приложения не читаются:
-// утилита запускается отдельно и не должна зависеть от его окружения.
 IConfigurationRoot configuration;
 try
 {
@@ -38,21 +35,38 @@ try
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"Ошибка загрузки конфигурации: {ex.Message}");
+    var message = $"Ошибка загрузки конфигурации: {ex}";
+    Console.Error.WriteLine(message);
+    TryWriteStartupError(message);
     return ExitFatal;
 }
 
-// --- Логирование (Serilog: консоль + файл) ---
-var loggerConfig = new LoggerConfiguration().ReadFrom.Configuration(configuration);
+LoggerConfiguration loggerConfig;
+bool hasConfiguredSinks;
+try
+{
+    loggerConfig = new LoggerConfiguration().ReadFrom.Configuration(configuration);
+    hasConfiguredSinks = configuration.GetSection("Serilog:WriteTo").GetChildren().Any();
+}
+catch (Exception ex)
+{
+    var message = $"Секция Serilog не применена, используется логирование по умолчанию: {ex}";
+    Console.Error.WriteLine(message);
+    TryWriteStartupError(message);
 
-// Страховка: если секция Serilog отсутствует (нет appsettings.json), всё равно пишем в консоль,
-// чтобы утилита не оставалась «немой» во время инцидента.
-var hasConfiguredSinks = configuration.GetSection("Serilog:WriteTo").GetChildren().Any();
+    loggerConfig = new LoggerConfiguration();
+    hasConfiguredSinks = false;
+}
+
 if (!hasConfiguredSinks)
 {
     loggerConfig
         .MinimumLevel.Is(options.Verbose ? LogEventLevel.Debug : LogEventLevel.Information)
-        .WriteTo.Console();
+        .WriteTo.Console()
+        .WriteTo.File(
+            Path.Combine(AppContext.BaseDirectory, "logs", "qbch-backup-tool-.log"),
+            rollingInterval: RollingInterval.Day,
+            encoding: System.Text.Encoding.UTF8);
 }
 
 Log.Logger = loggerConfig.CreateLogger();
@@ -215,6 +229,24 @@ static RecoverySettings BuildSettings(CliOptions options, IConfiguration configu
     };
 }
 
+// Аварийная запись причины сбоя до инициализации логгера. Best-effort: если и это не вышло,
+// молчим — исходная ошибка уже выведена в stderr.
+static void TryWriteStartupError(string message)
+{
+    try
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, "logs");
+        Directory.CreateDirectory(directory);
+        File.AppendAllText(
+            Path.Combine(directory, "qbch-backup-tool-startup-error.log"),
+            $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
+    }
+    catch
+    {
+        // ignore
+    }
+}
+
 static string ResolveBackupDirectory(string? configured)
 {
     var directory = string.IsNullOrWhiteSpace(configured) ? "backup" : configured;
@@ -231,5 +263,3 @@ static RecoveryTarget? ParseTargetFromConfig(string? value) => value?.Trim().ToL
     "kafka" => RecoveryTarget.Kafka,
     _ => null
 };
-
-

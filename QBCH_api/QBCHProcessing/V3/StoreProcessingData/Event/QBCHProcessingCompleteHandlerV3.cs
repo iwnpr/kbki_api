@@ -35,7 +35,7 @@ public class QBCHProcessingCompleteHandlerV3(
             _logger.LogCritical("Kafka-сообщение не отправлено, потому что результат не сохранён в Redis");
             return;
         }
-        _ = SendDataToKafka(transaction);
+        await SendDataToKafka(transaction);
     }
 
     private async Task<bool> TrySendDataToRedis(QBCHProcessingTransactionV3 transaction)
@@ -64,6 +64,7 @@ public class QBCHProcessingCompleteHandlerV3(
                 RequestTime = transaction.RequestTime,
                 IpAddress = transaction.ClentRequest.IpAddress,
                 Thumbprint = transaction.ClentRequest.Certificate?.Thumbprint,
+                CertificateRawData = transaction.ClentRequest.Certificate?.RawData,
                 ErrorCode = transaction.ProcessingErrors.FirstOrDefault()?.Code,
                 ErrorMessage = transaction.ProcessingErrors.FirstOrDefault()?.Message,
                 SignedRequest = transaction.Attachment.SignedRequestBody,

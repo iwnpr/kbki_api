@@ -18,16 +18,20 @@ public sealed class BackupRecoveryService
 
     private readonly ILogger<BackupRecoveryService> _logger;
     private readonly RedisBackupStore? _redis;
-    private readonly KafkaNotifier _kafka;
+    private readonly KafkaNotifier? _kafka;
 
     /// <param name="redis">
     /// Подключение к Redis. <see langword="null"/> допустимо только в режиме
     /// <see cref="RecoveryTarget.Kafka"/>, где Redis не нужен.
     /// </param>
+    /// <param name="kafka">
+    /// Продюсер Kafka. <see langword="null"/> допустимо только в режиме
+    /// <see cref="RecoveryTarget.Redis"/>, где Kafka не нужна.
+    /// </param>
     public BackupRecoveryService(
         ILogger<BackupRecoveryService> logger,
         RedisBackupStore? redis,
-        KafkaNotifier kafka)
+        KafkaNotifier? kafka)
     {
         _logger = logger;
         _redis = redis;
@@ -43,10 +47,7 @@ public sealed class BackupRecoveryService
         var summary = new RecoverySummary { Total = files.Count };
 
         if (files.Count == 0)
-        {
-            _logger.LogInformation("Backup-файлы не найдены — обрабатывать нечего.");
             return summary;
-        }
 
         _logger.LogInformation(
             "Найдено файлов: {count}. Цель: {target}. Сервис: {service}. Режим: {mode}.",
@@ -108,18 +109,18 @@ public sealed class BackupRecoveryService
         _logger.LogInformation("Обработка записи {id} из {file}.", id, Path.GetFileName(file));
 
         // --- Что именно доставлять ---
-        // В режиме Auto решение принимается по состоянию Redis: данных нет — упал Redis,
-        // восстанавливаем и данные, и уведомление; данные есть — упала Kafka, шлём только ключ.
+        // В режиме Auto решение принимается по состоянию Redis: результата нет — упал Redis,
+        // восстанавливаем и данные, и уведомление; результат есть — упала Kafka, шлём только ключ.
         // Режимы Redis/Kafka принудительные: состояние Redis не проверяется.
         bool writeRedis;
         bool produceKafka;
 
         if (settings.Target == RecoveryTarget.Auto)
         {
-            var exists = await TryKeyExistsAsync(settings.ServiceName, id);
+            var exists = await TryResultExistsAsync(settings.ServiceName, id);
             if (exists is null)
             {
-                _logger.LogError("Запись {id}: не удалось проверить наличие данных в Redis. Файл {file} сохранён для повторной попытки.",
+                _logger.LogError("Запись {id}: не удалось проверить состояние записи в Redis. Файл {file} сохранён для повторной попытки.",
                     id, Path.GetFileName(file));
                 return FileOutcome.Failed;
             }
@@ -128,9 +129,9 @@ public sealed class BackupRecoveryService
             produceKafka = true;
 
             if (writeRedis)
-                _logger.LogInformation("Запись {id}: данных в Redis нет — восстанавливаем данные и уведомление.", id);
+                _logger.LogInformation("Запись {id}: результата в Redis нет — восстанавливаем данные и уведомление.", id);
             else
-                _logger.LogInformation("Запись {id}: данные в Redis уже есть — переотправляем только ключ в Kafka.", id);
+                _logger.LogInformation("Запись {id}: результат в Redis уже сохранён — переотправляем только ключ в Kafka.", id);
         }
         else
         {
@@ -214,15 +215,15 @@ public sealed class BackupRecoveryService
     /// <see langword="true"/> — данные на месте (упала Kafka), <see langword="false"/> — данных нет (упал Redis),
     /// <see langword="null"/> — проверить не удалось, решение принимать нельзя.
     /// </summary>
-    private async Task<bool?> TryKeyExistsAsync(string serviceName, Guid id)
+    private async Task<bool?> TryResultExistsAsync(string serviceName, Guid id)
     {
         try
         {
-            return await Redis.KeyExistsAsync(serviceName, id);
+            return await Redis.ResultExistsAsync(serviceName, id);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Запись {id}: ошибка проверки ключа {key} в Redis.", id, RedisBackupStore.BuildKey(serviceName, id));
+            _logger.LogError(ex, "Запись {id}: ошибка проверки состояния ключа {key} в Redis.", id, RedisBackupStore.BuildKey(serviceName, id));
             return null;
         }
     }
@@ -246,7 +247,7 @@ public sealed class BackupRecoveryService
     {
         try
         {
-            var produced = await _kafka.ProduceAsync(kafkaKey, ct);
+            var produced = await Kafka.ProduceAsync(kafkaKey, ct);
             if (produced)
                 _logger.LogInformation("Запись {id}: уведомление отправлено в Kafka ('{key}').", id, kafkaKey);
             return produced;
@@ -263,6 +264,12 @@ public sealed class BackupRecoveryService
     /// </summary>
     private RedisBackupStore Redis => _redis
         ?? throw new InvalidOperationException("Redis не подключён: утилита запущена с целью только Kafka (--target kafka).");
+
+    /// <summary>
+    /// Продюсер Kafka. Обращение в режиме <c>--target redis</c> — ошибка в логике утилиты.
+    /// </summary>
+    private KafkaNotifier Kafka => _kafka
+        ?? throw new InvalidOperationException("Kafka не настроена: утилита запущена с целью только Redis (--target redis).");
 
     /// <summary>
     /// Восстанавливает набор полей redis-хэша по backup-записи.
@@ -285,6 +292,10 @@ public sealed class BackupRecoveryService
 
         if (!string.IsNullOrWhiteSpace(record.IpAddress))
             dict["ip_address"] = Utf8(record.IpAddress);
+
+        // Хранится как сырые байты (см. RedisBackupStore.BinaryFields).
+        if (record.CertificateRawData is { Length: > 0 })
+            dict["request_certificate_data"] = record.CertificateRawData;
 
         if (record.ErrorCode.HasValue)
         {
@@ -355,10 +366,7 @@ public sealed class BackupRecoveryService
         }
 
         if (!Directory.Exists(settings.BackupDirectory))
-        {
-            _logger.LogWarning("Каталог backup не найден: {dir}", settings.BackupDirectory);
             return new List<string>();
-        }
 
         return Directory
             .EnumerateFiles(settings.BackupDirectory, "*.json", SearchOption.TopDirectoryOnly)
@@ -401,5 +409,3 @@ public sealed class RecoverySummary
     /// <summary>Не обработано из-за ошибки.</summary>
     public int Failed { get; set; }
 }
-
-

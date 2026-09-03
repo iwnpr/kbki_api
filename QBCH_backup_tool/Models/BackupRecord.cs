@@ -15,33 +15,6 @@ namespace QBCH_backup_tool.Models;
 /// </remarks>
 public sealed class BackupRecord
 {
-    // <summary>
-    /// Версия API, обработавшего запрос (например, <c>3.0</c>).
-    /// Записывается обработчиком V3; в старых (V2) файлах отсутствует.
-    /// </summary>
-    public string? ApiVersion { get; set; }
-
-    /// <summary>
-    /// Версия контракта. Записывается обработчиком V3.
-    /// </summary>
-    public string? ContractVersion { get; set; }
-
-    /// <summary>
-    /// Вид ответа (<c>answer</c> / <c>ticket</c> / <c>putanswer</c>). Записывается обработчиком V3.
-    /// </summary>
-    public string? ResponseKind { get; set; }
-
-    /// <summary>
-    /// Семейство схемы ответа. Записывается обработчиком V3.
-    /// </summary>
-    public string? SchemaFamily { get; set; }
-
-    /// <summary>
-    /// Имя сервиса / redis-scope, под которым API сохранял бы запись.
-    /// Используется, если не задан <c>--service-name</c>.
-    /// </summary>
-    public string? ServiceName { get; set; }
-
     /// <summary>
     /// Время поступления запроса (строка формата dd.MM.yyyy HH:mm:ss:ffff).
     /// </summary>

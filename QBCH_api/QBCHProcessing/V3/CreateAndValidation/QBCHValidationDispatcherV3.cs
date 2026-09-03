@@ -136,6 +136,9 @@ public static class QBCHValidationDispatcherV3
         {
             logger.LogError("Не пройдена проверка УЭП dlrequest v3: сертификат={Thumbprint}. transactionId: {TransactionId}. code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, transaction.ClentRequest.Certificate?.Thumbprint, signValidationResult.Error!.Code, signValidationResult.Error.Message);
+
+            transaction.RiseCriticalError(new AnswerErrorCode(signValidationResult.Error!.Code, signValidationResult.Error.Message));
+            return;
         }
 
         transaction.Attachment.SetRequestBody(signValidationResult.Value.Body);
@@ -151,6 +154,8 @@ public static class QBCHValidationDispatcherV3
         {
             logger.LogError("Не пройдена проверка кодировки dlrequest v3. transactionId: {TransactionId} code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка");
+
+            transaction.RiseCriticalError(new AnswerErrorCode(encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка"));
         }
     }
 
