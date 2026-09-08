@@ -59,7 +59,9 @@ public class ValidationServiceV3(
         catch (DecoderFallbackException ex)
         {
             var error = AnswerErrorCode.Code8_UnsupportedEncoding();
-            _logger.LogError(ex, error.Message);
+            
+            _logger.LogError(ex, "Не пройдена проверка кодировки: тело запроса длиной {messageLength} байт не является корректным UTF-8, позиция ошибки={FallbackIndex}. code={QbchErrorCode}: {QbchErrorMessage}",
+                message.Length, ex.Index, error.Code, error.Message);
             result = CreateErrorResult(error);
 
             return false;
@@ -78,7 +80,9 @@ public class ValidationServiceV3(
         if (requestDate?.Date != currentMoscowDate)
         {
             var error = AnswerErrorCode.Code23_InvalidRerquestDate();
-            _logger.LogError("ValidateRequestDateV3: дата запроса не совпадает: {requestDate} != {currentMoscowDate}. {errorMessage}", requestDate, currentMoscowDate, error.Message);
+
+            _logger.LogError("Не пройдена проверка даты запроса: ДатаЗапроса={requestDate}, текущая дата по Москве={currentMoscowDate}. code={QbchErrorCode}: {QbchErrorMessage}",
+                requestDate, currentMoscowDate, error.Code, error.Message);
 
             result = CreateErrorResult(error);
             return false;
@@ -175,7 +179,7 @@ public class ValidationServiceV3(
 
         if (cert.Length == 0)
         {
-            _logger.LogError("Невозможно получить количество активных сертификатов v3: входящий сертификат пустой");
+            _logger.LogError("Невозможно получить количество активных сертификатов v3: входящий сертификат пустой (0 байт). Возвращено количество активных сертификатов = 0");
             return 0;
         }
 
@@ -191,7 +195,7 @@ public class ValidationServiceV3(
     {
         if (cert.Length == 0)
         {
-            _logger.LogError("Невозможно установить статус неактивного сертификатов v3: входящий сертификат пустой");
+            _logger.LogError("Невозможно отозвать сертификат v3: входящий сертификат пустой (0 байт). Отзыв не выполнен");
             return false;
         }
 

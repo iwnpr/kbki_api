@@ -59,7 +59,19 @@ public sealed class KafkaNotifier : IDisposable
         if (result.Status == PersistenceStatus.Persisted)
             return true;
 
-        _logger.LogError("Kafka: сообщение '{value}' не подтверждено брокером (статус {status}).", value, result.Status);
+        if (result.Status == PersistenceStatus.PossiblyPersisted)
+        {
+            // Ответ брокера потерян: сообщение могло записаться, а могло и нет. Считаем
+            // недоставленным и оставляем backup-файл — потерять уведомление хуже, чем
+            // продублировать его. Доставка тут at-least-once, потребитель обрабатывает
+            // ключ QBCH:{service}:{id} идемпотентно.
+            _logger.LogWarning(
+                "Kafka: доставка сообщения '{value}' не подтверждена (статус {status}). Файл останется " +
+                "для повторной отправки; возможен дубль уведомления.", value, result.Status);
+            return false;
+        }
+
+        _logger.LogError("Kafka: сообщение '{value}' не принято брокером (статус {status}).", value, result.Status);
         return false;
     }
 

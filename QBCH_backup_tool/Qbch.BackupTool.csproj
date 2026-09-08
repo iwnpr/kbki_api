@@ -11,8 +11,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<!-- appsettings.json — файл конфигурации, а не исходник: компилировать его нельзя,
-         но он должен лежать рядом с exe, т.к. читается из AppContext.BaseDirectory. -->
 		<None Update="appsettings.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>

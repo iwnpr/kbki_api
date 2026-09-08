@@ -255,8 +255,8 @@ public static class ConsentValidatorV3
         AnswerErrorCode error,
         ILogger logger)
     {
-        logger.LogError("Не пройдена проверка согласия субъекта dlrequest v3 для запроса {OrderNumber}, режим={RequestMode}. transactionId: {TransactionId} code={QbchErrorCode}: {QbchErrorMessage}",
-            transaction.Id, orderNumber, requestMode, error.Code, error.Message);
+        logger.LogError("Не пройдена проверка согласия субъекта dlrequest v3 для запроса №{OrderNumber}, режим={RequestMode}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                    orderNumber, requestMode, transaction.Id, error.Code, error.Message);
 
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
         {

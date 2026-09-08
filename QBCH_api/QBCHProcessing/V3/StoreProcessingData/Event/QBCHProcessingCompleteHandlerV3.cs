@@ -4,6 +4,7 @@ using KafkaService_lib.Services.Interfaces;
 using MediatR;
 using qbch_lib;
 using qbch_lib.domain.aggregate.V3;
+using QBCH_lib.domain.DTOs;
 using System.Text;
 using System.Text.Json;
 
@@ -22,7 +23,6 @@ public class QBCHProcessingCompleteHandlerV3(
     /// текущего рабочего каталога: под IIS/systemd он может быть каким угодно.
     /// </summary>
     private static readonly string BackupDirectory = Path.Combine(AppContext.BaseDirectory, "backup");
-
     private readonly ILogger<QBCHProcessingCompleteHandlerV3> _logger = logger;
     private readonly IKeyValueStorageService _storageService = storageService;
     private readonly IKafkaService _kafka = kafka;
@@ -32,7 +32,8 @@ public class QBCHProcessingCompleteHandlerV3(
         var transaction = notification.Transaction;
         if (!await TrySendDataToRedis(transaction))
         {
-            _logger.LogCritical("Kafka-сообщение не отправлено, потому что результат не сохранён в Redis");
+            _logger.LogCritical("Kafka-сообщение не отправлено, поскольку результат обработки не сохранён в Redis: сервис={QbchService}, статус обработки={ProcessingStatus}. transactionId={TransactionId}",
+                transaction.ServiceName, transaction.Status, transaction.Id);
             return;
         }
         await SendDataToKafka(transaction);
@@ -48,7 +49,8 @@ public class QBCHProcessingCompleteHandlerV3(
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Критическая ошибка при сохранении результата в redis");
+            _logger.LogCritical(ex, "Критическая ошибка при сохранении результата обработки в Redis: сервис={QbchService}, статус обработки={ProcessingStatus}. transactionId={TransactionId}. Результат будет выгружен в backup-файл",
+               transaction.ServiceName, transaction.Status, transaction.Id);
             await SaveBackupData(transaction);
             return false;
         }
@@ -58,8 +60,7 @@ public class QBCHProcessingCompleteHandlerV3(
     {
         try
         {
-            var sb = new StringBuilder();
-            sb.AppendLine(JsonSerializer.Serialize(new
+            var record = new BackupRecord
             {
                 RequestTime = transaction.RequestTime,
                 IpAddress = transaction.ClentRequest.IpAddress,
@@ -68,28 +69,30 @@ public class QBCHProcessingCompleteHandlerV3(
                 ErrorCode = transaction.ProcessingErrors.FirstOrDefault()?.Code,
                 ErrorMessage = transaction.ProcessingErrors.FirstOrDefault()?.Message,
                 SignedRequest = transaction.Attachment.SignedRequestBody,
-                request = transaction.Attachment.RequestBody,
+                Request = transaction.Attachment.RequestBody,
                 RequestId = transaction.Id,
-                RequestType = transaction.ClentRequest.Request?.ТипЗапроса,
+                RequestType = (int?)transaction.ClentRequest.Request?.ТипЗапроса,
                 SignedResponse_Ticket = transaction.Response.SignedTicket,
                 ResponseXml_Ticket = transaction.Response.TicketXML,
                 SignedResponse = transaction.Response.SignedResponse,
                 ResponseXml = transaction.Response.ResponseXML,
                 ValidationTime = transaction.ValidateTime,
                 ResponseTime = transaction.ResponseTime
-            }));
+            };
 
+            var sb = new StringBuilder();
+            sb.AppendLine(JsonSerializer.Serialize(record));
             Directory.CreateDirectory(BackupDirectory);
-
             var path = Path.Combine(BackupDirectory, $"{transaction.Id}.json");
             await File.WriteAllTextAsync(path, sb.ToString());
 
             // Полный путь в логе: по нему оператор находит файлы для утилиты восстановления.
-            _logger.LogCritical("Результат обработки сохранён в backup-файл {path}", path);
+            _logger.LogCritical("Результат обработки сохранён в backup-файл {path}. transactionId={TransactionId}. Для восстановления используйте QBCH_backup_tool", path, transaction.Id);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Критическая ошибка при сохранении backup файла {guid}", transaction.Id);
+            _logger.LogCritical(ex, "Критическая ошибка при сохранении backup-файла: каталог={BackupDirectory}. transactionId={TransactionId}. Результат обработки потерян",
+               BackupDirectory, transaction.Id);
         }
     }
 
@@ -101,8 +104,8 @@ public class QBCHProcessingCompleteHandlerV3(
             var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaKey });
             if (!isProduce)
             {
-                _logger.LogCritical("Потеряно содержимое Kafka-сообщения для ключа QBCH:{serviceName}:{Transactionid}",
-                    transaction.ServiceName, transaction.Id);
+                _logger.LogCritical("Kafka-сообщение для ключа QBCH:{serviceName}:{Transactionid} не отправлено. transactionId={TransactionId}. Результат будет выгружен в backup-файл",
+                                    transaction.ServiceName, transaction.Id, transaction.Id);
                 await SaveBackupData(transaction);
             }
             else
@@ -111,7 +114,8 @@ public class QBCHProcessingCompleteHandlerV3(
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Критическая ошибка при сохранении результата в kafka");
+            _logger.LogCritical(ex, "Критическая ошибка при отправке результата обработки в Kafka: ключ=QBCH:{serviceName}:{Transactionid}. transactionId={TransactionId}. Результат будет выгружен в backup-файл",
+                transaction.ServiceName, transaction.Id, transaction.Id);
             await SaveBackupData(transaction);
         }
     }

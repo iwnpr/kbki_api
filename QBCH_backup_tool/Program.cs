@@ -173,20 +173,14 @@ finally
 
 // ---------- Локальные функции ----------
 
-// Конфигурация утилиты: только её собственные appsettings рядом с exe,
-// переменные окружения и переопределения -D. Файлы веб-приложения не подключаются.
+// Конфигурация утилиты: единственный appsettings.json рядом с exe, переменные окружения
+// и переопределения -D. Файлы веб-приложения не подключаются, разделения по окружениям нет:
+// у каждого развёрнутого экземпляра свой файл под свой контур.
 static IConfigurationRoot BuildConfiguration(CliOptions options)
 {
-    var environment = options.Environment
-                      ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-                      ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-
     var builder = new ConfigurationBuilder()
         .SetBasePath(AppContext.BaseDirectory)
         .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
-
-    if (!string.IsNullOrWhiteSpace(environment))
-        builder.AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: false);
 
     builder.AddEnvironmentVariables();
 
@@ -224,7 +218,6 @@ static RecoverySettings BuildSettings(CliOptions options, IConfiguration configu
         Target = target,
         ServiceName = serviceName,
         DryRun = options.DryRun,
-        KeepFiles = options.KeepFiles,
         StopOnError = options.StopOnError
     };
 }

@@ -41,6 +41,10 @@ public class QBCHProcessingHandlerV3(
     private readonly ApiV3ContractRules _contractRules = contractRules;
     private readonly ConcurrentBag<Task<QBCHTaskResult>> _tasksList = [];
 
+    private const string ProcessingStageTaskScheduling = "Постановка задач получения сведений";
+    private const string ProcessingStageAwaitingTasks = "Ожидание ответов от источников сведений (БД и внешние КБКИ)";
+    private const string ProcessingStageBuildingResponse = "Формирование и сохранение агрегированного ответа";
+
     public async Task<QBCHProcessingTransactionV3> Handle(QBCHProcessedStartV3 request, CancellationToken cancellationToken)
     {
         var transaction = request.Transaction;
@@ -61,6 +65,9 @@ public class QBCHProcessingHandlerV3(
 
         try
         {
+            // Этап обработки: попадает в лог, чтобы по записи было видно, на чем именно упал сбор ответа.
+            var processingStage = ProcessingStageTaskScheduling;
+
             var process = Task.Run(async () =>
             {
                 try
@@ -80,14 +87,22 @@ public class QBCHProcessingHandlerV3(
                     }
 
                     _logger.LogDebug("QBCHProcessingHandlerV3: ожидание выполнения {taskCount} задач", _tasksList.Count);
+                    processingStage = ProcessingStageAwaitingTasks;
+
                     var results = await Task.WhenAll(_tasksList);
+
+                    processingStage = ProcessingStageBuildingResponse;
                     responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, clientRequest, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical(ex, "Ошибка выполнения запроса QBCH API 3.0");
+                    var error = AnswerErrorCode.Code99_OtherError(ex.Message);
 
-                    await StoreProcessingErrorAsync(transaction, AnswerErrorCode.Code99_OtherError(ex.Message));
+                    _logger.LogCritical(ex,
+                        "Не удалось сформировать ответ dlrequest v3 на этапе \"{ProcessingStage}\": задач={TaskCount}, requestId={RequestId}, типЗапроса={RequestType}, режимЗапроса={RequestMode}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                        processingStage, _tasksList.Count, requestId, requestType, requestMode, transaction.Id, error.Code, error.Message);
+
+                    await StoreProcessingErrorAsync(transaction, error);
                 }
             }).Wait(TimeSpan.FromMilliseconds(_contractRules.ImmediateResponseDeadlineMs - transaction.TimeElapsedForValidation.ElapsedMilliseconds));
 
@@ -103,11 +118,17 @@ public class QBCHProcessingHandlerV3(
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            _logger.LogWarning(ex, "Время проверки превысило {ImmediateResponseDeadlineMs} миллисекунд.", request.ImmediateResponseDeadlineMs);
+            _logger.LogWarning(ex,
+                "Время ответа истекло: валидация dlrequest v3 заняла {ValidationElapsedMs} мс при дедлайне немедленного ответа {ImmediateResponseDeadlineMs} мс, будет сформирован отложенный ответ. requestId={RequestId}, transactionId={TransactionId}",
+                transaction.TimeElapsedForValidation.ElapsedMilliseconds, request.ImmediateResponseDeadlineMs, requestId, transaction.Id);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Ошибка выполнения запроса QBCH API 3.0");
+            var error = AnswerErrorCode.Code99_OtherError(ex.Message);
+
+            _logger.LogCritical(ex,
+                "Ошибка немедленной обработки dlrequest v3: RequestId={RequestId}, ТипЗапроса={RequestType}, РежимЗапроса={RequestMode}, ОтветСформирован={HasResponseXml}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                    requestId, requestType, requestMode, responseXml is not null, transaction.Id, error.Code, error.Message);
         }
 
         _logger.LogDebug("QBCHProcessingHandlerV3: формирование тикета Accepted, TransactionId={TransactionId}", transaction.Id);
@@ -116,7 +137,7 @@ public class QBCHProcessingHandlerV3(
 
     private async Task StoreProcessingErrorAsync(QBCHProcessingTransactionV3 transaction, AnswerErrorCode error)
     {
-        _logger.LogDebug("QBCHProcessingHandlerV3.StoreProcessingErrorAsync начало: TransactionId={TransactionId}, errorCode={errorCode}, errorMessage={errorMessage}",
+        _logger.LogDebug("QBCHProcessingHandlerV3.StoreProcessingErrorAsync начало: сохранение ошибки обработки в Redis. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
             transaction.Id, error.Code, error.Message);
         var responseId = transaction.Id.ToString();
 
@@ -130,7 +151,6 @@ public class QBCHProcessingHandlerV3(
     private async Task<byte[]> BuildAndStoreAggregateResponseAsync(
         QBCHTaskResult[] results,
         QBCHProcessingTransactionV3 transaction,
-        //NOTE: переименовал, так как input слишком абстрактен
         ЗапросСведений clientRequest,
         string ourBureauPsrn,
         string requestId,
@@ -176,12 +196,18 @@ public class QBCHProcessingHandlerV3(
                 }
                 else
                 {
+                    
+                    var missingDataError = AnswerErrorCode.Code28_RequestDataNotFound();
+
+                    _logger.LogWarning("В ответе КБКИ отсутствуют запрошенные сведения: ОГРН КБКИ={Bureau}, запрос №{OrderNumber}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                        taskResult.BureauPSRN, info.ПорядковыйНомер, transaction.Id, missingDataError.Code, missingDataError.Message);
+
                     var errorKbki = new ОтветНаЗапросСведенийСведенияКБКИ
                     {
                         ОГРН = taskResult.BureauPSRN,
                         ПоСостояниюНа = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz"),
                     };
-                    errorKbki.УстановитьОшибку(28, "В ответе КБКИ отсутствуют запрошенные сведения");
+                    errorKbki.УстановитьОшибку(missingDataError.Code, missingDataError.Message);
                     kbkiItems.Add(errorKbki);
                 }
             }

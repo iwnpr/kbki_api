@@ -80,7 +80,8 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Критическая ошибка Redis: {errorMessage}", ex.Message);
+                _logger.LogCritical(ex, "Критическая ошибка Redis при записи поля хэша: метод={QbchService}, ключ={RedisKey}, поле={RedisField}",
+                   methodName, pKey, pField);
                 throw;
             }
         }
@@ -109,7 +110,8 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Критическая ошибка Redis: {errorMessage}", ex.Message);
+                _logger.LogCritical(ex, "Критическая ошибка Redis при пакетной записи: метод={QbchService}, ключ={RedisKey}, количество записей={RedisRecordsCount}",
+                    methodName, pKey, dictionary.Count);
                 throw;
             }
         }
@@ -147,7 +149,8 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Ошибка Redis при чтении поля хэша");
+                _logger.LogCritical(ex, "Ошибка Redis при чтении поля хэша: метод={QbchService}, ключ={RedisKey}, поле={RedisField}",
+                    methodName, pKey, pField);
 
                 bytes = null;
                 return false;
@@ -170,7 +173,8 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Ошибка Redis при чтении поля хэша");
+                _logger.LogCritical(ex, "Ошибка Redis при чтении поля хэша: метод={QbchService}, ключ={RedisKey}, поле={RedisField}",
+                   methodName, pKey, pField);
                 return Result<byte[]>.Failure(new AnswerErrorCode(500, ex.Message));
             }
         }
@@ -195,7 +199,8 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Ошибка Redis при чтении значения поля хэша");
+                _logger.LogCritical(ex, "Ошибка Redis при чтении значения поля хэша: метод={QbchService}, ключ={RedisKey}, поле={RedisField}",
+                    methodName, pKey, pField);
 
                 throw;
             }
@@ -215,7 +220,7 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Ошибка Redis при проверке существования ключа");
+                _logger.LogCritical(ex, "Ошибка Redis при проверке существования ключа: ключ={RedisKey}", KeyFormatter(keys));
                 throw;
             }
         }
@@ -236,7 +241,8 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Ошибка Redis при сохранении уникального requestId");
+                _logger.LogCritical(ex, "Ошибка Redis при сохранении уникального requestId: метод={QbchService}, requestId={requestId}, ОГРН={ogrn}. Проверка уникальности последующих запросов может отработать некорректно",
+                   methodName, requestId, ogrn);
             }
         }
 
@@ -269,7 +275,8 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Не удалось установить время жизни для ключа {key}", key);
+                _logger.LogWarning(ex, "Не удалось установить время жизни для ключа {RedisKey}: TTL={ttlInMinutes} мин. Ключ останется в Redis без ограничения по времени",
+                    key, ttlInMinutes);
             }
         }
 
@@ -282,7 +289,8 @@ namespace Cache_lib.Implementations
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Не удалось установить сохранить данные ListSet {key}: {value}", key, value);
+                _logger.LogWarning(ex, "Не удалось сохранить данные в список Redis: ключ={RedisKey}, размер значения={RedisValueLength} символов",
+                    KeyFormatter(key), value?.Length ?? 0);
             }
         }
     }

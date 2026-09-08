@@ -6,6 +6,7 @@ using QBCH.Lib.qcb_xml.v3_0;
 using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib;
 using qbch_lib.domain.aggregate.V3;
+using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
 using QBCHService_lib.Models;
@@ -332,14 +333,22 @@ public class QBCHServiceV3(
                     }
                     catch (HttpRequestException ex)
                     {
-                        _logger.LogError(ex, "Не удалось установить соединение. КБКИ: {bureau} address: {address}", bureau.Name, "/dlrequest");
-                        redisMsg.SetError("17", "Не удалось установить соединение.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now); ;
+                        var error = AnswerErrorCode.Code17_NoConnection();
+
+                        _logger.LogError(ex, "Не удалось установить соединение с КБКИ {bureau} (ОГРН {BureauPSRN}) по адресу {address}: последний HTTP-код={Status}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                            bureau.Name, bureau.ogrn, "/dlrequest", (int?)lastStatusCode, guid, error.Code, error.Message);
+
+                        redisMsg.SetError(error.Code.ToString(), error.Message).SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now); ;
                         await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ: {bureau}  address: {address}", bureau.Name, "/dlrequest");
-                        redisMsg.SetError("99", $"Код ответа: {lastStatusCode} Message:{lastResponseText ?? string.Empty}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+                        var error = AnswerErrorCode.Code99_OtherError("Ошибка получения ответа от КБКИ");
+
+                        _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ {bureau} (ОГРН {BureauPSRN}) по адресу {address}: последний HTTP-код={Status}, тело ответа={ResponseText}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                            bureau.Name, bureau.ogrn, "/dlrequest", (int?)lastStatusCode, lastResponseText, guid, error.Code, error.Message);
+
+                        redisMsg.SetError(error.Code.ToString(), $"{error.Message}: {lastResponseText}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                         await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                     }
 
@@ -353,8 +362,12 @@ public class QBCHServiceV3(
         }
         catch (TaskCanceledException ex)
         {
-            _logger.LogWarning(ex, "Запрос {guid} в бюро {bureauName} по адресу {baseAddress} был отменен по истечению таймаута {timeout}.", guid, bureau.Name, "/dlrequest", _qbchTicketTimeoutMs);
-            redisMsg.SetError("18", "Время ожидания ответа истекло.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+            var error = AnswerErrorCode.Code18_WaitForResponseExpired();
+
+            _logger.LogWarning(ex, "Запрос в КБКИ {bureauName} (ОГРН {BureauPSRN}) по адресу {baseAddress} отменен по истечению таймаута ожидания квитанции {timeout} мс. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                bureau.Name, bureau.ogrn, "/dlrequest", _qbchTicketTimeoutMs, guid, error.Code, error.Message);
+
+            redisMsg.SetError(error.Code.ToString(), error.Message).SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
             await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
             dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, "18", "Время ожидания ответа истекло.", orderNumbers);
         }
@@ -406,10 +419,14 @@ public class QBCHServiceV3(
         }
         catch (TaskCanceledException ex)
         {
-            _logger.LogWarning(ex, "Таймаут запроса в бюро {bureauName} по адресу {baseAddress}.", bureau.Name, $"/dlanswer?id={responseId}");
+            var error = AnswerErrorCode.Code18_WaitForResponseExpired();
+
+            _logger.LogWarning(ex, "Таймаут ожидания ответа от КБКИ {bureauName} (ОГРН {BureauPSRN}) по адресу {baseAddress}: осталось времени={timeLeftMs} мс. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                            bureau.Name, bureau.ogrn, $"/dlanswer?id={responseId}", timeLeftMs, guid, error.Code, error.Message);
+
             DLAnswerRedisMessage = DlAnswerRedisMessage.Create();
-            DLAnswerRedisMessage.SetError("18", "Время ожидания ответа истекло.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
-            dlanswerResult = CreateErrorAnswerV3(bureau.ogrn!, "18", "Время ожидания ответа истекло.", orderNumbers);
+            DLAnswerRedisMessage.SetError(error.Code.ToString(), error.Message).SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+            dlanswerResult = CreateErrorAnswerV3(bureau.ogrn!, error.Code.ToString(), error.Message, orderNumbers);
             await _storageService.ListSet(key: [DLAnswerRedisMessage.Name, guid, bureau.ogrn!, DLAnswerRedisMessage.Name], value: JsonSerializer.Serialize(DLAnswerRedisMessage));
         }
 
@@ -489,17 +506,20 @@ public class QBCHServiceV3(
                         }
                         else
                         {
-                            //NOTE: Возвратил пропавший код Артема.
-                            redisMsg.SetError("99", "Данные, полученные от КБКИ, не соответствуют указанному HTTP-коду ответа.").SetResponseTime(DateTime.Now);
-                            _logger.LogError("Данные, полученные от КБКИ, не соответствуют указанному HTTP-коду ответа. {Bureau}", bureau.Name);
+                            var error = AnswerErrorCode.Code99_OtherError("Данные, полученные от КБКИ, не соответствуют указанному HTTP-коду ответа.");
+
+                            _logger.LogError("Данные, полученные от КБКИ {Bureau} (ОГРН {BureauPSRN}), не соответствуют указанному HTTP-коду ответа {Status}: в теле ожидался блок Ошибка. requestId={RequestId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                                bureau.Name, bureau.ogrn, (int?)lastStatusCode, guid, error.Code, error.Message);
+
+                            redisMsg.SetError(error.Code.ToString(), error.Message).SetResponseTime(DateTime.Now);
+
                             await _storageService.ListSet(key: [RedisConstants.DlRequestV3Scope, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
-                            return CreateErrorAnswerV3(bureau.ogrn!, "99", "Данные, полученные от КБКИ, не соответствуют указанному HTTP-коду ответа.", orderNumbers);
+                            return CreateErrorAnswerV3(bureau.ogrn!, error.Code.ToString(), error.Message, orderNumbers);
                         }
                         await _storageService.ListSet(key: [RedisConstants.DlRequestV3Scope, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                         break;
 
                     default:
-                        //NOTE: Возвратил пропавший код Артема.
                         redisMsg.SetError("99", $"Код ответа: {responseMessage.StatusCode} Message:{lastResponseText}").SetResponseTime(DateTime.Now);
                         await _storageService.ListSet(key: [RedisConstants.DlRequestV3Scope, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                         break;
@@ -507,11 +527,14 @@ public class QBCHServiceV3(
 
                 await Task.Delay(_qbchResponseDelayMs, ct);
             }
-            //NOTE: Возвратил пропавший код Артема.
             catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "Не удалось установить соединение. КБКИ: {bureau} address: {address}", bureau.Name, $"/dlanswer?id={responseId}");
-                redisMsg.SetError("17", "Не удалось установить соединение.").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+                var error = AnswerErrorCode.Code17_NoConnection();
+
+                _logger.LogError(ex, "Не удалось установить соединение с КБКИ {bureau} (ОГРН {BureauPSRN}) по адресу {address}: последний HTTP-код={Status}. requestId={RequestId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                    bureau.Name, bureau.ogrn, $"/dlanswer?id={responseId}", (int?)lastStatusCode, guid, error.Code, error.Message);
+
+                redisMsg.SetError(error.Code.ToString(), error.Message).SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                 await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
             }
             catch (TaskCanceledException)
@@ -520,8 +543,12 @@ public class QBCHServiceV3(
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ: {bureau}  address: {address}", bureau.Name, $"/dlanswer?id={responseId}");
-                redisMsg.SetError("99", $"Код ответа: {lastStatusCode} Message:{lastResponseText ?? string.Empty}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+                var error = AnswerErrorCode.Code99_OtherError("Ошибка получения ответа от КБКИ");
+
+                _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ {bureau} (ОГРН {BureauPSRN}) по адресу {address}: последний HTTP-код={Status}, тело ответа={ResponseText}. requestId={RequestId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                    bureau.Name, bureau.ogrn, $"/dlanswer?id={responseId}", (int?)lastStatusCode, lastResponseText, guid, error.Code, error.Message);
+
+                redisMsg.SetError(error.Code.ToString(), $"Код ответа: {lastStatusCode} Message:{lastResponseText ?? string.Empty}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
                 await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
             }
         }
@@ -536,21 +563,23 @@ public class QBCHServiceV3(
         {
             switch (cryptoResult.ErrorCode)
             {
-                //NOTE: Вернул логирование
                 case 4:
                     result.Error = "УЭП КБКИ некорректна";
                     result.ErrorCode = 4;
-                    _logger.LogError("УЭП КБКИ некорректна {bureauName}.", bureau.Name);
+                    _logger.LogError("Не пройдена проверка УЭП ответа КБКИ {bureauName} (ОГРН {BureauPSRN}), схема={Schema}. code={QbchErrorCode}: {QbchErrorMessage}",
+                        bureau.Name, bureau.ogrn, schemaName, result.ErrorCode, result.Error);
                     break;
                 case 7:
                     result.Error = "Некорректный формат ответа КБКИ";
                     result.ErrorCode = 7;
-                    _logger.LogError("Некорректный формат ответа КБКИ {name}.", bureau.Name);
+                    _logger.LogError("Ответ КБКИ {bureauName} (ОГРН {BureauPSRN}) не является криптографическим сообщением PKCS#7, схема={Schema}, размер={BodyLength} байт. code={QbchErrorCode}: {QbchErrorMessage}",
+                        bureau.Name, bureau.ogrn, schemaName, body.Length, result.ErrorCode, result.Error);
                     break;
                 default:
                     result.Error = "Ошибка при проверке УЭП";
                     result.ErrorCode = 24;
-                    _logger.LogError("Неопознанная ошибка криптографии {cryptoResult.ErrorCode}", cryptoResult.ErrorCode);
+                    _logger.LogError("Неопознанная ошибка криптографии при проверке ответа КБКИ {bureauName} (ОГРН {BureauPSRN}): код криптосервиса={CryptoErrorCode}, схема={Schema}. code={QbchErrorCode}: {QbchErrorMessage}",
+                        bureau.Name, bureau.ogrn, cryptoResult.ErrorCode, schemaName, result.ErrorCode, result.Error);
                     break;
             }
 
@@ -563,8 +592,8 @@ public class QBCHServiceV3(
             result.Error = "Ответ не соответствует схеме";
             result.ErrorCode = 19;
             result.IsError = true;
-            //NOTE: Вернул логирование
-            _logger.LogError("Ответ не соответствует схеме {bureauName}.", bureau.Name);
+            _logger.LogError("Ответ КБКИ {bureauName} (ОГРН {BureauPSRN}) не соответствует схеме: после снятия подписи тело ответа пустое, схема={Schema}. code={QbchErrorCode}: {QbchErrorMessage}",
+                bureau.Name, bureau.ogrn, schemaName, result.ErrorCode, result.Error);
             return result;
         }
 
@@ -577,8 +606,8 @@ public class QBCHServiceV3(
             result.Error = $"Ответ не соответствует схеме: {xsdValidation.Error}.";
             result.ErrorCode = 19;
             result.IsError = true;
-            //NOTE: Вернул логирование
-            _logger.LogError("Ответ не соответствует схеме в бюро {bureauName}. XSD_Error:{xsd}", bureau.Name, xsdValidation?.Error);
+            _logger.LogError("Ответ КБКИ {bureauName} (ОГРН {BureauPSRN}) не соответствует схеме {Schema}: {XsdError}. code={QbchErrorCode}: {QbchErrorMessage}",
+                bureau.Name, bureau.ogrn, schemaName, xsdValidation?.Error, result.ErrorCode, result.Error);
         }
 
         return result;

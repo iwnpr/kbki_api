@@ -172,7 +172,8 @@ public class XmlServiceV3(IMemoryCache memoryCache, IConfiguration config, ILogg
             {
                 var error = AnswerErrorCode.Code9_InvalidRequestByScheme(string.Concat(e.Severity, ": ", e.Message));
 
-                _logger.LogError(error.Message);
+                _logger.LogError("Документ не соответствует XSD-схеме: уровень={Severity}, описание={SchemaError}. code={QbchErrorCode}: {QbchErrorMessage}",
+                    e.Severity, e.Message, error.Code, error.Message);
 
                 xsdError = CreateSchemaError(error.Code, error.Message);
             });

@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using QBCH_backup_tool.Models;
+using QBCH_lib.domain.DTOs;
 
 namespace QBCH_backup_tool.Services;
 
@@ -139,9 +139,10 @@ public sealed class BackupRecoveryService
             produceKafka = settings.Target == RecoveryTarget.Kafka;
         }
 
-        // Пропущенный шаг считается успешным и не мешает удалить файл.
-        var redisOk = true;
-        var kafkaOk = true;
+        // Успех проставляется только по факту выполнения шага. Пропущенный шаг отмечается
+        // успешным явно — он не должен мешать удалить файл.
+        var redisOk = !writeRedis;
+        var kafkaOk = !produceKafka;
 
         // --- Redis ---
         if (writeRedis)
@@ -151,6 +152,7 @@ public sealed class BackupRecoveryService
             {
                 _logger.LogInformation("[DRY-RUN] Redis: записал бы {count} полей в ключ QBCH:{service}:{id} ({fields}).",
                     dict.Count, settings.ServiceName, id, string.Join(", ", dict.Keys));
+                redisOk = true;
             }
             else
             {
@@ -172,7 +174,10 @@ public sealed class BackupRecoveryService
             {
                 var kafkaKey = RedisBackupStore.BuildKey(settings.ServiceName, id);
                 if (settings.DryRun)
+                {
                     _logger.LogInformation("[DRY-RUN] Kafka: отправил бы сообщение с ключом-значением '{key}'.", kafkaKey);
+                    kafkaOk = true;
+                }
                 else
                     kafkaOk = await TryProduceKafkaAsync(kafkaKey, id, ct);
             }
@@ -185,16 +190,13 @@ public sealed class BackupRecoveryService
             return FileOutcome.Failed;
         }
 
+        // Файл остаётся на диске только в холостом прогоне. Сохранять его после боевой
+        // отправки нельзя: на следующем проходе он был бы обработан ещё раз и данные
+        // ушли бы в Kafka повторно.
         if (settings.DryRun)
         {
             _logger.LogInformation("[DRY-RUN] Запись {id} обработана бы успешно, файл {file} НЕ удаляется.", id, Path.GetFileName(file));
             return FileOutcome.Skipped;
-        }
-
-        if (settings.KeepFiles)
-        {
-            _logger.LogInformation("Запись {id} восстановлена, файл {file} сохранён (--keep).", id, Path.GetFileName(file));
-            return FileOutcome.Recovered;
         }
 
         try
@@ -390,7 +392,6 @@ public sealed class RecoverySettings
     public required RecoveryTarget Target { get; init; }
     public required string ServiceName { get; init; }
     public required bool DryRun { get; init; }
-    public required bool KeepFiles { get; init; }
     public required bool StopOnError { get; init; }
 }
 
@@ -400,7 +401,7 @@ public sealed class RecoverySummary
     /// <summary>Всего найдено файлов.</summary>
     public int Total { get; set; }
 
-    /// <summary>Успешно восстановлено (данные отправлены, файл удалён/сохранён по --keep).</summary>
+    /// <summary>Успешно восстановлено (данные отправлены, файл удалён).</summary>
     public int Recovered { get; set; }
 
     /// <summary>Пропущено без ошибки (например, dry-run).</summary>

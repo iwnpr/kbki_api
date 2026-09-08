@@ -32,20 +32,18 @@ public sealed class CliOptions
     /// <summary>Произвольные переопределения конфигурации (ключ=значение).</summary>
     public Dictionary<string, string?> ConfigOverrides { get; } = new();
 
-    /// <summary>Имя окружения для appsettings.{env}.json.</summary>
-    public string? Environment { get; private set; }
-
     /// <summary>Куда доставлять данные.</summary>
     public RecoveryTarget? Target { get; private set; }
 
     /// <summary>Имя сервиса (redis-scope / префикс ключа).</summary>
     public string? ServiceName { get; private set; }
 
-    /// <summary>Ничего не отправлять и не удалять — только показать, что было бы сделано.</summary>
+    /// <summary>
+    /// Ничего не отправлять и не удалять — только показать, что было бы сделано.
+    /// Это единственный режим, в котором обработанные файлы остаются на диске: сохранять их
+    /// после боевой отправки нельзя, иначе на следующем проходе те же данные уйдут повторно.
+    /// </summary>
     public bool DryRun { get; private set; }
-
-    /// <summary>Не удалять backup-файл даже при успешной отправке.</summary>
-    public bool KeepFiles { get; private set; }
 
     /// <summary>Остановить обработку при первой ошибке (по умолчанию — продолжать).</summary>
     public bool StopOnError { get; private set; }
@@ -85,11 +83,6 @@ public sealed class CliOptions
                     options.Files.Add(RequireValue(args, ref i, arg));
                     break;
 
-                case "-e":
-                case "--environment":
-                    options.Environment = RequireValue(args, ref i, arg);
-                    break;
-
                 case "-t":
                 case "--target":
                     options.Target = ParseTarget(RequireValue(args, ref i, arg));
@@ -107,10 +100,6 @@ public sealed class CliOptions
                 case "-n":
                 case "--dry-run":
                     options.DryRun = true;
-                    break;
-
-                case "--keep":
-                    options.KeepFiles = true;
                     break;
 
                 case "--stop-on-error":
@@ -180,23 +169,22 @@ public sealed class CliOptions
                                     redis  — принудительно записать только в Redis;
                                     kafka  — принудительно отправить только ключ в Kafka.
           --service-name <имя>      Имя сервиса / redis-scope (по умолчанию: dlrequest).
-          -e, --environment <env>   Окружение для appsettings.{env}.json.
           -D, --define <Ключ=Знач>  Переопределить параметр конфигурации.
                                     Напр.: -D ConnectionStrings:Redis=host:6379,...
           -n, --dry-run             Ничего не отправлять и не удалять — только показать план.
-          --keep                    Не удалять backup-файлы даже при успешной отправке.
+                                    Единственный режим, в котором файлы остаются на диске.
           --stop-on-error           Остановиться на первой ошибке (по умолчанию — продолжать).
           -v, --verbose             Подробный (Debug) вывод в консоль.
           -h, --help                Показать эту справку.
 
         КОНФИГУРАЦИЯ (порядок применения, каждый следующий переопределяет предыдущий)
-          1. appsettings.json рядом с утилитой — основной и единственный файл настроек.
-          2. appsettings.{environment}.json рядом с утилитой (если указано -e/--environment).
-          3. Переменные окружения.
-          4. Переопределения -D/--define.
+          1. appsettings.json рядом с утилитой — единственный файл настроек.
+          2. Переменные окружения.
+          3. Переопределения -D/--define.
 
-          Утилита автономна: настройки берутся ТОЛЬКО из её собственных файлов,
-          конфигурация веб-приложения не читается.
+          Утилита автономна: настройки берутся ТОЛЬКО из её собственного appsettings.json,
+          конфигурация веб-приложения не читается. Разделения по окружениям нет: у каждого
+          развёрнутого экземпляра свой файл, заполненный под свой контур.
 
           Параметры подключения (заполняются в appsettings.json утилиты):
             ConnectionStrings:Redis        строка подключения StackExchange.Redis
@@ -217,9 +205,6 @@ public sealed class CliOptions
 
           # Посмотреть, что будет сделано, без отправки и удаления:
           qbch-backup-tool --dry-run --verbose
-
-          # Настройки для конкретного окружения (appsettings.Production.json утилиты):
-          qbch-backup-tool -e Production
 
           # Восстановить один файл принудительно только в Redis:
           qbch-backup-tool -t redis -f backup/8f1c...json

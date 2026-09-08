@@ -94,7 +94,8 @@ namespace KafkaService_lib.Services.Implementation
                     _ => TimeSpan.FromMilliseconds(_produceRetryDelayMs),
                     (exception, delay, retryNumber, _) =>
                     {
-                        _logger.LogWarning(exception, "Ошибка отправки в кафку {value}. Попытка {attempt}/{maxAttempts}. Повтор через {delayMs} ms", message.Value, retryNumber, maxAttempts, (int)delay.TotalMilliseconds);
+                        _logger.LogWarning(exception, "Ошибка отправки сообщения в Kafka: значение={value}. Попытка {attempt}/{maxAttempts}, повтор через {delayMs} мс",
+                                                    message.Value, retryNumber, maxAttempts, (int)delay.TotalMilliseconds);
                     });
 
             var policy = Policy.WrapAsync(timeoutPolicy, retryPolicy);
@@ -112,7 +113,8 @@ namespace KafkaService_lib.Services.Implementation
             }
             catch (Exception e) when (e is ProduceException<Null, string> || e is TimeoutRejectedException)
             {
-                _logger.LogError(e, "Ошибка отправки в кафку {value}. Достигнут лимит ретраев/времени ({timeoutMs} ms)", message.Value, _produceRetryTotalTimeoutMs);
+                _logger.LogError(e, "Сообщение не отправлено в Kafka: значение={value}. Достигнут лимит попыток ({retryCount}) либо общего времени ({timeoutMs} мс)",
+                                    message.Value, _produceRetryCount, _produceRetryTotalTimeoutMs);
                 return false;
 
             }

@@ -61,9 +61,12 @@ namespace Crypto_lib.Service
             if (requestCert is null)
             {
                 var errorMessage = "Отсутствует сертификат запроса";
-                _logger.LogError(errorMessage);
 
                 var processingError = AnswerErrorCode.Code99_OtherError(errorMessage);
+
+                _logger.LogError("Не пройдена проверка УЭП: клиентский сертификат не передан в запросе. code={QbchErrorCode}: {QbchErrorMessage}",
+                    processingError.Code, processingError.Message);
+
                 result.Error = processingError.Message;
                 result.ErrorCode = processingError.Code;
                 result.Ticket = _ticketService.CreateResultV3Error(processingError);
@@ -84,7 +87,9 @@ namespace Crypto_lib.Service
             {
 
                 var processingError = AnswerErrorCode.Code5_TheCertificateIsExpired();
-                _logger.LogError(processingError.Message);
+
+                _logger.LogError("Не пройдена проверка УЭП: срок действия сертификата запроса истек {NotAfter}, отпечаток={Thumbprint}. code={QbchErrorCode}: {QbchErrorMessage}",
+                    requestCert.NotAfter, requestCert.Thumbprint, processingError.Code, processingError.Message);
 
                 result.ErrorCode = processingError.Code;
                 result.ErrorMessage = processingError.Message;
@@ -114,7 +119,8 @@ namespace Crypto_lib.Service
             catch (Exception ex)
             {
                 var processingError = AnswerErrorCode.Code7_IncorrectRequestFormat();
-                _logger.LogError(ex, "Не удалось декодировать PKCS#7 сообщение: {Error}", processingError.Message);
+                _logger.LogError(ex, "Не удалось декодировать PKCS#7 сообщение: отсоединенная подпись={HasDetachedSignature}, размер сообщения={MsgLength} байт. code={QbchErrorCode}: {QbchErrorMessage}",
+                   encodedSignature is not null, msg?.Length ?? 0, processingError.Code, processingError.Message);
 
                 result.Error = processingError.Message;
                 result.ErrorCode = processingError.Code;
@@ -139,10 +145,11 @@ namespace Crypto_lib.Service
                     // Сверка реквизитов сертифкатов запроса и подписи.
                     if (IsCertComapreFailed(requestSubject, current.Certificate, result))
                     {
-
-                        _logger.LogError("УЭП не соответствует абоненту, ИНН запроса:{request_inn}, ИНН из подписи:{sign_inn}. ОГРН запроса:{request_ogrn}, ОГРН из подписи:{sign_ogrn}", result.RequestINN, result.SignINN, result.RequestOGRN, result.SignOGRN);
-
+                        
                         var processingError = AnswerErrorCode.Code6_DetailsDoNotMatch($"УЭП не соответствует абоненту, ИНН запроса:{result.RequestINN}, ИНН из подписи:{result.SignINN}. ОГРН запроса:{result.RequestOGRN}, ОГРН из подписи:{result.SignOGRN}");
+
+                        _logger.LogError("УЭП не соответствует абоненту: ИНН запроса={request_inn}, ИНН из подписи={sign_inn}, ОГРН запроса={request_ogrn}, ОГРН из подписи={sign_ogrn}. code={QbchErrorCode}: {QbchErrorMessage}",
+                            result.RequestINN, result.SignINN, result.RequestOGRN, result.SignOGRN, processingError.Code, processingError.Message);
 
                         result = new CryptoServiceResult()
                         {
@@ -163,7 +170,8 @@ namespace Crypto_lib.Service
                     {
                         var processingError = AnswerErrorCode.Code4_SignatureIsNotCorrect();
 
-                        _logger.LogError(ex, "УЭП некорректна: {Error}", ex.Message);
+                        _logger.LogError(ex, "Не пройдена проверка УЭП: подпись не прошла криптографическую проверку, отпечаток подписанта={SignThumbprint}. code={QbchErrorCode}: {QbchErrorMessage}",
+                           current.Certificate?.Thumbprint, processingError.Code, processingError.Message);
 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
@@ -175,8 +183,12 @@ namespace Crypto_lib.Service
 
             if (!IsValidCert)
             {
-                _logger.LogError("Валидная УЭП не найдена. Количество накопленных ошибок: {errorCount}", errors.Count);
-                return QBCH_lib.core.Result<CryptoServiceResult>.Failure(errors.First());
+                var firstError = errors.First();
+
+                _logger.LogError("Валидная УЭП не найдена: ни один подписант сообщения не прошел проверку, накоплено ошибок={errorCount}. code={QbchErrorCode}: {QbchErrorMessage}",
+                    errors.Count, firstError.Code, firstError.Message);
+
+                return QBCH_lib.core.Result<CryptoServiceResult>.Failure(firstError);
             }
 
             result.Body = signedCms.ContentInfo.Content;
@@ -240,9 +252,11 @@ namespace Crypto_lib.Service
                 _logger.LogDebug("Проверка срока действия сертификата. NotAfter: {notAfter}", requestCert.NotAfter);
                 if (requestCert.NotAfter <= DateTime.Now)
                 {
-                    _logger.LogError("Истек срок сертификата УЭП");
-
                     var error = AnswerErrorCode.Code5_TheCertificateIsExpired();
+
+                    logger.LogError("Истек срок сертификата УЭП: NotAfter={NotAfter}, отпечаток={Thumbprint}. code={QbchErrorCode}: {QbchErrorMessage}",
+                        requestCert.NotAfter, requestCert.Thumbprint, error.Code, error.Message);
+
                     result.Error = error.Message;
                     result.ErrorCode = error.Code;
                     result.Ticket = _ticketService.CreateResultV3Error(error);
@@ -279,9 +293,10 @@ namespace Crypto_lib.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Некорректный формат запроса:  Полученный в запросе файл не идентифицируется как криптографическое сообщение в формате PKCS#7, содержащее запрос и УЭП");
-
                 var error = AnswerErrorCode.Code7_IncorrectRequestFormat();
+
+                _logger.LogError(ex, "Некорректный формат запроса: полученный файл не идентифицируется как криптографическое сообщение PKCS#7, содержащее запрос и УЭП. Отсоединенная подпись={HasDetachedSignature}, размер сообщения={MsgLength} байт. code={QbchErrorCode}: {QbchErrorMessage}",
+                   encodedSignature is not null, msg?.Length ?? 0, error.Code, error.Message);
 
                 result.Error = error.Message;
                 result.ErrorCode = error.Code;
@@ -301,11 +316,12 @@ namespace Crypto_lib.Service
                 {
                     if (IsCertComapreFailed(requestSubject, current.Certificate, result))
                     {
-                        _logger.LogError("УЭП не соответствует абоненту, ИНН запроса:{request_inn}, ИНН из подписи:{sign_inn}. ОГРН запроса:{request_ogrn}, ОГРН из подписи:{sign_ogrn}", result.RequestINN, result.SignINN, result.RequestOGRN, result.SignOGRN);
-
                         var processingError = AnswerErrorCode.Code6_DetailsDoNotMatch($"УЭП не соответствует абоненту, ИНН запроса:{result.RequestINN}, ИНН из подписи:{result.SignINN}. ОГРН запроса:{result.RequestOGRN}, ОГРН из подписи:{result.SignOGRN}");
 
-                       result = new CryptoServiceResult()
+                        _logger.LogError("УЭП не соответствует абоненту: ИНН запроса={request_inn}, ИНН из подписи={sign_inn}, ОГРН запроса={request_ogrn}, ОГРН из подписи={sign_ogrn}. code={QbchErrorCode}: {QbchErrorMessage}",
+                            result.RequestINN, result.SignINN, result.RequestOGRN, result.SignOGRN, processingError.Code, processingError.Message);
+
+                        result = new CryptoServiceResult()
                        {
                            ErrorCode = 6,
                            Error = "Реквизиты абонента не совпадают",
@@ -323,7 +339,8 @@ namespace Crypto_lib.Service
                     {
                         var processingError = AnswerErrorCode.Code4_SignatureIsNotCorrect();
 
-                        _logger.LogError(ex, "УЭП некорректна: {Error}", ex.Message);
+                        _logger.LogError(ex, "Не пройдена проверка УЭП: подпись не прошла криптографическую проверку, отпечаток подписанта={SignThumbprint}. code={QbchErrorCode}: {QbchErrorMessage}",
+                            current.Certificate?.Thumbprint, processingError.Code, processingError.Message);
 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
@@ -391,9 +408,10 @@ namespace Crypto_lib.Service
                     {
                         if (current.Certificate.NotAfter <= DateTime.Now)
                         {
-                            _logger.LogError("Истек срок сертификата УЭП");
-
                             var error = AnswerErrorCode.Code5_TheCertificateIsExpired();
+
+                            _logger.LogError("Истек срок сертификата УЭП подписанта: NotAfter={NotAfter}, отпечаток={Thumbprint}. code={QbchErrorCode}: {QbchErrorMessage}",
+                                current.Certificate.NotAfter, current.Certificate.Thumbprint, error.Code, error.Message);
 
                             result = new CryptoServiceResult
                             {
@@ -419,7 +437,8 @@ namespace Crypto_lib.Service
                     {
                         var processingError = AnswerErrorCode.Code4_SignatureIsNotCorrect();
 
-                        _logger.LogError(ex, "УЭП некорректна: {Error}", ex.Message);
+                        _logger.LogError(ex, "Не пройдена проверка УЭП: подпись не прошла криптографическую проверку, отпечаток подписанта={SignThumbprint}. code={QbchErrorCode}: {QbchErrorMessage}",
+                          current.Certificate?.Thumbprint, processingError.Code, processingError.Message);
 
                         result.Error = processingError.Message;
                         result.ErrorCode = processingError.Code;
@@ -456,7 +475,8 @@ namespace Crypto_lib.Service
             if (requestCert is null)
             {
                 var error = AnswerErrorCode.Code99_OtherError("Отсутствует сертификат запроса");
-                _logger.LogError(error.Message);
+                _logger.LogError("Не пройдена проверка сертификата: клиентский сертификат не передан в запросе. code={QbchErrorCode}: {QbchErrorMessage}",
+                    error.Code, error.Message);
 
                 result = new CryptoServiceResult
                 {
@@ -471,7 +491,9 @@ namespace Crypto_lib.Service
             if (requestCert.NotAfter <= DateTime.Today)
             {
                 var error = AnswerErrorCode.Code5_TheCertificateIsExpired();
-                _logger.LogError(error.Message);
+
+                _logger.LogError("Не пройдена проверка сертификата: срок действия истек {NotAfter}, отпечаток={Thumbprint}. code={QbchErrorCode}: {QbchErrorMessage}",
+                    requestCert.NotAfter, requestCert.Thumbprint, error.Code, error.Message);
 
                 result = new CryptoServiceResult()
                 {

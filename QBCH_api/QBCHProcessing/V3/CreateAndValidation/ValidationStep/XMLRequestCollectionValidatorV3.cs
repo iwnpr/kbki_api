@@ -38,8 +38,8 @@ public static class XMLRequestCollectionValidatorV3
         {
             var error = AnswerErrorCode.Code26_WrongBlockCount();
 
-            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: одиночный режим, блоков={RequestCount}, ожидался 1. transactionId: {TransactionId} code={QbchErrorCode}: {QbchErrorMessage}",
-                transaction.Id, requestCount, error.Code, error.Message);
+            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: одиночный режим, блоков={RequestCount}, ожидался 1. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                requestCount, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
@@ -51,7 +51,7 @@ public static class XMLRequestCollectionValidatorV3
         {
             var error = AnswerErrorCode.Code26_WrongBlockCount();
 
-            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: пакетный режим без блоков Запрос. transactionId: {TransactionId}  code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: пакетный режим без блоков Запрос. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -111,8 +111,8 @@ public static class XMLRequestCollectionValidatorV3
 
         var error = AnswerErrorCode.Code99_OtherError(message);
 
-        logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3 для запроса №{OrderNumber}. transactionId: {TransactionId}  code={QbchErrorCode}: {QbchErrorMessage}",
-            transaction.Id, orderNumber, error.Code, error.Message);
+        logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3 для запроса №{OrderNumber}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            orderNumber, transaction.Id, error.Code, error.Message);
 
         transaction.SetPacakgeValidationError(orderNumber, error);
     }
