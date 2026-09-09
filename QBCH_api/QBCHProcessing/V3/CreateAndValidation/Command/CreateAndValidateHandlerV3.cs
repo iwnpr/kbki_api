@@ -33,7 +33,7 @@ public sealed class CreateAndValidateHandler(
 
     public async Task<QBCHProcessingTransactionV3> Handle(CreateToValidateCommandV3 request, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Начало создания и валидации транзакции v3. Method={Method}, Path={Path}", request.Request.Method, request.Request.Path);
+        _logger.LogDebug("Начало создания и валидации транзакции. Method={Method}, Path={Path}", request.Request.Method, request.Request.Path);
         request.Request.EnableBuffering();
         if (request.Request.Body.CanSeek)
         {

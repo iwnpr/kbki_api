@@ -104,17 +104,17 @@ public class QBCHProcessingCompleteHandlerV3(
             var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaKey });
             if (!isProduce)
             {
-                _logger.LogCritical("Kafka-сообщение для ключа QBCH:{serviceName}:{Transactionid} не отправлено. transactionId={TransactionId}. Результат будет выгружен в backup-файл",
+                _logger.LogCritical("Kafka-сообщение для ключа QBCH:{serviceName}:{TransactionId} не отправлено. transactionId={TransactionId}. Результат будет выгружен в backup-файл",
                                     transaction.ServiceName, transaction.Id, transaction.Id);
                 await SaveBackupData(transaction);
             }
             else
-                _logger.LogDebug("Добавлено Kafka-сообщение для ключа QBCH:{serviceName}:{Transactionid}",
+                _logger.LogDebug("Добавлено Kafka-сообщение для ключа QBCH:{serviceName}:{TransactionId}",
                     transaction.ServiceName, transaction.Id);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Критическая ошибка при отправке результата обработки в Kafka: ключ=QBCH:{serviceName}:{Transactionid}. transactionId={TransactionId}. Результат будет выгружен в backup-файл",
+            _logger.LogCritical(ex, "Критическая ошибка при отправке результата обработки в Kafka: ключ=QBCH:{serviceName}:{TransactionId}. transactionId={TransactionId}. Результат будет выгружен в backup-файл",
                 transaction.ServiceName, transaction.Id, transaction.Id);
             await SaveBackupData(transaction);
         }

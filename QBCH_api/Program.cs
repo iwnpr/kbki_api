@@ -15,6 +15,7 @@ using Qbch_db_lib.Services.Implementations.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
+using QBCH_lib.Diagnostics;
 using QBCH_lib.Services.Implementations.V3;
 using QBCH_lib.Services.Interfaces.V3;
 using QBCHService_lib.Services.Implementations.V3;
@@ -78,6 +79,8 @@ ThreadPool.SetMinThreads(200, 200);
 builder.Services.AddTransient<IKeyValueStorageService, KeyValueStorageService>();
 builder.Services.AddSingleton<IBKIRequisitsHandler, BKIRequsits>();
 builder.Services.AddSingleton<IKafkaService, KafkaService>();
+// Контекст замеров обращений к БД в рамках запроса (dbExecutionTime в итоговом логе).
+builder.Services.AddScoped<DbTimingContext>();
 
 
 // V_3.0
@@ -165,6 +168,7 @@ builder.Services.AddMediatR(opt =>
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddSwaggerGen(options =>
 {

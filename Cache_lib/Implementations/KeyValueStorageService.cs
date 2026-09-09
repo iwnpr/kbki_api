@@ -105,7 +105,7 @@ namespace Cache_lib.Implementations
                         entry.Key == "response_signed_data" ? entry.Value : Encoding.UTF8.GetString(entry.Value)) });
                 }
 
-                _logger.LogTrace("Redis: запись в кэш по ключу {pGuid}", pKey);
+                _logger.LogDebug("Redis: запись в кэш по ключу {pGuid}", pKey);
                 await transaction.ExecuteAsync();
             }
             catch (Exception ex)

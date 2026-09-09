@@ -48,7 +48,7 @@ public class QBCHProcessingHandlerV3(
     public async Task<QBCHProcessingTransactionV3> Handle(QBCHProcessedStartV3 request, CancellationToken cancellationToken)
     {
         var transaction = request.Transaction;
-        _logger.LogDebug("QBCHProcessingHandlerV3.Handle начало: TransactionId={TransactionId}, ImmediateDeadlineMs={ImmediateDeadlineMs}",
+        _logger.LogDebug("Начало формирования ответа: TransactionId={TransactionId}, ImmediateDeadlineMs={ImmediateDeadlineMs}",
             transaction.Id, request.ImmediateResponseDeadlineMs);
 
         var clientRequest = transaction.GetRequest<ЗапросСведений>();
@@ -58,7 +58,7 @@ public class QBCHProcessingHandlerV3(
         var requestType = clientRequest.ТипЗапроса;
         var requestMode = clientRequest.РежимЗапроса;
 
-        _logger.LogDebug("QBCHProcessingHandlerV3: параметры запроса RequestId={requestId}, RequestDate={requestDate}, RequestType={requestType}, RequestMode={requestMode}",
+        _logger.LogDebug("Параметры запроса RequestId={requestId}, RequestDate={requestDate}, RequestType={requestType}, RequestMode={requestMode}",
             requestId, requestDate, requestType, requestMode);
 
         byte[]? responseXml = null;
@@ -72,21 +72,21 @@ public class QBCHProcessingHandlerV3(
             {
                 try
                 {
-                    _logger.LogDebug("QBCHProcessingHandlerV3: добавление задачи RequestFromDB, TransactionId={TransactionId}", transaction.Id);
+                    _logger.LogDebug("Добавление задачи RequestFromDB, TransactionId={TransactionId}", transaction.Id);
                     _tasksList.Add(_qbchService.RequestFromDB(transaction));
 
                     // Item2 в API 3.0 — запрос "во все КБКИ".
                     if (clientRequest.ТипЗапроса == СправочникСпособыЗапроса.Item2)
                     {
-                        _logger.LogDebug("QBCHProcessingHandlerV3: режим \"Во все БКИ\" — добавление задач для {bureauCount} КБКИ", _qbchList.Count);
+                        _logger.LogDebug("Режим \"Во все БКИ\" — добавление задач для {bureauCount} КБКИ", _qbchList.Count);
                         _qbchList.ForEach(qbch =>
                         {
-                            _logger.LogDebug("QBCHProcessingHandlerV3: добавление задачи RequestFromExternalBureau, bureau={bureau}", qbch.Name);
+                            _logger.LogDebug("Добавление задачи RequestFromExternalBureau, bureau={bureau}", qbch.Name);
                             _tasksList.Add(_qbchService.RequestFromExternalBureau(transaction, _httpClientFactory.CreateClient($"{qbch.Name}v3"), qbch));
                         });
                     }
 
-                    _logger.LogDebug("QBCHProcessingHandlerV3: ожидание выполнения {taskCount} задач", _tasksList.Count);
+                    _logger.LogDebug("Ожидание выполнения {taskCount} задач", _tasksList.Count);
                     processingStage = ProcessingStageAwaitingTasks;
 
                     var results = await Task.WhenAll(_tasksList);
@@ -108,12 +108,12 @@ public class QBCHProcessingHandlerV3(
 
             if (process && responseXml is not null)
             {
-                _logger.LogDebug("QBCHProcessingHandlerV3: немедленный ответ готов, TransactionId={TransactionId}", transaction.Id);
+                _logger.LogDebug("Немедленный ответ готов, TransactionId={TransactionId}", transaction.Id);
                 transaction.Complete(responseXml, _cryptoService.SignMsg(responseXml));
                 return transaction;
             }
 
-            logger.LogDebug("QBCHProcessingHandlerV3: процесс завершен до дедлайна, но ответ не готов (process={process}, responseXml={hasXml}) — переход к отложенному ответу",
+            logger.LogDebug("Процесс завершен до дедлайна, но ответ не готов (process={process}, responseXml={hasXml}) — переход к отложенному ответу",
                 process, responseXml is not null);
         }
         catch (ArgumentOutOfRangeException ex)
@@ -131,13 +131,13 @@ public class QBCHProcessingHandlerV3(
                     requestId, requestType, requestMode, responseXml is not null, transaction.Id, error.Code, error.Message);
         }
 
-        _logger.LogDebug("QBCHProcessingHandlerV3: формирование тикета Accepted, TransactionId={TransactionId}", transaction.Id);
+        _logger.LogDebug("Формирование ответа завершено, TransactionId={TransactionId}", transaction.Id);
         return await CompleteAcceptedTransactionAsync(transaction, requestId, requestDate);
     }
 
     private async Task StoreProcessingErrorAsync(QBCHProcessingTransactionV3 transaction, AnswerErrorCode error)
     {
-        _logger.LogDebug("QBCHProcessingHandlerV3.StoreProcessingErrorAsync начало: сохранение ошибки обработки в Redis. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+        _logger.LogDebug("Сохранение ошибки обработки в Redis. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
             transaction.Id, error.Code, error.Message);
         var responseId = transaction.Id.ToString();
 
@@ -180,11 +180,6 @@ public class QBCHProcessingHandlerV3(
             var kbkiItems = new List<ОтветНаЗапросСведенийСведенияКБКИ>();
             foreach (var taskResult in results)
             {
-                logger.LogDebug("{guid} {bureau}: Количество ответов {count}",
-                    transaction.Id,
-                    taskResult.BureauPSRN,
-                    taskResult.Answer3?.Сведения?.Length ?? 0);
-
                 var TaskResultXml = _xmlService.SerializeAsStringV3(taskResult.Answer3);
                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_result_xml", TaskResultXml);
                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
@@ -215,7 +210,7 @@ public class QBCHProcessingHandlerV3(
         }
 
         var responseXml = _xmlService.SerializeAsByteV3(response);
-        _logger.LogDebug("QBCHProcessingHandlerV3.BuildAndStoreAggregateResponseAsync: агрегированный ответ сериализован, size={size} байт", responseXml.Length);
+        _logger.LogDebug("Агрегированный ответ сериализован, size={size} байт", responseXml.Length);
 
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
@@ -225,9 +220,6 @@ public class QBCHProcessingHandlerV3(
 
     private async Task<QBCHProcessingTransactionV3> CompleteAcceptedTransactionAsync(QBCHProcessingTransactionV3 transaction, string requestId, DateTime requestDate)
     {
-        logger.LogDebug("QBCHProcessingHandlerV3.CompleteAcceptedTransactionAsync начало: TransactionId={TransactionId}, requestId={requestId}", transaction.Id, requestId);
-
-
         var acceptedTicket = _ticketService.CreateResultV3Accepted(
             requestId: requestId,
             responseId: transaction.Id.ToString(),
@@ -238,7 +230,6 @@ public class QBCHProcessingHandlerV3(
         transaction.Accepted();
         transaction.Complete(ticketBytes, _cryptoService.SignMsg(ticketBytes));
 
-        _logger.LogDebug("QBCHProcessingHandlerV3.CompleteAcceptedTransactionAsync завершено: TransactionId={TransactionId}, Status={Status}", transaction.Id, transaction.Status);
         return transaction;
     }
 }

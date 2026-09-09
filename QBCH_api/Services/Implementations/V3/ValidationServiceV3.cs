@@ -29,20 +29,20 @@ public class ValidationServiceV3(
     private readonly ITicketServiceV3 _ticketService = ticketService;
     private readonly ILogger<ValidationServiceV3> _logger = logger;
 
-    public bool ValidateXmlV3(MemoryStream memoryStream, string nameOfController, [NotNullWhen(false)] out BaseResult? result)
+    public bool ValidateXmlV3(MemoryStream memoryStream, string nameOfEndpoint, [NotNullWhen(false)] out BaseResult? result)
     {
-        _logger.LogDebug("ValidationServiceV3.ValidateXmlV3: начало проверки XML, controller={nameOfController}, streamLength={streamLength}", nameOfController, memoryStream.Length);
-        var isValid = _xmlService.ValidateXmlV3(memoryStream, nameOfController, out var xmlResult);
+        _logger.LogDebug("Начало валидации XML. endpoint={nameOfEndpoint}, streamLength={streamLength}, method={methodName}", nameOfEndpoint, memoryStream.Length, nameof(ValidateXmlV3));
+        var isValid = _xmlService.ValidateXmlV3(memoryStream, nameOfEndpoint, out var xmlResult);
 
         if (!isValid)
         {
-            _logger.LogDebug("ValidationServiceV3.ValidateXmlV3: невалидный XML, controller={nameOfController}, errorCode={errorCode}", nameOfController, xmlResult.ErrorCode);
+            _logger.LogDebug("Валидация XML не пройдена. endpoint={nameOfEndpoint}, errorCode={errorCode}, method={methodName}", nameOfEndpoint, xmlResult.ErrorCode, nameof(ValidateXmlV3));
             var error = new AnswerErrorCode(xmlResult.ErrorCode, xmlResult.Error);
             result = CreateErrorResult(error);
             return false;
         }
 
-        _logger.LogDebug("ValidationServiceV3.ValidateXmlV3: XML валиден, controller={nameOfController}", nameOfController);
+        _logger.LogDebug("Валидация XML успешно завершена. XML валиден. endpoint={nameOfEndpoint}, method={methodName}", nameOfEndpoint, nameof(ValidateXmlV3));
 
         result = null;
         return true;
@@ -50,7 +50,7 @@ public class ValidationServiceV3(
 
     public bool ValidateEncodingV3(byte[] message, [NotNullWhen(false)] out BaseResult? result)
     {
-        _logger.LogDebug("ValidationServiceV3.ValidateEncodingV3: messageLength={messageLength}", message.Length);
+        _logger.LogDebug("Начало проверки кодировки: messageLength={messageLength}, method={methodName}", message.Length, nameof(ValidateEncodingV3));
         try
         {
             var encoding = new UTF8Encoding(false, true);
@@ -60,13 +60,12 @@ public class ValidationServiceV3(
         {
             var error = AnswerErrorCode.Code8_UnsupportedEncoding();
             
-            _logger.LogError(ex, "Не пройдена проверка кодировки: тело запроса длиной {messageLength} байт не является корректным UTF-8, позиция ошибки={FallbackIndex}. code={QbchErrorCode}: {QbchErrorMessage}",
-                message.Length, ex.Index, error.Code, error.Message);
+            _logger.LogError(ex, "Не пройдена проверка кодировки: тело запроса не является корректным UTF-8, code={QbchErrorCode}, message: {QbchErrorMessage}, method={methodName}", error.Code, error.Message, nameof(ValidateEncodingV3));
             result = CreateErrorResult(error);
 
             return false;
         }
-        _logger.LogDebug("ValidationServiceV3.ValidateEncodingV3: кодировка UTF-8 корректна");
+        _logger.LogDebug("Проверка кодировки успешно завершена. Кодировка UTF-8 корректна. method={methodName}", nameof(ValidateEncodingV3));
 
         result = null;
         return true;
@@ -74,21 +73,15 @@ public class ValidationServiceV3(
 
     public bool ValidateRequestDateV3(DateTime? requestDate, [NotNullWhen(false)] out BaseResult? result)
     {
-        _logger.LogDebug("ValidationServiceV3.ValidateRequestDateV3: начало проверки даты запроса, requestDate={requestDate}", requestDate);
         var currentMoscowDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, MoscowTimeZone).Date;
 
         if (requestDate?.Date != currentMoscowDate)
         {
             var error = AnswerErrorCode.Code23_InvalidRerquestDate();
-
-            _logger.LogError("Не пройдена проверка даты запроса: ДатаЗапроса={requestDate}, текущая дата по Москве={currentMoscowDate}. code={QbchErrorCode}: {QbchErrorMessage}",
-                requestDate, currentMoscowDate, error.Code, error.Message);
-
             result = CreateErrorResult(error);
             return false;
         }
 
-        _logger.LogDebug("ValidationServiceV3.ValidateRequestDateV3: дата запроса корректна");
         result = null;
         return true;
     }

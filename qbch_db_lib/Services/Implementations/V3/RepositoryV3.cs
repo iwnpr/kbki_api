@@ -1,11 +1,14 @@
 ﻿using Cache_lib.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
 using Qbch_db_lib.Services.Interfaces.V3;
 using QBCH_lib.Configuration;
+using QBCH_lib.Diagnostics;
 using System.Data;
+using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 
@@ -15,11 +18,12 @@ namespace Qbch_db_lib.Services.Implementations.V3;
 /// Репозиторий версии 3.0 для доступа к данным КБКИ
 /// Работает только с V3-конфигурацией
 /// </summary>
-public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, IKeyValueStorageService cacheService, ApiV3ContractOptions contractOptions, ApiV3ContractRules contractRules) : IRepositoryV3
+public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, IKeyValueStorageService cacheService, ApiV3ContractOptions contractOptions, ApiV3ContractRules contractRules, DbTimingContext dbTimingContext) : IRepositoryV3
 {
     private readonly IConfiguration _config = config;
     private readonly ILogger<RepositoryV3> _logger = logger;
     private readonly IKeyValueStorageService _cacheService = cacheService;
+    private readonly DbTimingContext _dbTimingContext = dbTimingContext;
 
     private readonly string[] _qbchDbConnectionPool = config.GetSection("ConnectionPoolV3:QbchDb").Get<string[]>() ?? [];
     private readonly string[] _searchSubjectsConnectionPool = config.GetSection("ConnectionPoolV3:QbchSearchSubjects").Get<string[]>() ?? [];
@@ -57,29 +61,27 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         if (string.IsNullOrWhiteSpace(request) || string.IsNullOrWhiteSpace(procName) || string.IsNullOrWhiteSpace(_schemaQbchSearchSubjectsV3))
             return [];
 
-        _logger.LogDebug("XML для поиска субъектов ({Proc}): {Xml}", procName, request);
-
         var sql = $"SELECT {_schemaQbchSearchSubjectsV3}.{procName}(@request)";
 
-        //NOTE: Убрал передачу ConnectionPool, так как его можно получить внутри метода. Также убрал передачу параметров процедуры. Это хорошо для универсального метода, а здесь это ухудшает читабельность кода.
         var subjects = await ExecuteSubjectIdsAsync(sql, procName, timeLeftMs ?? _searchSubjectsTimeout, request);
 
-        _logger.LogDebug("Кол-во субъектов - {SubjectCount}. Запрос: ({Proc}): {Xml}", subjects.Count, procName, request);
+        _logger.LogDebug("Кол-во найденных субъектов - {SubjectCount}. Запрос: ({Proc}): {Xml}", subjects.Count, procName, request);
 
         return subjects;
     }
 
-    //NOTE: Второй параметр, как я понял, это все же имя процедуры, а не столбца
     private async Task<List<long>> ExecuteSubjectIdsAsync(string sql, string procName, long timeoutMs, string request)
     {
         var result = new List<long>();
+
+        // Суммарное время неудачных обращений к БД - пойдёт в лог таймаута.
+        var failedDbExecutionTime = 0d;
 
         if (_searchSubjectsConnectionPool.Length == 0)
         {
             return result;
         }
 
-        //NOTE: Смысл логики двух CancellationToken'ов у Артема я не понял. Решил не возвращать.
         using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs)))
 
             while (!cts.Token.IsCancellationRequested)
@@ -87,6 +89,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                 for (var i = 0; i < _searchSubjectsConnectionPool.Length; i++)
                 {
                     using var connection = new NpgsqlConnection(_searchSubjectsConnectionPool[i]);
+                    var dbOperation = _dbTimingContext.StartOperation();
                     try
                     {
                         await connection.OpenAsync(cts.Token);
@@ -96,30 +99,30 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                         _logger.LogDebug("Выполняется процедура поиска субъектов. PoolIndex={PoolIndex}", i);
 
                         using var reader = await cmd.ExecuteReaderAsync(cts.Token);
+
                         while (await reader.ReadAsync(cts.Token))
                         {
-                            //NOTE: Вернул код Артема
                             result = (await reader.IsDBNullAsync(reader.GetOrdinal(procName)) ? null : reader.GetFieldValue<List<long>>(reader.GetOrdinal(procName))) ?? new();   //GetString();
                         }
+
+                        var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
+
+                        _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, dbExecutionTime={dbExecutionTime}ms",
+                            nameof(GetSearchAllSubjectsV3), dbExecutionTime);
+
                         _logger.LogDebug(
                                 "Результат процедуры. ProcedureName={ProcName},  ParsedSubjectIds={@SubjectIds}, Count={Count}",
                                 procName,
                                 result,
                                 result.Count);
-
-                        //NOTE: Зачем здесь Distinct? У Артема его нет.
-                        //var distinctResult = result.Distinct().ToList();
-
-                        //_logger.LogDebug(
-                        //    "Итоговый результат процедуры поиска субъектов. SubjectIds={@SubjectIds}, Count={Count}",
-                        //    distinctResult,
-                        //    distinctResult.Count);
-
                         return result;
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogCritical(ex, "Ошибка процедуры {OperationName}.", nameof(GetSearchAllSubjectsV3));
+                        var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
+                        failedDbExecutionTime += dbExecutionTime;
+
+                        _logger.LogCritical(ex, "Ошибка процедуры {OperationName}. dbExecutionTime={dbExecutionTime}ms", nameof(GetSearchAllSubjectsV3), dbExecutionTime);
                         await Task.Delay(_dbConnectDelayMs, cts.Token);
                     }
                     finally
@@ -135,9 +138,10 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         //var timeoutResult = result.Distinct().ToList();
 
         _logger.LogWarning(
-            "Таймаут выполнения процедуры поиска субъектов. Частичный результат: SubjectIds={@SubjectIds}, Count={Count}",
+            "Таймаут выполнения процедуры поиска субъектов. Частичный результат: SubjectIds={@SubjectIds}, Count={Count}, dbExecutionTime={dbExecutionTime}ms",
             result,
-            result.Count);
+            result.Count,
+            failedDbExecutionTime);
 
         return result;
     }
@@ -700,6 +704,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
             for (var i = 0; i < connectionPool.Length; i++)
             {
                 using var connection = new NpgsqlConnection(connectionPool[i]);
+                var dbOperation = _dbTimingContext.StartOperation();
                 try
                 {
                     await connection.OpenAsync(cts.Token);
@@ -707,22 +712,31 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                     addParams(cmd);
                     using var reader = await cmd.ExecuteReaderAsync(cts.Token);
 
-                    while (await reader.ReadAsync(cts.Token))
+                    object? value = null;
+
+                    if (await reader.ReadAsync(cts.Token))
                     {
                         var ordinal = reader.GetOrdinal(resultColumn);
-                        if (await reader.IsDBNullAsync(ordinal, cts.Token))
-                        {
-                            return null;
-                        }
 
-                        return reader.GetValue(ordinal);
+                        if (!await reader.IsDBNullAsync(ordinal, cts.Token))
+                        {
+                            value = reader.GetValue(ordinal);
+                        }
                     }
 
-                    return null;
+                    var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
+
+                    _logger.LogInformation("Запрос в БД выполнен. OperationName={OperationName}, dbExecutionTime={dbExecutionTime}ms",
+                        operationName ?? resultColumn, dbExecutionTime);
+
+                    return value;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical(ex, "Ошибка процедуры {OperationName}.", operationName ?? resultColumn);
+                    var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
+
+                    _logger.LogCritical(ex, "Ошибка процедуры {OperationName}. dbExecutionTime={dbExecutionTime}ms",
+                          operationName ?? resultColumn, dbExecutionTime);
                     await Task.Delay(_dbConnectDelayMs);
                 }
                 finally
@@ -757,6 +771,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
             for (var i = 0; i < connectionPool.Length; i++)
             {
                 using var connection = new NpgsqlConnection(connectionPool[i]);
+                var dbOperation = _dbTimingContext.StartOperation();
                 try
                 {
                     await connection.OpenAsync(cts.Token);
@@ -764,16 +779,25 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                     addParams(cmd);
                     using var reader = await cmd.ExecuteReaderAsync(cts.Token);
 
+                    object? value = null;
+
                     if (await reader.ReadAsync(cts.Token) && !await reader.IsDBNullAsync(0, cts.Token))
                     {
-                        return reader.GetValue(0);
+                        value = reader.GetValue(0);
                     }
 
-                    return null;
+                    var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
+
+                    _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, dbExecutionTime={dbExecutionTime}ms",
+                        operationName, dbExecutionTime);
+
+                    return value;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical(ex, "Ошибка запроса {OperationName}.", operationName);
+                    var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
+                    _logger.LogCritical(ex, "Ошибка запроса {OperationName}. dbExecutionTime={dbExecutionTime}ms",
+                       operationName, dbExecutionTime);
                     await Task.Delay(_dbConnectDelayMs);
                 }
                 finally
@@ -808,16 +832,25 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
             for (var i = 0; i < connectionPool.Length; i++)
             {
                 using var connection = new NpgsqlConnection(connectionPool[i]);
+                var dbOperation = _dbTimingContext.StartOperation();
                 try
                 {
                     await connection.OpenAsync(cts.Token);
                     using var cmd = new NpgsqlCommand(sql, connection);
                     addParams(cmd);
-                    return await cmd.ExecuteNonQueryAsync(cts.Token);
+                    var affectedRows = await cmd.ExecuteNonQueryAsync(cts.Token);
+                    var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
+
+                    _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, dbExecutionTime={dbExecutionTime}ms",
+                        operationName, dbExecutionTime);
+
+                    return affectedRows;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical(ex, "Ошибка запроса {OperationName}.", operationName);
+                    var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
+                    _logger.LogCritical(ex, "Ошибка запроса {OperationName}. dbExecutionTime={dbExecutionTime}ms",
+                        operationName, dbExecutionTime);
                     await Task.Delay(_dbConnectDelayMs);
                 }
                 finally

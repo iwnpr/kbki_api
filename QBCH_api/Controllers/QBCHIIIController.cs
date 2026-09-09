@@ -12,11 +12,13 @@ using QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 using QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
 using QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 using QBCH_api.Services.Interfaces.V3;
+using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib;
 using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
+using QBCH_lib.Diagnostics;
 using QBCH_lib.Services.Interfaces.V3;
 using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
@@ -43,7 +45,8 @@ public class QBCHIIIController(IMediator mediator,
         ICertManagementService certManagement,
         IKafkaService kafka,
         ApiV3ContractRules contractRules,
-        IConfiguration config) : ControllerBase
+        IConfiguration config,
+        DbTimingContext dbTimingContext) : ControllerBase
 {
     private readonly IMediator _mediator = mediator;
     private readonly ICryptoService _cryptoService = cryptoService;
@@ -57,6 +60,7 @@ public class QBCHIIIController(IMediator mediator,
     private readonly ApiV3ContractRules _contractRules = contractRules;
     private readonly IConfiguration _config = config;
     private readonly IKafkaService _kafka = kafka;
+    private readonly DbTimingContext _dbTimingContext = dbTimingContext;
 
     private readonly string? _kafkaTopic = config.GetValue<string>("KafkaService:Topic");
     private readonly string? _ourBureauPSRN = config.GetValue<string>("Bureau:PSRN");
@@ -81,7 +85,6 @@ public class QBCHIIIController(IMediator mediator,
         _logger.LogInformation("Начало = {Action} {RequestTime}", nameof(DlRequest_v_3), requestTime);
 
         var transaction = await _mediator.Send(new CreateToValidateCommandV3(apiVersion, Request));
-        _logger.LogDebug("{guid} Запрос: {dt}", transaction.Id, requestTime);
 
         if (transaction.ProcessingErrors.Count != 0)
         {
@@ -124,7 +127,7 @@ public class QBCHIIIController(IMediator mediator,
         }
 
         transaction.TimeElapsedForValidation.Stop();
-        _logger.LogDebug("{guid} Конец валидации: {elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
+        _logger.LogDebug("Конец валидации: transactionId={TransactionId} validationTime={elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
 
         // Основной processing и формирование HTTP-ответа
         try
@@ -193,7 +196,7 @@ public class QBCHIIIController(IMediator mediator,
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
 
-        _logger.LogInformation("Начало действия {Action} service={QbchService} transactionId={id} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, id, guid, requestTime);
+        _logger.LogInformation("Начало действия {Action} service={QbchService} transactionId={TransactionId} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, id, guid, requestTime);
 
         try
         {
@@ -1209,15 +1212,16 @@ public class QBCHIIIController(IMediator mediator,
         var bureau = HttpContext.Connection.ClientCertificate?.GetNameInfo(X509NameType.SimpleName, false);
         var elapsedMs = elapsed.TotalMilliseconds;
         var isOnTime = elapsedMs <= _contractRules.ImmediateResponseDeadlineMs;
+        var dbExecutionTime = _dbTimingContext.ElapsedMilliseconds;
 
         if (guid is null)
         {
-            _logger.LogInformation("Выполнен запрос {Action}, onTime={isOnTime}, transactionId={transactionId}, bureau={Bureau}, status={StatusCode}, elapsed={ElapsedMs}ms",
-                action, isOnTime, transactionId, bureau, statusCode, elapsedMs);
+            _logger.LogInformation("Выполнен запрос {Action}, onTime={isOnTime}, transactionId={transactionId}, bureau={Bureau}, status={StatusCode}, elapsed={ElapsedMs}ms, dbExecutionTime={dbExecutionTime}ms",
+                action, isOnTime, transactionId, bureau, statusCode, elapsedMs, dbExecutionTime);
             return;
         }
 
-        _logger.LogInformation("Выполнен запрос {Action}, onTime={isOnTime}, transactionId={transactionId}, bureau={Bureau}, status={StatusCode}, guid={Guid}, elapsed={ElapsedMs}ms",
-            action, isOnTime, transactionId, bureau, statusCode, guid, elapsedMs);
+        _logger.LogInformation("Выполнен запрос {Action}, onTime={isOnTime}, transactionId={transactionId}, bureau={Bureau}, status={StatusCode}, guid={Guid}, elapsed={ElapsedMs}ms, dbExecutionTime={dbExecutionTime}ms",
+            action, isOnTime, transactionId, bureau, statusCode, guid, elapsedMs, dbExecutionTime);
     }
 }

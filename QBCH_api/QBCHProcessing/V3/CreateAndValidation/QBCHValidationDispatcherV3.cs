@@ -260,16 +260,19 @@ public static class QBCHValidationDispatcherV3
 
     private static void ValidateRequestDateV3(QBCHProcessingTransactionV3 transaction, IValidationServiceV3 validationService, ЗапросСведенийV3? requestV3, ILogger logger)
     {
-        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && requestV3 is not null &&
-            !validationService.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult))
+        logger.LogDebug("Начало проверки даты запроса. requestDate={requestDate}, method={methodName}", requestV3.ДатаЗапроса, nameof(ValidateRequestDateV3));
+
+        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && requestV3 is not null && !validationService.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult))
         {
             var error = new AnswerErrorCode(dateValidationResult!.ErrorCode, dateValidationResult.Error ?? "Дата запроса указана некорректно");
 
-            logger.LogError("Не пройдена проверка даты запроса dlrequest v3: ДатаЗапроса={RequestDate}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка даты запроса: ДатаЗапроса={RequestDate}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestV3.ДатаЗапроса, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
+
+        logger.LogDebug("Дата запроса корректна. requestDate={requestDate}, method={methodName}", requestV3.ДатаЗапроса, nameof(ValidateRequestDateV3));
     }
 
     private static void AdditionalValidationV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)

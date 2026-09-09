@@ -55,14 +55,10 @@ public class QBCHServiceV3(
     /// <returns>Результат обработки с ответом <c>ОтветНаЗапросСведений</c>.</returns>
     public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransactionV3 transaction)
     {
+        _logger.LogDebug("Начало получения данных из внутренней БД. Запрос: {ransactionId}", transaction.Id);
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
         var package = transaction.GetRequest<ЗапросСведений>();
-
-        //NOTE: Убрал лишнюю проверку, такого быть не должно
-        //if (package is null)
-        //    return new QBCHTaskResult(_ourBureauPsrn);
-
         var answer = new ОтветНаЗапросСведений
         {
             ИдентификаторЗапроса = package.ИдентификаторЗапроса,
@@ -75,7 +71,6 @@ public class QBCHServiceV3(
 
         var requests = package.Запрос ?? [];
         var timeLeft = _qbchResponseTimeoutMs * requests.Length - transaction.TimeElapsedForValidation.ElapsedMilliseconds;
-        _logger.LogDebug("{guid} {bureau}: Таймаут для запросов {timeLeft} ms", transaction.Id, _ourBureauPsrn, timeLeft);
 
         var responseRows = new List<ОтветНаЗапросСведенийСведения>(requests.Length);
 
@@ -147,6 +142,7 @@ public class QBCHServiceV3(
             var getAntifraudTask = includeAntifraud && isInnVerified
               ? _qbchDb.GetAntifraudV3(requestItem.Субъект!.ДатаРождения, requestItem.Субъект.ИНН!.Value, timeLeft)
               : null;
+
             if (getAntifraudTask is not null)
                 pendingTasks.Add(getAntifraudTask);
 
@@ -165,6 +161,8 @@ public class QBCHServiceV3(
             FillObligationsSection(kbki, includeAmp, getAmpTask?.Result);
             FillSelfProhibitionSection(kbki, getSelfProhibitionTask?.Result, isInnVerified);
             FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result, isInnVerified);
+
+            _logger.LogDebug("Данные из БД упешно получены. Запрос: {transactionId}", transaction.Id);
 
             response.КБКИ = [kbki];
             responseRows.Add(response);
@@ -239,8 +237,8 @@ public class QBCHServiceV3(
                     redisMsg = DlRequestRedisMessage.Create(DateTime.Now, signedDlrequestBytes, dlrequestBytes);
                     try
                     {
-                        //NOTE: Куда-то исчезло все логирование, что странно так как именно здесь оно лишним никогда не будет.
                         _logger.LogDebug("{guid} {Bureau}: отправка dlrequest {dt}", guid, bureau.ogrn!, DateTime.Now);
+
                         using var responseMessage = await client.PostAsync("dlrequest", dlrequestContent, ticketCts.Token);
                         lastStatusCode = responseMessage.StatusCode;
                         lastResponseText = await responseMessage.Content.ReadAsStringAsync(ticketCts.Token);
