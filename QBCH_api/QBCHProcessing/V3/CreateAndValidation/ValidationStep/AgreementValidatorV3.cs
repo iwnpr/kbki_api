@@ -87,12 +87,32 @@ public static class ConsentValidatorV3
             return;
         }
 
+        ValidateConsentPeriod(transaction, requestV3.РежимЗапроса, agreement, orderNumber, logger);
+
+        if (HasError(transaction, requestV3.РежимЗапроса, orderNumber))
+        {
+            return;
+        }
+
+        ValidateConsentTargets(transaction, requestV3.РежимЗапроса, requestItem, agreement, orderNumber, logger);
+    }
+
+    /// <summary>
+    /// Проверка срока действия согласия.
+    /// </summary>
+    private static void ValidateConsentPeriod(
+        QBCHProcessingTransactionV3 transaction,
+        СправочникРежимыЗапросаV3 requestMode,
+        ТипСогласиеV3 agreement,
+        int orderNumber,
+        ILogger logger)
+    {
         switch (agreement.СрокДействия)
         {
             case СправочникСрокиСогласияV3.Item1:
                 if (DateTime.Today >= agreement.ДатаВыдачи.AddMonths(6).AddDays(1))
                 {
-                    AddError(transaction, requestV3.РежимЗапроса, orderNumber,
+                    AddError(transaction, requestMode, orderNumber,
                         AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 6 месяцев) меньше текущей даты"), logger);
                 }
 
@@ -101,7 +121,7 @@ public static class ConsentValidatorV3
             case СправочникСрокиСогласияV3.Item2:
                 if (DateTime.Today >= agreement.ДатаВыдачи.AddMonths(12).AddDays(1))
                 {
-                    AddError(transaction, requestV3.РежимЗапроса, orderNumber,
+                    AddError(transaction, requestMode, orderNumber,
                        AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 12 месяцев) меньше текущей даты"), logger);
                 }
 
@@ -110,7 +130,7 @@ public static class ConsentValidatorV3
             case СправочникСрокиСогласияV3.Item3:
                 if (agreement.Договор is null)
                 {
-                    AddError(transaction, requestV3.РежимЗапроса, orderNumber,
+                    AddError(transaction, requestMode, orderNumber,
                         AnswerErrorCode.Code13_СonsentDenied("Элемент \"Договор\" обязателен, когда значение атрибута \"СрокДействия\" равно \"3\""), logger);
                     return;
                 }
@@ -120,39 +140,68 @@ public static class ConsentValidatorV3
                 // - допускается договор, действующий на дату согласия (может быть заключен раньше даты согласия);
                 // - допускаются случаи после расторжения при наличии вступившего в силу решения суда.
                 // Поэтому проверка "дата договора >= дата согласия" здесь не применяется.
-                if (agreement.Договор is not null && agreement.Договор.Дата > DateTime.Today)
+                if (agreement.Договор.Дата > DateTime.Today)
                 {
-                    AddError(transaction, requestV3.РежимЗапроса, orderNumber,
+                    AddError(transaction, requestMode, orderNumber,
                         AnswerErrorCode.Code13_СonsentDenied($"Дата договора {agreement.Договор.Дата:dd.MM.yyyy} больше текущей даты"), logger);
                 }
 
                 return;
         }
+    }
+
+    /// <summary>
+    /// Проверка целей запроса на соответствие целям, на которые субъект выдал согласие.
+    /// Цель, указанная в блоке "Запрос" и отсутствующая в блоке "Согласие" (в том числе когда
+    /// в согласии не указано ни одной цели), означает, что субъект не давал согласия на эту цель, — код ошибки 13.
+    /// </summary>
+    private static void ValidateConsentTargets(
+        QBCHProcessingTransactionV3 transaction,
+        СправочникРежимыЗапросаV3 requestMode,
+        ЗапросСведенийЗапросV3 requestItem,
+        ТипСогласиеV3 agreement,
+        int orderNumber,
+        ILogger logger)
+    {
+        var requestTargets = requestItem.Цель ?? [];
+        var consentTargets = agreement.Цель ?? [];
 
         // Если у цели 99 нет описания
-        if (requestItem.Цель?.Any(x => x.КодЦели == ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)) ?? false)
+        if (requestTargets.Any(x => x.КодЦели == ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)))
         {
-            AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData($"Код цели запроса со значением \"99\" не содержит описания."), logger);
+            AddError(transaction, requestMode, orderNumber,
+                AnswerErrorCode.Code15_InvalidRequestData("Код цели запроса со значением \"99\" не содержит описания."), logger);
             return;
         }
 
         // Если в согласии у цели 99 нет описания
-        if (requestItem?.Согласие?.Цель?.Any(x => x.КодЦели == ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)) ?? false)
+        if (consentTargets.Any(x => x.КодЦели == ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)))
         {
-            AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData($"Код цели согласия со значением \"99\" не содержит описания."), logger);
+            AddError(transaction, requestMode, orderNumber,
+                AnswerErrorCode.Code15_InvalidRequestData("Код цели согласия со значением \"99\" не содержит описания."), logger);
             return;
         }
 
-        //  Проверка кодов цели запроса Одна или несколько целей запроса отсутствует в согласии
-        for (int i = 0; i < requestItem?.Цель?.Count(); i++)
+        // В блоке "Согласие" не указано ни одной цели: согласие не покрывает ни одну цель запроса
+        if (requestTargets.Length > 0 && consentTargets.Length == 0)
         {
-            if (!requestItem?.Согласие?.Цель?.Any(x => x.КодЦели == requestItem?.Цель[i].КодЦели) ?? false)
-            {
-                AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                    AnswerErrorCode.Code13_СonsentDenied($"Одна или несколько целей, указанных в блоке «Запрос» отсутствует."), logger);
-            }
+            AddError(transaction, requestMode, orderNumber,
+                AnswerErrorCode.Code13_СonsentDenied("В блоке «Согласие» не указано ни одной цели"), logger);
+            return;
+        }
+
+        // Проверка кодов цели запроса: одна или несколько целей запроса отсутствуют в согласии
+        var missingTargets = requestTargets
+            .Where(target => consentTargets.All(consentTarget => consentTarget.КодЦели != target.КодЦели))
+            .Select(target => target.ПолучитьКодЦели())
+            .Distinct()
+            .ToArray();
+
+        if (missingTargets.Length > 0)
+        {
+            AddError(transaction, requestMode, orderNumber,
+                AnswerErrorCode.Code13_СonsentDenied(
+                    $"Cогласие не включает в себя всех целей запроса: одна или несколько целей, указанных в блоке «Запрос», отсутствует в блоке «Согласие» (КодЦели: {string.Join(", ", missingTargets)})"), logger);
         }
     }
 

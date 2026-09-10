@@ -38,8 +38,8 @@ public static class XMLRequestCollectionValidatorV3
         {
             var error = AnswerErrorCode.Code26_WrongBlockCount();
 
-            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: одиночный режим, блоков={RequestCount}, ожидался 1. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
-                requestCount, transaction.Id, error.Code, error.Message);
+            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: одиночный режим, блоков={RequestCount}, ожидался 1. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+               requestCount, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
@@ -51,7 +51,7 @@ public static class XMLRequestCollectionValidatorV3
         {
             var error = AnswerErrorCode.Code26_WrongBlockCount();
 
-            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: пакетный режим без блоков Запрос. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: пакетный режим без блоков Запрос. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -62,8 +62,8 @@ public static class XMLRequestCollectionValidatorV3
         {
             var error = AnswerErrorCode.Code26_WrongBlockCount();
 
-            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: пакетный режим, блоков={RequestCount}, допустимо не более 10. transactionId: {TransactionId} code={QbchErrorCode}: {QbchErrorMessage}",
-                transaction.Id, requests.Count, error.Code, error.Message);
+            logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3: пакетный режим, блоков={RequestCount}, допустимо не более 10. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+               requests.Count, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
             return;
@@ -111,7 +111,7 @@ public static class XMLRequestCollectionValidatorV3
 
         var error = AnswerErrorCode.Code99_OtherError(message);
 
-        logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3 для запроса №{OrderNumber}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+        logger.LogError("Не пройдена проверка коллекции блоков Запрос dlrequest v3 для запроса №{OrderNumber}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
             orderNumber, transaction.Id, error.Code, error.Message);
 
         transaction.SetPacakgeValidationError(orderNumber, error);

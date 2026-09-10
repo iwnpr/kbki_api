@@ -85,8 +85,8 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code1_WrongRequestMethod();
 
-            logger.LogError("Не пройдена проверка метода запроса dlrequest v3: получен {RequestMethod}, ожидался POST. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
-                transaction.ClentRequest.RequestMethod, transaction.Id, error.Code, error.Message);
+            logger.LogError("Не пройдена проверка метода запроса dlrequest v3: получен {RequestMethod}, ожидался POST. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+               transaction.ClentRequest.RequestMethod, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
@@ -98,7 +98,7 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code2_EmptyRequestBody();
 
-            logger.LogError("Не пройдена проверка тела запроса dlrequest v3: тело запроса пустое. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка тела запроса dlrequest v3: тело запроса пустое. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -114,7 +114,7 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code99_OtherError("Комбинация КодСведений=\"8\" и ТипЗапроса=\"2\" недопустима");
 
-            logger.LogError("Не пройдена проверка совместимости антифрода и одного окна dlrequest v3: КодСведений={КодСведений}, ТипЗапроса={ТипЗапроса}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка совместимости антифрода и одного окна dlrequest v3: КодСведений={КодСведений}, ТипЗапроса={ТипЗапроса}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestV3.КодСведений, requestV3.ТипЗапроса, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -134,7 +134,7 @@ public static class QBCHValidationDispatcherV3
 
         if (!signValidationResult.IsSuccess)
         {
-            logger.LogError("Не пройдена проверка УЭП dlrequest v3: сертификат={Thumbprint}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка УЭП dlrequest v3: сертификат={Thumbprint}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.ClentRequest.Certificate?.Thumbprint, transaction.Id, signValidationResult.Error!.Code, signValidationResult.Error.Message);
 
             transaction.RiseCriticalError(new AnswerErrorCode(signValidationResult.Error!.Code, signValidationResult.Error.Message));
@@ -152,7 +152,7 @@ public static class QBCHValidationDispatcherV3
 
         if (!validationService.ValidateEncodingV3(transaction.Attachment.RequestBody!, out var encodingValidationResult))
         {
-            logger.LogError("Не пройдена проверка кодировки dlrequest v3: тело запроса не является корректным UTF-8. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка кодировки dlrequest v3: тело запроса не является корректным UTF-8. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка");
 
             transaction.RiseCriticalError(new AnswerErrorCode(encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка"));
@@ -172,7 +172,7 @@ public static class QBCHValidationDispatcherV3
         {
             var noRequestError = AnswerErrorCode.Code99_OtherError("Отсутствуют данные запроса");
 
-            logger.LogError("Не пройдена проверка реквизитов абонента dlrequest v3: отсутствуют данные запроса. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка реквизитов абонента dlrequest v3: отсутствуют данные запроса. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, noRequestError.Code, noRequestError.Message);
 
             transaction.RiseCriticalError(noRequestError);
@@ -188,7 +188,7 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code10_RequestAndAbonentDataNotMach(abonentINN, requestINN, abonentOGRN, requestOGRN);
 
-            logger.LogError("Не пройдена проверка реквизитов абонента dlrequest v3: ИНН сертификата={RequestINN}, ИНН запроса={AbonentINN}, ОГРН сертификата={RequestOGRN}, ОГРН запроса={AbonentOGRN}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка реквизитов абонента dlrequest v3: ИНН сертификата={RequestINN}, ИНН запроса={AbonentINN}, ОГРН сертификата={RequestOGRN}, ОГРН запроса={AbonentOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestINN, abonentINN, requestOGRN, abonentOGRN, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -201,8 +201,7 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code22_AccessDenied();
 
-            logger.LogError(
-                "Не пройдена проверка прав доступа dlrequest v3: сертификат={Thumbprint}, сервис={QbchService}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка прав доступа dlrequest v3: сертификат={Thumbprint}, сервис={QbchService}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.ClentRequest.Certificate?.Thumbprint, transaction.ServiceName, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -226,7 +225,7 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code14_SingleWindowDenied();
 
-            logger.LogError("Не пройдена проверка одного окна dlrequest v3: взаимодействие в режиме «одно окно» не предусмотрено договором с абонентом ОГРН={RequestOGRN}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка одного окна dlrequest v3: взаимодействие в режиме «одно окно» не предусмотрено договором с абонентом ОГРН={RequestOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                             requestOgrn, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -251,7 +250,7 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code11_RequestIdIsNotUnique();
 
-            logger.LogError("Не пройдена проверка уникальности идентификатора запроса dlrequest v3: ИдентификаторЗапроса={RequestId}, ОГРН абонента={RequestOGRN}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка уникальности идентификатора запроса dlrequest v3: ИдентификаторЗапроса={RequestId}, ОГРН абонента={RequestOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestV3.ИдентификаторЗапроса, requestOgrn, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -266,7 +265,7 @@ public static class QBCHValidationDispatcherV3
         {
             var error = new AnswerErrorCode(dateValidationResult!.ErrorCode, dateValidationResult.Error ?? "Дата запроса указана некорректно");
 
-            logger.LogError("Не пройдена проверка даты запроса: ДатаЗапроса={RequestDate}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка даты запроса: ДатаЗапроса={RequestDate}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestV3.ДатаЗапроса, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);

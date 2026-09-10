@@ -168,7 +168,6 @@ builder.Services.AddMediatR(opt =>
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddSwaggerGen(options =>
 {

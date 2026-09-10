@@ -107,7 +107,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
 
                         var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
 
-                        _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, dbExecutionTime={dbExecutionTime}ms",
+                        _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, DbExecutionTime={DbExecutionTime}ms",
                             nameof(GetSearchAllSubjectsV3), dbExecutionTime);
 
                         _logger.LogDebug(
@@ -122,7 +122,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                         var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
                         failedDbExecutionTime += dbExecutionTime;
 
-                        _logger.LogCritical(ex, "Ошибка процедуры {OperationName}. dbExecutionTime={dbExecutionTime}ms", nameof(GetSearchAllSubjectsV3), dbExecutionTime);
+                        _logger.LogCritical(ex, "Ошибка процедуры {OperationName}. DbExecutionTime={DbExecutionTime}ms", nameof(GetSearchAllSubjectsV3), dbExecutionTime);
                         await Task.Delay(_dbConnectDelayMs, cts.Token);
                     }
                     finally
@@ -138,7 +138,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
         //var timeoutResult = result.Distinct().ToList();
 
         _logger.LogWarning(
-            "Таймаут выполнения процедуры поиска субъектов. Частичный результат: SubjectIds={@SubjectIds}, Count={Count}, dbExecutionTime={dbExecutionTime}ms",
+            "Таймаут выполнения процедуры поиска субъектов. Частичный результат: SubjectIds={@SubjectIds}, Count={Count}, DbExecutionTime={DbExecutionTime}ms",
             result,
             result.Count,
             failedDbExecutionTime);
@@ -726,7 +726,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
 
                     var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
 
-                    _logger.LogInformation("Запрос в БД выполнен. OperationName={OperationName}, dbExecutionTime={dbExecutionTime}ms",
+                    _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, DbExecutionTime={DbExecutionTime}ms",
                         operationName ?? resultColumn, dbExecutionTime);
 
                     return value;
@@ -735,7 +735,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                 {
                     var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
 
-                    _logger.LogCritical(ex, "Ошибка процедуры {OperationName}. dbExecutionTime={dbExecutionTime}ms",
+                    _logger.LogCritical(ex, "Ошибка процедуры {OperationName}. DbExecutionTime={DbExecutionTime}ms",
                           operationName ?? resultColumn, dbExecutionTime);
                     await Task.Delay(_dbConnectDelayMs);
                 }
@@ -788,7 +788,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
 
                     var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
 
-                    _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, dbExecutionTime={dbExecutionTime}ms",
+                    _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, DbExecutionTime={DbExecutionTime}ms",
                         operationName, dbExecutionTime);
 
                     return value;
@@ -796,7 +796,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                 catch (Exception ex)
                 {
                     var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
-                    _logger.LogCritical(ex, "Ошибка запроса {OperationName}. dbExecutionTime={dbExecutionTime}ms",
+                    _logger.LogCritical(ex, "Ошибка запроса {OperationName}. DbExecutionTime={DbExecutionTime}ms",
                        operationName, dbExecutionTime);
                     await Task.Delay(_dbConnectDelayMs);
                 }
@@ -841,7 +841,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                     var affectedRows = await cmd.ExecuteNonQueryAsync(cts.Token);
                     var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
 
-                    _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, dbExecutionTime={dbExecutionTime}ms",
+                    _logger.LogDebug("Запрос в БД выполнен. OperationName={OperationName}, DbExecutionTime={DbExecutionTime}ms",
                         operationName, dbExecutionTime);
 
                     return affectedRows;
@@ -849,7 +849,7 @@ public class RepositoryV3(IConfiguration config, ILogger<RepositoryV3> logger, I
                 catch (Exception ex)
                 {
                     var dbExecutionTime = _dbTimingContext.StopOperation(dbOperation);
-                    _logger.LogCritical(ex, "Ошибка запроса {OperationName}. dbExecutionTime={dbExecutionTime}ms",
+                    _logger.LogCritical(ex, "Ошибка запроса {OperationName}. DbExecutionTime={DbExecutionTime}ms",
                         operationName, dbExecutionTime);
                     await Task.Delay(_dbConnectDelayMs);
                 }

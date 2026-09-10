@@ -127,7 +127,7 @@ public class QBCHIIIController(IMediator mediator,
         }
 
         transaction.TimeElapsedForValidation.Stop();
-        _logger.LogDebug("Конец валидации: transactionId={TransactionId} validationTime={elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
+        _logger.LogDebug("Конец валидации: TransactionId={TransactionId} validationTime={elapsed}", transaction.Id, transaction.TimeElapsedForValidation.Elapsed);
 
         // Основной processing и формирование HTTP-ответа
         try
@@ -196,7 +196,7 @@ public class QBCHIIIController(IMediator mediator,
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
 
-        _logger.LogInformation("Начало действия {Action} service={QbchService} transactionId={TransactionId} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, id, guid, requestTime);
+        _logger.LogInformation("Начало действия {Action} service={QbchService} TransactionId={TransactionId} guid={Guid} в {RequestTime}", nameof(DlAnswer_v_3), serviceName, id, guid, requestTime);
 
         try
         {
@@ -1216,12 +1216,12 @@ public class QBCHIIIController(IMediator mediator,
 
         if (guid is null)
         {
-            _logger.LogInformation("Выполнен запрос {Action}, onTime={isOnTime}, transactionId={transactionId}, bureau={Bureau}, status={StatusCode}, elapsed={ElapsedMs}ms, dbExecutionTime={dbExecutionTime}ms",
+            _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Bureau={Bureau}, Status={StatusCode}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
                 action, isOnTime, transactionId, bureau, statusCode, elapsedMs, dbExecutionTime);
             return;
         }
 
-        _logger.LogInformation("Выполнен запрос {Action}, onTime={isOnTime}, transactionId={transactionId}, bureau={Bureau}, status={StatusCode}, guid={Guid}, elapsed={ElapsedMs}ms, dbExecutionTime={dbExecutionTime}ms",
+        _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Bureau={Bureau}, Status={StatusCode}, Guid={Guid}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
             action, isOnTime, transactionId, bureau, statusCode, guid, elapsedMs, dbExecutionTime);
     }
 }

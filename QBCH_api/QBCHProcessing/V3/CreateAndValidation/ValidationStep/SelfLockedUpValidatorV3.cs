@@ -80,7 +80,7 @@ public static class SelfLockedUpValidatorV3
     {
         var error = AnswerErrorCode.Code25_SelfLockedUpError_V3();
 
-        logger.LogError("Не пройдена проверка ИНН и самозапрета dlrequest v3 для запроса №{OrderNumber}: КодСведений={КодСведений}, режим={RequestMode}, отсутствует ИНН субъекта или ПризнакПроверки не равен 1. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+        logger.LogError("Не пройдена проверка ИНН и самозапрета dlrequest v3 для запроса №{OrderNumber}: КодСведений={КодСведений}, режим={RequestMode}, отсутствует ИНН субъекта или ПризнакПроверки не равен 1. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
             orderNumber, infoCode, requestMode, transaction.Id, error.Code, error.Message);
 
         if (requestMode == СправочникРежимыЗапросаV3.Item2)

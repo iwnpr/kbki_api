@@ -55,7 +55,7 @@ public class QBCHServiceV3(
     /// <returns>Результат обработки с ответом <c>ОтветНаЗапросСведений</c>.</returns>
     public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransactionV3 transaction)
     {
-        _logger.LogDebug("Начало получения данных из внутренней БД. Запрос: {ransactionId}", transaction.Id);
+        _logger.LogDebug("Начало получения данных из внутренней БД. Запрос: {TransactionId}", transaction.Id);
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
         var package = transaction.GetRequest<ЗапросСведений>();
@@ -162,7 +162,7 @@ public class QBCHServiceV3(
             FillSelfProhibitionSection(kbki, getSelfProhibitionTask?.Result, isInnVerified);
             FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result, isInnVerified);
 
-            _logger.LogDebug("Данные из БД упешно получены. Запрос: {transactionId}", transaction.Id);
+            _logger.LogDebug("Данные из БД упешно получены. Запрос: {TransactionId}", transaction.Id);
 
             response.КБКИ = [kbki];
             responseRows.Add(response);
@@ -333,7 +333,7 @@ public class QBCHServiceV3(
                     {
                         var error = AnswerErrorCode.Code17_NoConnection();
 
-                        _logger.LogError(ex, "Не удалось установить соединение с КБКИ {bureau} (ОГРН {BureauPSRN}) по адресу {address}: последний HTTP-код={Status}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                        _logger.LogError(ex, "Не удалось установить соединение с КБКИ {bureau} (ОГРН {BureauPSRN}) по адресу {address}: последний HTTP-код={Status}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                             bureau.Name, bureau.ogrn, "/dlrequest", (int?)lastStatusCode, guid, error.Code, error.Message);
 
                         redisMsg.SetError(error.Code.ToString(), error.Message).SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now); ;
@@ -343,7 +343,7 @@ public class QBCHServiceV3(
                     {
                         var error = AnswerErrorCode.Code99_OtherError("Ошибка получения ответа от КБКИ");
 
-                        _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ {bureau} (ОГРН {BureauPSRN}) по адресу {address}: последний HTTP-код={Status}, тело ответа={ResponseText}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                        _logger.LogCritical(ex, "Ошибка получения ответа от КБКИ {bureau} (ОГРН {BureauPSRN}) по адресу {address}: последний HTTP-код={Status}, тело ответа={ResponseText}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                             bureau.Name, bureau.ogrn, "/dlrequest", (int?)lastStatusCode, lastResponseText, guid, error.Code, error.Message);
 
                         redisMsg.SetError(error.Code.ToString(), $"{error.Message}: {lastResponseText}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
@@ -362,7 +362,7 @@ public class QBCHServiceV3(
         {
             var error = AnswerErrorCode.Code18_WaitForResponseExpired();
 
-            _logger.LogWarning(ex, "Запрос в КБКИ {bureauName} (ОГРН {BureauPSRN}) по адресу {baseAddress} отменен по истечению таймаута ожидания квитанции {timeout} мс. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogWarning(ex, "Запрос в КБКИ {bureauName} (ОГРН {BureauPSRN}) по адресу {baseAddress} отменен по истечению таймаута ожидания квитанции {timeout} мс. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 bureau.Name, bureau.ogrn, "/dlrequest", _qbchTicketTimeoutMs, guid, error.Code, error.Message);
 
             redisMsg.SetError(error.Code.ToString(), error.Message).SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
@@ -419,7 +419,7 @@ public class QBCHServiceV3(
         {
             var error = AnswerErrorCode.Code18_WaitForResponseExpired();
 
-            _logger.LogWarning(ex, "Таймаут ожидания ответа от КБКИ {bureauName} (ОГРН {BureauPSRN}) по адресу {baseAddress}: осталось времени={timeLeftMs} мс. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogWarning(ex, "Таймаут ожидания ответа от КБКИ {bureauName} (ОГРН {BureauPSRN}) по адресу {baseAddress}: осталось времени={timeLeftMs} мс. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                             bureau.Name, bureau.ogrn, $"/dlanswer?id={responseId}", timeLeftMs, guid, error.Code, error.Message);
 
             DLAnswerRedisMessage = DlAnswerRedisMessage.Create();

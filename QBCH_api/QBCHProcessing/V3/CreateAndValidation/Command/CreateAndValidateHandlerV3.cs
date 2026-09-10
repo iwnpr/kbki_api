@@ -67,7 +67,7 @@ public sealed class CreateAndValidateHandler(
             cancellationToken: cancellationToken);
 
         _logger.LogDebug(
-            "Окончание создания и валидации транзакции v3 {TransactionId}. Ошибок обработки={ProcessingErrorsCount}, пакетных ошибок={PackageErrorsCount}",
+            "Окончание создания и валидации транзакции v3. TransactionId={TransactionId}, Ошибок обработки={ProcessingErrorsCount}, пакетных ошибок={PackageErrorsCount}",
             result.Id,
             result.ProcessingErrors.Count,
             result.PackageValidationErrors.Count);

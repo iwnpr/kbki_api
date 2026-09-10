@@ -199,7 +199,7 @@ public static class AdditionalValidatorV3
         {
             var error = AnswerErrorCode.Code15_InvalidRequestData("Поля и элементы \"МестоРождения\" не допускаются в запросах API 3.0");
 
-            logger.LogError("Не пройдена проверка отсутствия МестоРождения dlrequest v3: в запросе присутствуют поля или элементы «МестоРождения». transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            logger.LogError("Не пройдена проверка отсутствия МестоРождения dlrequest v3: в запросе присутствуют поля или элементы «МестоРождения». TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                            transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
@@ -208,7 +208,7 @@ public static class AdditionalValidatorV3
 
     private static void AddError(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber, AnswerErrorCode error, ILogger logger)
     {
-        logger.LogError("Не пройдена дополнительная проверка dlrequest v3 для запроса №{OrderNumber}, режим={RequestMode}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+        logger.LogError("Не пройдена дополнительная проверка dlrequest v3 для запроса №{OrderNumber}, режим={RequestMode}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
             orderNumber, requestMode, transaction.Id, error.Code, error.Message);
 
         if (requestMode == СправочникРежимыЗапросаV3.Item2)

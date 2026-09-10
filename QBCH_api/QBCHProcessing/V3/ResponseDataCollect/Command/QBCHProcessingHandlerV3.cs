@@ -99,7 +99,7 @@ public class QBCHProcessingHandlerV3(
                     var error = AnswerErrorCode.Code99_OtherError(ex.Message);
 
                     _logger.LogCritical(ex,
-                        "Не удалось сформировать ответ dlrequest v3 на этапе \"{ProcessingStage}\": задач={TaskCount}, requestId={RequestId}, типЗапроса={RequestType}, режимЗапроса={RequestMode}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                        "Не удалось сформировать ответ dlrequest v3 на этапе \"{ProcessingStage}\": задач={TaskCount}, requestId={RequestId}, типЗапроса={RequestType}, режимЗапроса={RequestMode}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                         processingStage, _tasksList.Count, requestId, requestType, requestMode, transaction.Id, error.Code, error.Message);
 
                     await StoreProcessingErrorAsync(transaction, error);
@@ -119,7 +119,7 @@ public class QBCHProcessingHandlerV3(
         catch (ArgumentOutOfRangeException ex)
         {
             _logger.LogWarning(ex,
-                "Время ответа истекло: валидация dlrequest v3 заняла {ValidationElapsedMs} мс при дедлайне немедленного ответа {ImmediateResponseDeadlineMs} мс, будет сформирован отложенный ответ. requestId={RequestId}, transactionId={TransactionId}",
+                "Время ответа истекло: валидация dlrequest v3 заняла {ValidationElapsedMs} мс при дедлайне немедленного ответа {ImmediateResponseDeadlineMs} мс, будет сформирован отложенный ответ. requestId={RequestId}, TransactionId={TransactionId}",
                 transaction.TimeElapsedForValidation.ElapsedMilliseconds, request.ImmediateResponseDeadlineMs, requestId, transaction.Id);
         }
         catch (Exception ex)
@@ -127,7 +127,7 @@ public class QBCHProcessingHandlerV3(
             var error = AnswerErrorCode.Code99_OtherError(ex.Message);
 
             _logger.LogCritical(ex,
-                "Ошибка немедленной обработки dlrequest v3: RequestId={RequestId}, ТипЗапроса={RequestType}, РежимЗапроса={RequestMode}, ОтветСформирован={HasResponseXml}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+               "Ошибка немедленной обработки dlrequest v3: RequestId={RequestId}, ТипЗапроса={RequestType}, РежимЗапроса={RequestMode}, ОтветСформирован={HasResponseXml}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                     requestId, requestType, requestMode, responseXml is not null, transaction.Id, error.Code, error.Message);
         }
 
@@ -137,7 +137,7 @@ public class QBCHProcessingHandlerV3(
 
     private async Task StoreProcessingErrorAsync(QBCHProcessingTransactionV3 transaction, AnswerErrorCode error)
     {
-        _logger.LogDebug("Сохранение ошибки обработки в Redis. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+        _logger.LogDebug("Сохранение ошибки обработки в Redis. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
             transaction.Id, error.Code, error.Message);
         var responseId = transaction.Id.ToString();
 
@@ -194,7 +194,7 @@ public class QBCHProcessingHandlerV3(
                     
                     var missingDataError = AnswerErrorCode.Code28_RequestDataNotFound();
 
-                    _logger.LogWarning("В ответе КБКИ отсутствуют запрошенные сведения: ОГРН КБКИ={Bureau}, запрос №{OrderNumber}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                    _logger.LogWarning("В ответе КБКИ отсутствуют запрошенные сведения: ОГРН КБКИ={Bureau}, запрос {OrderNumber}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                         taskResult.BureauPSRN, info.ПорядковыйНомер, transaction.Id, missingDataError.Code, missingDataError.Message);
 
                     var errorKbki = new ОтветНаЗапросСведенийСведенияКБКИ
