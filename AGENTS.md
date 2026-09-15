@@ -1,5 +1,17 @@
 # AGENTS.md
 
+## Repository purpose
+
+This repository is an AI/local-development copy of the internal qbch_api repository.
+
+It contains local and Codex-specific adaptations required to build and run
+outside the production environment.
+
+When implementing production/business changes:
+- do not unnecessarily depend on local-only adaptations;
+- distinguish production code from local/Codex infrastructure;
+- do not modify local infrastructure unless required by the task.
+
 ## Environment
 
 Codex Cloud runs on Linux.
