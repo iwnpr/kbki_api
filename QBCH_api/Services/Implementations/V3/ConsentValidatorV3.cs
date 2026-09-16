@@ -1,4 +1,5 @@
 ﻿using QBCH.Lib.qcb_xml.v3_0;
+using QBCH_api.Services.Interfaces.V3;
 using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
@@ -12,14 +13,16 @@ using ТипСогласиеV3 = QBCH.Lib.qcb_xml.v3_0.ТипСогласие;
 using ТипЮЛV3 = QBCH.Lib.qcb_xml.v3_0.ТипЮЛ;
 using ТипЮЛБазовыйV3 = QBCH.Lib.qcb_xml.v3_0.ТипЮЛБазовый;
 
-namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
+namespace QBCH_api.Services.Implementations.V3;
 
 /// <summary>
 /// Валидация блока "Согласие" для API 3.0.
 /// </summary>
-public static class ConsentValidatorV3
+public class ConsentValidatorV3(ILogger<ConsentValidatorV3> logger) : IConsentValidatorV3
 {
-    public static QBCHProcessingTransactionV3 ValidateConsentV3(this QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
+    private readonly ILogger<ConsentValidatorV3> _logger = logger;
+
+    public QBCHProcessingTransactionV3 ValidateConsentV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
         {
@@ -32,7 +35,7 @@ public static class ConsentValidatorV3
         for (var i = 0; i < requests.Length; i++)
         {
             var requestItem = requests[i];
-            var orderNumber = ParseOrderNumberOrPosition(requestItem.ПорядковыйНомер, i + 1);
+            var orderNumber = ValidationHelperV3.ParseOrderNumberOrPosition(requestItem.ПорядковыйНомер, i + 1);
 
             if (requestV3.РежимЗапроса == СправочникРежимыЗапросаV3.Item2 &&
                 transaction.PackageValidationErrors.Any(x => x.Id == orderNumber))
@@ -40,7 +43,7 @@ public static class ConsentValidatorV3
                 continue;
             }
 
-            ValidateRequestConsent(transaction, requestV3, requestItem, requiresConsent, orderNumber, logger);
+            ValidateRequestConsent(transaction, requestV3, requestItem, requiresConsent, orderNumber);
 
             if (requestV3.РежимЗапроса == СправочникРежимыЗапросаV3.Item1 &&
                 transaction.Status.Equals(QBCHProcessingStatus.Failure))
@@ -52,13 +55,12 @@ public static class ConsentValidatorV3
         return transaction;
     }
 
-    private static void ValidateRequestConsent(
+    private void ValidateRequestConsent(
         QBCHProcessingTransactionV3 transaction,
         ЗапросСведенийV3 requestV3,
         ЗапросСведенийЗапросV3 requestItem,
         bool requiresAgreement,
-        int orderNumber,
-        ILogger logger)
+        int orderNumber)
     {
         var agreement = requestItem.Согласие;
 
@@ -66,7 +68,7 @@ public static class ConsentValidatorV3
         {
             if (requiresAgreement)
             {
-                AddError(transaction, requestV3.РежимЗапроса, orderNumber, AnswerErrorCode.Code27_СonsentIsNull(), logger);
+                AddError(transaction, requestV3.РежимЗапроса, orderNumber, AnswerErrorCode.Code27_СonsentIsNull());
             }
 
             return;
@@ -75,37 +77,36 @@ public static class ConsentValidatorV3
         if (agreement.ДатаВыдачи > DateTime.Today)
         {
             AddError(transaction, requestV3.РежимЗапроса, orderNumber,
-                AnswerErrorCode.Code13_СonsentDenied($"Дата выдачи согласия {agreement.ДатаВыдачи:dd.MM.yyyy} больше текущей даты"), logger);
+                AnswerErrorCode.Code13_СonsentDenied($"Дата выдачи согласия {agreement.ДатаВыдачи:dd.MM.yyyy} больше текущей даты"));
 
             return;
         }
 
-        ValidateTransferringToAnotherPerson(transaction, requestV3.РежимЗапроса, requestItem, agreement, orderNumber, logger);
+        ValidateTransferringToAnotherPerson(transaction, requestV3.РежимЗапроса, requestItem, agreement, orderNumber);
 
         if (HasError(transaction, requestV3.РежимЗапроса, orderNumber))
         {
             return;
         }
 
-        ValidateConsentPeriod(transaction, requestV3.РежимЗапроса, agreement, orderNumber, logger);
+        ValidateConsentPeriod(transaction, requestV3.РежимЗапроса, agreement, orderNumber);
 
         if (HasError(transaction, requestV3.РежимЗапроса, orderNumber))
         {
             return;
         }
 
-        ValidateConsentTargets(transaction, requestV3.РежимЗапроса, requestItem, agreement, orderNumber, logger);
+        ValidateConsentTargets(transaction, requestV3.РежимЗапроса, requestItem, agreement, orderNumber);
     }
 
     /// <summary>
     /// Проверка срока действия согласия.
     /// </summary>
-    private static void ValidateConsentPeriod(
+    private void ValidateConsentPeriod(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ТипСогласиеV3 agreement,
-        int orderNumber,
-        ILogger logger)
+        int orderNumber)
     {
         switch (agreement.СрокДействия)
         {
@@ -113,7 +114,7 @@ public static class ConsentValidatorV3
                 if (DateTime.Today >= agreement.ДатаВыдачи.AddMonths(6).AddDays(1))
                 {
                     AddError(transaction, requestMode, orderNumber,
-                        AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 6 месяцев) меньше текущей даты"), logger);
+                        AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 6 месяцев) меньше текущей даты"));
                 }
 
                 return;
@@ -122,7 +123,7 @@ public static class ConsentValidatorV3
                 if (DateTime.Today >= agreement.ДатаВыдачи.AddMonths(12).AddDays(1))
                 {
                     AddError(transaction, requestMode, orderNumber,
-                       AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 12 месяцев) меньше текущей даты"), logger);
+                       AnswerErrorCode.Code13_СonsentDenied("Дата окончания действия согласия (дата выдачи + 12 месяцев) меньше текущей даты"));
                 }
 
                 return;
@@ -131,7 +132,7 @@ public static class ConsentValidatorV3
                 if (agreement.Договор is null)
                 {
                     AddError(transaction, requestMode, orderNumber,
-                        AnswerErrorCode.Code13_СonsentDenied("Элемент \"Договор\" обязателен, когда значение атрибута \"СрокДействия\" равно \"3\""), logger);
+                        AnswerErrorCode.Code13_СonsentDenied("Элемент \"Договор\" обязателен, когда значение атрибута \"СрокДействия\" равно \"3\""));
                     return;
                 }
 
@@ -143,7 +144,7 @@ public static class ConsentValidatorV3
                 if (agreement.Договор.Дата > DateTime.Today)
                 {
                     AddError(transaction, requestMode, orderNumber,
-                        AnswerErrorCode.Code13_СonsentDenied($"Дата договора {agreement.Договор.Дата:dd.MM.yyyy} больше текущей даты"), logger);
+                        AnswerErrorCode.Code13_СonsentDenied($"Дата договора {agreement.Договор.Дата:dd.MM.yyyy} больше текущей даты"));
                 }
 
                 return;
@@ -155,13 +156,12 @@ public static class ConsentValidatorV3
     /// Цель, указанная в блоке "Запрос" и отсутствующая в блоке "Согласие" (в том числе когда
     /// в согласии не указано ни одной цели), означает, что субъект не давал согласия на эту цель, — код ошибки 13.
     /// </summary>
-    private static void ValidateConsentTargets(
+    private void ValidateConsentTargets(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
         ТипСогласиеV3 agreement,
-        int orderNumber,
-        ILogger logger)
+        int orderNumber)
     {
         var requestTargets = requestItem.Цель ?? [];
         var consentTargets = agreement.Цель ?? [];
@@ -170,7 +170,7 @@ public static class ConsentValidatorV3
         if (requestTargets.Any(x => x.КодЦели == ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)))
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData("Код цели запроса со значением \"99\" не содержит описания."), logger);
+                AnswerErrorCode.Code15_InvalidRequestData("Код цели запроса со значением \"99\" не содержит описания."));
             return;
         }
 
@@ -178,7 +178,7 @@ public static class ConsentValidatorV3
         if (consentTargets.Any(x => x.КодЦели == ТипЦельКодЦели.Item99 && string.IsNullOrWhiteSpace(x.Описание)))
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData("Код цели согласия со значением \"99\" не содержит описания."), logger);
+                AnswerErrorCode.Code15_InvalidRequestData("Код цели согласия со значением \"99\" не содержит описания."));
             return;
         }
 
@@ -186,14 +186,14 @@ public static class ConsentValidatorV3
         if (requestTargets.Length > 0 && consentTargets.Length == 0)
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code13_СonsentDenied("В блоке «Согласие» не указано ни одной цели"), logger);
+                AnswerErrorCode.Code13_СonsentDenied("В блоке «Согласие» не указано ни одной цели"));
             return;
         }
 
         // Проверка кодов цели запроса: одна или несколько целей запроса отсутствуют в согласии
         var missingTargets = requestTargets
             .Where(target => consentTargets.All(consentTarget => consentTarget.КодЦели != target.КодЦели))
-            .Select(target => target.ПолучитьКодЦели())
+            .Select(target => target.GetTargetCode())
             .Distinct()
             .ToArray();
 
@@ -201,7 +201,7 @@ public static class ConsentValidatorV3
         {
             AddError(transaction, requestMode, orderNumber,
                 AnswerErrorCode.Code13_СonsentDenied(
-                    $"Cогласие не включает в себя всех целей запроса: одна или несколько целей, указанных в блоке «Запрос», отсутствует в блоке «Согласие» (КодЦели: {string.Join(", ", missingTargets)})"), logger);
+                    $"Cогласие не включает в себя всех целей запроса: одна или несколько целей, указанных в блоке «Запрос», отсутствует в блоке «Согласие» (КодЦели: {string.Join(", ", missingTargets)})"));
         }
     }
 
@@ -210,13 +210,12 @@ public static class ConsentValidatorV3
     /// При наличии атрибута "ОснованиеПередачи" реквизиты должны различаться (согласие передано другому лицу),
     /// при его отсутствии — совпадать (согласие выдано самому источнику).
     /// </summary>
-    private static void ValidateTransferringToAnotherPerson(
+    private void ValidateTransferringToAnotherPerson(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
         ТипСогласиеV3 agreement,
-        int orderNumber,
-        ILogger logger)
+        int orderNumber)
     {
         var (innAgreement, ogrnAgreement) = ExtractRequisites(agreement.Выдано?.Item);
         var (innSource, ogrnSource) = ExtractRequisites(requestItem.Источник?.Item);
@@ -224,14 +223,14 @@ public static class ConsentValidatorV3
         if (string.IsNullOrWhiteSpace(innAgreement))
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code13_СonsentDenied("В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие."), logger);
+                AnswerErrorCode.Code13_СonsentDenied("В блоке \"Выдано\" отсутствуют реквизиты лица, которому было выдано согласие."));
             return;
         }
 
         if (string.IsNullOrWhiteSpace(ogrnAgreement))
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code13_СonsentDenied("Отсутствуют реквизиты лица, которому было выдано согласие."), logger);
+                AnswerErrorCode.Code13_СonsentDenied("Отсутствуют реквизиты лица, которому было выдано согласие."));
             return;
         }
 
@@ -244,14 +243,14 @@ public static class ConsentValidatorV3
             if (compareInn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"При наличии в согласии атрибута \"ОснованиеПередачи\" ИНН ({innAgreement}) лица, которому было выдано согласие, не должен совпадать с ИНН ({innSource}) источника."), logger);
+                    $"При наличии в согласии атрибута \"ОснованиеПередачи\" ИНН ({innAgreement}) лица, которому было выдано согласие, не должен совпадать с ИНН ({innSource}) источника."));
                 return;
             }
 
             if (compareOgrn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                   $"При наличии в согласии атрибута \"ОснованиеПередачи\" ОГРН лица ({ogrnAgreement}), которому было выдано согласие, не должен совпадать с ОГРН источника ({ogrnSource})."), logger);
+                   $"При наличии в согласии атрибута \"ОснованиеПередачи\" ОГРН лица ({ogrnAgreement}), которому было выдано согласие, не должен совпадать с ОГРН источника ({ogrnSource})."));
                 return;
             }
         }
@@ -261,14 +260,14 @@ public static class ConsentValidatorV3
             if (!compareInn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"ИНН лица ({innAgreement}), которому было выдано согласие, должен совпадать с ИНН источника ({innSource})."), logger);
+                    $"ИНН лица ({innAgreement}), которому было выдано согласие, должен совпадать с ИНН источника ({innSource})."));
                 return;
             }
 
             if (!compareOgrn)
             {
                 AddError(transaction, requestMode, orderNumber, AnswerErrorCode.Code13_СonsentDenied(
-                    $"ОГРН ({ogrnAgreement}) лица, которому было выдано согласие, должен совпадать с ОГРН ({ogrnSource}) источника."), logger);
+                    $"ОГРН ({ogrnAgreement}) лица, которому было выдано согласие, должен совпадать с ОГРН ({ogrnSource}) источника."));
                 return;
             }
         }
@@ -297,14 +296,13 @@ public static class ConsentValidatorV3
             : transaction.Status.Equals(QBCHProcessingStatus.Failure);
     }
 
-    private static void AddError(
+    private void AddError(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         int orderNumber,
-        AnswerErrorCode error,
-        ILogger logger)
+        AnswerErrorCode error)
     {
-        logger.LogError("Не пройдена проверка согласия субъекта dlrequest. режим={RequestMode}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+        _logger.LogError("Не пройдена проверка согласия субъекта dlrequest. режим={RequestMode}. transactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                     requestMode, transaction.Id, error.Code, error.Message);
 
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
@@ -323,11 +321,5 @@ public static class ConsentValidatorV3
         // 7 — платежи + антифрод + запрет (согласие требуется)
         // 8 — антифрод + запрет (согласие требуется)
         return infoCode is СправочникВидыСведенийV3.Item7 or СправочникВидыСведенийV3.Item8;
-    }
-    private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)
-    {
-        return int.TryParse(orderNumberRaw, out var parsedOrderNumber) && parsedOrderNumber > 0
-            ? parsedOrderNumber
-            : position;
     }
 }

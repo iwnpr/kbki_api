@@ -9,6 +9,7 @@ using KafkaService_lib.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.FeatureManagement;
 using Microsoft.OpenApi.Models;
+using QBCH_api.QBCHProcessing.V3.CreateAndValidation;
 using QBCH_api.Services.Implementations.V3;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Implementations.V3;
@@ -90,6 +91,12 @@ builder.Services.AddTransient<IRepositoryV3, RepositoryV3>();
 builder.Services.AddTransient<IQBCHServiceV3, QBCHServiceV3>();
 builder.Services.AddTransient<ITicketServiceV3, TicketServiceV3>();
 builder.Services.AddTransient<IDlPutServiceV3, DlPutServiceV3>();
+builder.Services.AddTransient<IXSDValidatorV3, XSDValidatorV3>();
+builder.Services.AddTransient<IAdditionalValidatorV3, AdditionalValidatorV3>();
+builder.Services.AddTransient<IConsentValidatorV3, ConsentValidatorV3>();
+builder.Services.AddTransient<ISelfLockedUpValidatorV3, SelfLockedUpValidatorV3>();
+builder.Services.AddTransient<IXmlRequestCollectionValidatorV3, XmlRequestCollectionValidatorV3>();
+builder.Services.AddTransient<IQBCHValidationDispatcherV3, QBCHValidationDispatcherV3>();
 
 // Добавление http-клиентов в HttpClientFactory
 try

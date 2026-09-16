@@ -4,7 +4,7 @@ namespace QBCH.Lib.qcb_xml.v3_0
 {
     public partial class ТипЦель
     {
-        public string ПолучитьКодЦели() => XmlEnumHelper.GetXmlEnumValue(КодЦели);
+        public string GetTargetCode() => XmlEnumHelper.GetXmlEnumValue(КодЦели);
 
         public void УстановитьКодЦели(string xmlCode)
         {

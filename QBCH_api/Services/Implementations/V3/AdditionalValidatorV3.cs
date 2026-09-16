@@ -1,7 +1,7 @@
 ﻿using QBCH.Lib.qcb_xml.v3_0;
+using QBCH_api.Services.Interfaces.V3;
 using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
-using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using ЗапросСведенийЗапросV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийЗапрос;
@@ -11,13 +11,15 @@ using ТипИностранныйПредпринимательV3 = QBCH.Lib.qc
 using ТипИПV3 = QBCH.Lib.qcb_xml.v3_0.ТипИП;
 using ТипЦельКодЦелиV3 = QBCH.Lib.qcb_xml.v3_0.ТипЦельКодЦели;
 
-namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
+namespace QBCH_api.Services.Implementations.V3;
 
 /// <summary>
 /// Дополнительные проверки API 3.0, не покрываемые XSD.
 /// </summary>
-public static class AdditionalValidatorV3
+public class AdditionalValidatorV3(ILogger<AdditionalValidatorV3> logger) : IAdditionalValidatorV3
 {
+    private readonly ILogger<AdditionalValidatorV3> _logger = logger;
+
     private static readonly HashSet<ТипЦельКодЦелиV3> CreditTargets =
     [
         ТипЦельКодЦелиV3.Item1,
@@ -36,14 +38,14 @@ public static class AdditionalValidatorV3
         ТипЦельКодЦелиV3.Item15
     ];
 
-    public static QBCHProcessingTransactionV3 AdditionalValidationV3(this QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
+    public QBCHProcessingTransactionV3 AdditionalValidationV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
         {
             return transaction;
         }
 
-        ValidatePlaceOfBirthAbsence(transaction, requestV3.РежимЗапроса, logger);
+        ValidatePlaceOfBirthAbsence(transaction);
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
         {
             return transaction;
@@ -53,7 +55,7 @@ public static class AdditionalValidatorV3
         for (var i = 0; i < requests.Length; i++)
         {
             var requestItem = requests[i];
-            var orderNumber = ParseOrderNumberOrPosition(requestItem.ПорядковыйНомер, i + 1);
+            var orderNumber = ValidationHelperV3.ParseOrderNumberOrPosition(requestItem.ПорядковыйНомер, i + 1);
 
             if (requestV3.РежимЗапроса == СправочникРежимыЗапросаV3.Item2 &&
                 transaction.PackageValidationErrors.Any(x => x.Id == orderNumber))
@@ -61,7 +63,7 @@ public static class AdditionalValidatorV3
                 continue;
             }
 
-            ValidateRequest(transaction, requestV3.РежимЗапроса, requestItem, orderNumber, logger);
+            ValidateRequest(transaction, requestV3.РежимЗапроса, requestItem, orderNumber);
 
             if (requestV3.РежимЗапроса == СправочникРежимыЗапросаV3.Item1 &&
                 transaction.Status.Equals(QBCHProcessingStatus.Failure))
@@ -73,32 +75,30 @@ public static class AdditionalValidatorV3
         return transaction;
     }
 
-    private static void ValidateRequest(
+    private void ValidateRequest(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber,
-        ILogger logger)
+        int orderNumber)
     {
-        ValidateDul999(transaction, requestMode, requestItem, orderNumber, logger);
-        ValidateSubjectBirthDate(transaction, requestMode, requestItem, orderNumber, logger);
-        ValidateSubjectDocumentsIssueDate(transaction, requestMode, requestItem, orderNumber, logger);
-        ValidateLoanObligations(transaction, requestMode, requestItem, orderNumber, logger);
+        ValidateDul999(transaction, requestMode, requestItem, orderNumber);
+        ValidateSubjectBirthDate(transaction, requestMode, requestItem, orderNumber);
+        ValidateSubjectDocumentsIssueDate(transaction, requestMode, requestItem, orderNumber);
+        ValidateLoanObligations(transaction, requestMode, requestItem, orderNumber);
     }
 
-    private static void ValidateDul999(
+    private void ValidateDul999(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber,
-        ILogger logger)
+        int orderNumber)
     {
         if (TryGetSourceDocument(requestItem, out var document) &&
             document?.КодДУЛ == СправочникДУЛV3.Item999 &&
             string.IsNullOrWhiteSpace(document.НаименованиеДУЛ))
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData("При значении \"КодДУЛ\" = 999 поле \"НаименованиеДУЛ\" обязательно к заполнению"), logger);
+                AnswerErrorCode.Code15_InvalidRequestData("При значении \"КодДУЛ\" = 999 поле \"НаименованиеДУЛ\" обязательно к заполнению"));
         }
     }
 
@@ -114,31 +114,29 @@ public static class AdditionalValidatorV3
         return document is not null;
     }
 
-    private static void ValidateSubjectBirthDate(
+    private void ValidateSubjectBirthDate(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber,
-        ILogger logger)
+        int orderNumber)
     {
         var birthDate = requestItem.Субъект?.ДатаРождения;
 
         if (birthDate is null)
-                return;
+            return;
 
         if (birthDate.Value.Date >= DateTime.Today)
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData($"Дата рождения {birthDate:dd.MM.yyyy} больше или равна текущей дате"), logger);
+                AnswerErrorCode.Code15_InvalidRequestData($"Дата рождения {birthDate:dd.MM.yyyy} больше или равна текущей дате"));
         }
     }
 
-    private static void ValidateSubjectDocumentsIssueDate(
+    private void ValidateSubjectDocumentsIssueDate(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-        int orderNumber,
-        ILogger logger)
+        int orderNumber)
     {
         var birthDate = requestItem.Субъект?.ДатаРождения;
         if (birthDate is null)
@@ -151,19 +149,18 @@ public static class AdditionalValidatorV3
             if (document.ДатаВыдачи.Date <= birthDate.Value.Date)
             {
                 AddError(transaction, requestMode, orderNumber,
-                    AnswerErrorCode.Code15_InvalidRequestData($"Дата выдачи ДУЛ {document.ДатаВыдачи:dd.MM.yyyy} более ранняя или равна дате рождения {birthDate:dd.MM.yyyy}"), logger);
+                    AnswerErrorCode.Code15_InvalidRequestData($"Дата выдачи ДУЛ {document.ДатаВыдачи:dd.MM.yyyy} более ранняя или равна дате рождения {birthDate:dd.MM.yyyy}"));
 
                 return;
             }
         }
     }
 
-    private static void ValidateLoanObligations(
+    private void ValidateLoanObligations(
         QBCHProcessingTransactionV3 transaction,
         СправочникРежимыЗапросаV3 requestMode,
         ЗапросСведенийЗапросV3 requestItem,
-         int orderNumber,
-        ILogger logger)
+         int orderNumber)
     {
         var hasCreditTarget = (requestItem.Цель ?? [])
             .Select(x => x.КодЦели)
@@ -172,11 +169,11 @@ public static class AdditionalValidatorV3
         if (hasCreditTarget && requestItem.СуммаОбязательства is null)
         {
             AddError(transaction, requestMode, orderNumber,
-                AnswerErrorCode.Code15_InvalidRequestData("Для кредитных целей \"СуммаОбязательства\" обязательна к заполнению"), logger);
+                AnswerErrorCode.Code15_InvalidRequestData("Для кредитных целей \"СуммаОбязательства\" обязательна к заполнению"));
         }
     }
 
-    private static void ValidatePlaceOfBirthAbsence(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, ILogger logger)
+    private void ValidatePlaceOfBirthAbsence(QBCHProcessingTransactionV3 transaction)
     {
         if (transaction.Attachment.RequestBody is null)
         {
@@ -199,16 +196,16 @@ public static class AdditionalValidatorV3
         {
             var error = AnswerErrorCode.Code15_InvalidRequestData("Поля и элементы \"МестоРождения\" не допускаются в запросах API 3.0");
 
-            logger.LogError("Не пройдена проверка отсутствия МестоРождения dlrequest v3: в запросе присутствуют поля или элементы «МестоРождения». TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка отсутствия МестоРождения dlrequest v3: в запросе присутствуют поля или элементы «МестоРождения». TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                            transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
     }
 
-    private static void AddError(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber, AnswerErrorCode error, ILogger logger)
+    private void AddError(QBCHProcessingTransactionV3 transaction, СправочникРежимыЗапросаV3 requestMode, int orderNumber, AnswerErrorCode error)
     {
-        logger.LogError("Не пройдена дополнительная проверка dlrequest v3 для запроса №{OrderNumber}, режим={RequestMode}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+        _logger.LogError("Не пройдена дополнительная проверка dlrequest v3 для запроса №{OrderNumber}, режим={RequestMode}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
             orderNumber, requestMode, transaction.Id, error.Code, error.Message);
 
         if (requestMode == СправочникРежимыЗапросаV3.Item2)
@@ -218,12 +215,5 @@ public static class AdditionalValidatorV3
         }
 
         transaction.RiseCriticalError(error);
-    }
-
-    private static int ParseOrderNumberOrPosition(string? orderNumberRaw, int position)
-    {
-        return int.TryParse(orderNumberRaw, out var parsedOrderNumber) && parsedOrderNumber > 0
-            ? parsedOrderNumber
-            : position;
     }
 }

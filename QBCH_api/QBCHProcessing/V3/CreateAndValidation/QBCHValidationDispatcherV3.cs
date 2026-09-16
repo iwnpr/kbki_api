@@ -1,111 +1,130 @@
 ﻿using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using QBCH.Lib.qcb_xml.v3_0;
-using QBCH_api.QBCHProcessing.V3.CreateAndValidation.ValidationStep;
+using QBCH_api.QBCHProcessing.V3.CreateAndValidation;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib;
 using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
-using XmlService_lib.Services.Interfaces.V3;
 using АбонентИноV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИностранноеЛицо;
 using АбонентИПV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентИндивидуальныйПредприниматель;
 using АбонентИЮЛV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведенийАбонентЮридическоеЛицо;
 using ЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ЗапросСведений;
 using СправочникСпособыЗапросаV3 = QBCH.Lib.qcb_xml.v3_0.СправочникСпособыЗапроса;
 
-namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation;
+namespace QBCH_api.Services.Implementations.V3;
 
 /// <summary>
 /// Отдельный диспетчер start-to-finish валидации для API 3.0.
 /// </summary>
-public static class QBCHValidationDispatcherV3
+public class QBCHValidationDispatcherV3(
+    IValidationServiceV3 validationService,
+    ICryptoService cryptoService,
+    IRepositoryV3 repository,
+    IKeyValueStorageService cacheService,
+    IXSDValidatorV3 xsdValidator,
+    IAdditionalValidatorV3 additionalValidator,
+    IConsentValidatorV3 consentValidator,
+    ISelfLockedUpValidatorV3 selfLockedUpValidator,
+    IXmlRequestCollectionValidatorV3 xmlRequestCollectionValidator,
+    ILogger<QBCHValidationDispatcherV3> logger) : IQBCHValidationDispatcherV3
 {
-    public static async Task<QBCHProcessingTransactionV3> ValidateV3(
-        this QBCHProcessingTransactionV3 transaction,
-        IValidationServiceV3 validationService,
-        ICryptoService cryptoService,
-        IXmlServiceV3 xmlService,
-        ILogger logger,
-        IRepositoryV3 repository,
-        IKeyValueStorageService cacheService,
-        CancellationToken cancellationToken)
+    private readonly IValidationServiceV3 _validationService = validationService;
+    private readonly ICryptoService _cryptoService = cryptoService;
+    private readonly IRepositoryV3 _repository = repository;
+    private readonly IKeyValueStorageService _cacheService = cacheService;
+    private readonly IXSDValidatorV3 _xsdValidator = xsdValidator;
+    private readonly IAdditionalValidatorV3 _additionalValidator = additionalValidator;
+    private readonly IConsentValidatorV3 _consentValidator = consentValidator;
+    private readonly ISelfLockedUpValidatorV3 _selfLockedUpValidator = selfLockedUpValidator;
+    private readonly IXmlRequestCollectionValidatorV3 _xmlRequestCollectionValidator = xmlRequestCollectionValidator;
+    private readonly ILogger<QBCHValidationDispatcherV3> _logger = logger;
+
+    /// <summary>
+    /// Выполняет полную валидацию транзакции dlrequest.
+    /// При критической ошибке транзакция помечается как <see cref="QBCHProcessingStatus.Failure"/>
+    /// </summary>
+    /// <param name="transaction">Обрабатываемая транзакция, накапливающая результаты валидации.</param>
+    /// <param name="cancellationToken">Токен отмены для асинхронных проверок (права доступа, уникальность идентификатора запроса).</param>
+    /// <returns>Транзакция с проставленным статусом и, при наличии, списком ошибок валидации (критических и пакетных).</returns>
+    public async Task<QBCHProcessingTransactionV3> ValidateV3(QBCHProcessingTransactionV3 transaction, CancellationToken cancellationToken)
     {
         // method
-        ValidateRequestMethodV3(transaction, logger);
+        ValidateRequestMethodV3(transaction);
 
         // body
-        ValidateRequestBodyV3(transaction, logger);
+        ValidateRequestBodyV3(transaction);
 
         // sign
-        ProcessSignV3(transaction, cryptoService, validationService, logger);
+        ProcessSignV3(transaction);
 
         // xsd
-        transaction.ValidateXml(validationService, xmlService, logger);
+        _xsdValidator.ValidateXml(transaction);
 
         var requestV3 = transaction.GetRequest<ЗапросСведенийV3>();
 
         // abonent
-        await ValidateAbonentV3(transaction, logger);
+        await ValidateAbonentV3(transaction);
 
         // packet
-        transaction.ValidateXmlRequestCollectionV3(requestV3, logger);
+        _xmlRequestCollectionValidator.ValidateXmlRequestCollectionV3(transaction, requestV3);
 
         // rights
-        await ValidateRightsV3(transaction, repository, logger, cancellationToken);
+        await ValidateRightsV3(transaction, cancellationToken);
 
         // one-window
-        ValidateOneWindowV3(transaction, logger);
+        ValidateOneWindowV3(transaction);
 
         // antifraud one-window compatibility
-        ValidateAntifraudOneWindowCompatibilityV3(transaction, requestV3, logger);
+        ValidateAntifraudOneWindowCompatibilityV3(transaction, requestV3);
 
         // unique request id
-        await ValidateUniqueRequestIdV3(transaction, cacheService, requestV3, logger);
+        await ValidateUniqueRequestIdV3(transaction, requestV3);
 
         // request date
-        ValidateRequestDateV3(transaction, validationService, requestV3, logger);
+        ValidateRequestDateV3(transaction, requestV3);
 
         // additional validation
-        AdditionalValidationV3(transaction, requestV3, logger);
+        _additionalValidator.AdditionalValidationV3(transaction, requestV3);
 
         // agreement
-        ValidateAgreementV3(transaction, requestV3, logger);
+        _consentValidator.ValidateConsentV3(transaction, requestV3);
 
         // inn/self-prohibition
-        ValidateInnAndSelfProhibitionV3(transaction, requestV3, logger);
+        _selfLockedUpValidator.ValidateInnAndSelfProhibitionV3(transaction, requestV3);
 
         transaction.ValidationComplete();
         return transaction;
     }
 
-    private static void ValidateRequestMethodV3(QBCHProcessingTransactionV3 transaction, ILogger logger)
+    private void ValidateRequestMethodV3(QBCHProcessingTransactionV3 transaction)
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && !string.Equals(transaction.ClentRequest.RequestMethod, HttpMethods.Post, StringComparison.OrdinalIgnoreCase))
         {
             var error = AnswerErrorCode.Code1_WrongRequestMethod();
 
-            logger.LogError("Не пройдена проверка метода запроса dlrequest v3: получен {RequestMethod}, ожидался POST. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка метода запроса dlrequest v3: получен {RequestMethod}, ожидался POST. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                transaction.ClentRequest.RequestMethod, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
     }
 
-    private static void ValidateRequestBodyV3(QBCHProcessingTransactionV3 transaction, ILogger logger)
+    private void ValidateRequestBodyV3(QBCHProcessingTransactionV3 transaction)
     {
         if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && (transaction.Attachment.SignedRequestBody is null || transaction.Attachment.SignedRequestBody.Length == 0))
         {
             var error = AnswerErrorCode.Code2_EmptyRequestBody();
 
-            logger.LogError("Не пройдена проверка тела запроса dlrequest v3: тело запроса пустое. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка тела запроса dlrequest v3: тело запроса пустое. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
     }
 
-    private static void ValidateAntifraudOneWindowCompatibilityV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
+    private void ValidateAntifraudOneWindowCompatibilityV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
             return;
@@ -114,27 +133,27 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code99_OtherError("Комбинация КодСведений=\"8\" и ТипЗапроса=\"2\" недопустима");
 
-            logger.LogError("Не пройдена проверка совместимости антифрода и одного окна dlrequest v3: КодСведений={КодСведений}, ТипЗапроса={ТипЗапроса}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка совместимости антифрода и одного окна dlrequest v3: КодСведений={КодСведений}, ТипЗапроса={ТипЗапроса}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestV3.КодСведений, requestV3.ТипЗапроса, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
     }
 
-    private static void ProcessSignV3(QBCHProcessingTransactionV3 transaction, ICryptoService cryptoService, IValidationServiceV3 validationService, ILogger logger)
+    private void ProcessSignV3(QBCHProcessingTransactionV3 transaction)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
         {
             return;
         }
 
-        var signValidationResult = cryptoService.ValidateMsg(
+        var signValidationResult = _cryptoService.ValidateMsg(
             transaction.Attachment.SignedRequestBody!,
             transaction.ClentRequest.Certificate);
 
         if (!signValidationResult.IsSuccess)
         {
-            logger.LogError("Не пройдена проверка УЭП dlrequest v3: сертификат={Thumbprint}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка УЭП dlrequest v3: сертификат={Thumbprint}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.ClentRequest.Certificate?.Thumbprint, transaction.Id, signValidationResult.Error!.Code, signValidationResult.Error.Message);
 
             transaction.RiseCriticalError(new AnswerErrorCode(signValidationResult.Error!.Code, signValidationResult.Error.Message));
@@ -150,9 +169,9 @@ public static class QBCHValidationDispatcherV3
             signValidationResult.Value.RequestINN,
             signValidationResult.Value.RequestOGRN);
 
-        if (!validationService.ValidateEncodingV3(transaction.Attachment.RequestBody!, out var encodingValidationResult))
+        if (!_validationService.ValidateEncodingV3(transaction.Attachment.RequestBody!, out var encodingValidationResult))
         {
-            logger.LogError("Не пройдена проверка кодировки dlrequest v3: тело запроса не является корректным UTF-8. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка кодировки dlrequest v3: тело запроса не является корректным UTF-8. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка");
 
             transaction.RiseCriticalError(new AnswerErrorCode(encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка"));
@@ -160,7 +179,7 @@ public static class QBCHValidationDispatcherV3
     }
 
 
-    private static async Task ValidateAbonentV3(QBCHProcessingTransactionV3 transaction, ILogger logger)
+    private async Task ValidateAbonentV3(QBCHProcessingTransactionV3 transaction)
     {
         //Это проверка сравнения полей ИНН и ОГРН из сертификата с ИНН и ОГРН из запроса, а не из базы
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
@@ -172,10 +191,11 @@ public static class QBCHValidationDispatcherV3
         {
             var noRequestError = AnswerErrorCode.Code99_OtherError("Отсутствуют данные запроса");
 
-            logger.LogError("Не пройдена проверка реквизитов абонента dlrequest v3: отсутствуют данные запроса. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка реквизитов абонента dlrequest v3: отсутствуют данные запроса. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, noRequestError.Code, noRequestError.Message);
 
             transaction.RiseCriticalError(noRequestError);
+            return;
         }
 
         var requestINN = transaction.ClentRequest?.RequestINN;
@@ -188,27 +208,27 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code10_RequestAndAbonentDataNotMach(abonentINN, requestINN, abonentOGRN, requestOGRN);
 
-            logger.LogError("Не пройдена проверка реквизитов абонента dlrequest v3: ИНН сертификата={RequestINN}, ИНН запроса={AbonentINN}, ОГРН сертификата={RequestOGRN}, ОГРН запроса={AbonentOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка реквизитов абонента dlrequest v3: ИНН сертификата={RequestINN}, ИНН запроса={AbonentINN}, ОГРН сертификата={RequestOGRN}, ОГРН запроса={AbonentOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestINN, abonentINN, requestOGRN, abonentOGRN, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
     }
 
-    private static async Task ValidateRightsV3(QBCHProcessingTransactionV3 transaction, IRepositoryV3 repository, ILogger logger, CancellationToken cancellationToken)
+    private async Task ValidateRightsV3(QBCHProcessingTransactionV3 transaction, CancellationToken cancellationToken)
     {
-        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && !await repository.IsPermissionGrantedV3(transaction.ClentRequest.Certificate?.Thumbprint, transaction.ServiceName, cancellationToken))
+        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && !await _repository.IsPermissionGrantedV3(transaction.ClentRequest.Certificate?.Thumbprint, transaction.ServiceName, cancellationToken))
         {
             var error = AnswerErrorCode.Code22_AccessDenied();
 
-            logger.LogError("Не пройдена проверка прав доступа dlrequest v3: сертификат={Thumbprint}, сервис={QbchService}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка прав доступа dlrequest v3: сертификат={Thumbprint}, сервис={QbchService}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.ClentRequest.Certificate?.Thumbprint, transaction.ServiceName, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
     }
 
-    private static void ValidateOneWindowV3(QBCHProcessingTransactionV3 transaction, ILogger logger)
+    private void ValidateOneWindowV3(QBCHProcessingTransactionV3 transaction)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure))
             return;
@@ -225,18 +245,14 @@ public static class QBCHValidationDispatcherV3
         {
             var error = AnswerErrorCode.Code14_SingleWindowDenied();
 
-            logger.LogError("Не пройдена проверка одного окна dlrequest v3: взаимодействие в режиме «одно окно» не предусмотрено договором с абонентом ОГРН={RequestOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка одного окна dlrequest v3: взаимодействие в режиме «одно окно» не предусмотрено договором с абонентом ОГРН={RequestOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                             requestOgrn, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
     }
 
-    private static async Task ValidateUniqueRequestIdV3(
-        QBCHProcessingTransactionV3 transaction,
-        IKeyValueStorageService cacheService,
-        ЗапросСведенийV3? requestV3,
-        ILogger logger)
+    private async Task ValidateUniqueRequestIdV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
         {
@@ -244,49 +260,34 @@ public static class QBCHValidationDispatcherV3
         }
 
         var requestOgrn = GetAbonentRequisitesV3(requestV3).ogrn;
-        var isUniqueRequest = await cacheService.IsUniqueRequestId(requestV3.ИдентификаторЗапроса, requestOgrn ?? string.Empty, RedisConstants.DlRequestV3Scope);
+        var isUniqueRequest = await _cacheService.IsUniqueRequestId(requestV3.ИдентификаторЗапроса, requestOgrn ?? string.Empty, RedisConstants.DlRequestV3Scope);
 
         if (!isUniqueRequest)
         {
             var error = AnswerErrorCode.Code11_RequestIdIsNotUnique();
 
-            logger.LogError("Не пройдена проверка уникальности идентификатора запроса dlrequest v3: ИдентификаторЗапроса={RequestId}, ОГРН абонента={RequestOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка уникальности идентификатора запроса dlrequest v3: ИдентификаторЗапроса={RequestId}, ОГРН абонента={RequestOGRN}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestV3.ИдентификаторЗапроса, requestOgrn, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
     }
 
-    private static void ValidateRequestDateV3(QBCHProcessingTransactionV3 transaction, IValidationServiceV3 validationService, ЗапросСведенийV3? requestV3, ILogger logger)
+    private void ValidateRequestDateV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3)
     {
-        logger.LogDebug("Начало проверки даты запроса. requestDate={requestDate}, method={methodName}", requestV3.ДатаЗапроса, nameof(ValidateRequestDateV3));
+        _logger.LogDebug("Начало проверки даты запроса. requestDate={requestDate}, method={methodName}", requestV3?.ДатаЗапроса, nameof(ValidateRequestDateV3));
 
-        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && requestV3 is not null && !validationService.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult))
+        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && requestV3 is not null && !_validationService.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult))
         {
             var error = new AnswerErrorCode(dateValidationResult!.ErrorCode, dateValidationResult.Error ?? "Дата запроса указана некорректно");
 
-            logger.LogError("Не пройдена проверка даты запроса: ДатаЗапроса={RequestDate}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            _logger.LogError("Не пройдена проверка даты запроса: ДатаЗапроса={RequestDate}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestV3.ДатаЗапроса, transaction.Id, error.Code, error.Message);
 
             transaction.RiseCriticalError(error);
         }
 
-        logger.LogDebug("Дата запроса корректна. requestDate={requestDate}, method={methodName}", requestV3.ДатаЗапроса, nameof(ValidateRequestDateV3));
-    }
-
-    private static void AdditionalValidationV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
-    {
-        transaction.AdditionalValidationV3(requestV3, logger);
-    }
-
-    private static void ValidateAgreementV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
-    {
-        transaction.ValidateConsentV3(requestV3, logger);
-    }
-
-    private static void ValidateInnAndSelfProhibitionV3(QBCHProcessingTransactionV3 transaction, ЗапросСведенийV3? requestV3, ILogger logger)
-    {
-        transaction.ValidateInnAndSelfProhibitionV3(requestV3, logger);
+        _logger.LogDebug("Дата запроса корректна. requestDate={requestDate}, method={methodName}", requestV3?.ДатаЗапроса, nameof(ValidateRequestDateV3));
     }
 
     private static (string? inn, string? ogrn) GetAbonentRequisitesV3(ЗапросСведенийV3 request)

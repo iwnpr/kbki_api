@@ -14,20 +14,9 @@ namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 /// <summary>
 /// Создание и валидация транзакции для dlrequest
 /// </summary>
-public sealed class CreateAndValidateHandler(
-    IValidationServiceV3 validationService,
-    ICryptoService cryptoService,
-    IXmlServiceV3 xmlService,
-    IRepositoryV3 repository,
-    IKeyValueStorageService storageService,
-    IBKIRequisitsHandler bKIRequisits,
-    ILogger<CreateAndValidateHandler> logger) : IRequestHandler<CreateToValidateCommandV3, QBCHProcessingTransactionV3>
+public sealed class CreateAndValidateHandler(IQBCHValidationDispatcherV3 validationDispatcher, IBKIRequisitsHandler bKIRequisits, ILogger<CreateAndValidateHandler> logger) : IRequestHandler<CreateToValidateCommandV3, QBCHProcessingTransactionV3>
 {
-    private readonly IValidationServiceV3 _validationService = validationService;
-    private readonly ICryptoService _cryptoService = cryptoService;
-    private readonly IXmlServiceV3 _xmlService = xmlService;
-    private readonly IRepositoryV3 _repository = repository;
-    private readonly IKeyValueStorageService _storageService = storageService;
+    private readonly IQBCHValidationDispatcherV3 _validationDispatcher = validationDispatcher;
     private readonly IBKIRequisitsHandler _bKIRequisits = bKIRequisits;
     private readonly ILogger<CreateAndValidateHandler> _logger = logger;
 
@@ -57,14 +46,7 @@ public sealed class CreateAndValidateHandler(
         var attachement = Attachment.Create(signedRequest: requestBody);
         var transaction = QBCHProcessingTransactionV3.Create(DateTime.Now, clientRequest, attachement, _bKIRequisits.GetBureaList());
 
-        var result = await transaction.ValidateV3(
-            validationService: _validationService,
-            cryptoService: _cryptoService,
-            xmlService: _xmlService,
-            logger: _logger,
-            repository: _repository,
-            cacheService: _storageService,
-            cancellationToken: cancellationToken);
+        var result = await _validationDispatcher.ValidateV3(transaction, cancellationToken);
 
         _logger.LogDebug(
             "Окончание создания и валидации транзакции v3. TransactionId={TransactionId}, Ошибок обработки={ProcessingErrorsCount}, пакетных ошибок={PackageErrorsCount}",
