@@ -86,7 +86,7 @@ namespace KafkaService_lib.Services.Implementation
 
             topic ??= _topic;
             var maxAttempts = _produceRetryCount + 1;
-            var timeoutPolicy = Policy.TimeoutAsync(_produceRetryTotalTimeoutMs / 1000, TimeoutStrategy.Optimistic);
+            var timeoutPolicy = Policy.TimeoutAsync(TimeSpan.FromMilliseconds(_produceRetryTotalTimeoutMs), TimeoutStrategy.Optimistic);
             var retryPolicy = Policy
                 .Handle<ProduceException<Null, string>>()
                 .WaitAndRetryAsync(
@@ -104,7 +104,7 @@ namespace KafkaService_lib.Services.Implementation
             {
                 await policy.ExecuteAsync(async token =>
                 {
-                    await _producerMsg.ProduceAsync(topic, message);
+                    await _producerMsg.ProduceAsync(topic, message, token);
                     return true;
                 }, CancellationToken.None);
 

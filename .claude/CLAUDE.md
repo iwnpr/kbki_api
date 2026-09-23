@@ -17,6 +17,12 @@ Before implementing:
 
 Implementation:
 - make the smallest complete change;
+- default to the shortest solution that meets the requirement;
+- propose a more complex option only with a named failure scenario that the
+  simple one breaks, and state how you verified that scenario is real;
+- when comparing options, state the cost in countable terms: new files, new DI
+  registrations, diff size;
+- name which recent changes the proposed change interacts with;
 - do not overengineer;
 - do not introduce speculative abstractions;
 - do not create interfaces/factories/wrappers/helpers without concrete need;
@@ -32,4 +38,9 @@ When I challenge your solution:
 Verification:
 - inspect the final diff;
 - verify what can actually be verified;
-- never claim something passed unless it was actually run.
+- never claim something passed unless it was actually run;
+- never attribute runtime behaviour to a design from memory (draining,
+  backpressure, ordering, timeouts, context flow): measure it, or label the
+  claim NOT VERIFIED;
+- if the environment blocks verification, fix the environment first;
+  "cannot verify here" is a conclusion, not a starting assumption.
