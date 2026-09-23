@@ -4,7 +4,6 @@ using Cache_lib.Interfaces;
 using CertManagement.Services.Implementations;
 using CertManagement.Services.Interfaces;
 using Crypto_lib.Service;
-using KafkaService_lib.BackgroundPublishing;
 using KafkaService_lib.Services.Implementation;
 using KafkaService_lib.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Certificate;
@@ -98,8 +97,6 @@ builder.Services.AddTransient<IConsentValidatorV3, ConsentValidatorV3>();
 builder.Services.AddTransient<ISelfLockedUpValidatorV3, SelfLockedUpValidatorV3>();
 builder.Services.AddTransient<IXmlRequestCollectionValidatorV3, XmlRequestCollectionValidatorV3>();
 builder.Services.AddTransient<IQBCHValidationDispatcherV3, QBCHValidationDispatcherV3>();
-builder.Services.AddSingleton<KafkaPublishQueue>();
-builder.Services.AddHostedService<KafkaPublishWorker>();
 
 // Добавление http-клиентов в HttpClientFactory
 try
