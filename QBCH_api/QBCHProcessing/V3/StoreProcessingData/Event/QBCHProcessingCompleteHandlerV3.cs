@@ -38,7 +38,7 @@ public class QBCHProcessingCompleteHandlerV3(
             return;
         }
 
-         await SendDataToKafka(transaction);
+        _ = SendDataToKafka(transaction);
     }
 
     private async Task<bool> TrySendDataToRedis(QBCHProcessingTransactionV3 transaction)
