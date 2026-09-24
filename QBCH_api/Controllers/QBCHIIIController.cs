@@ -3,6 +3,7 @@ using Cache_lib.Interfaces;
 using CertManagement.Services.Interfaces;
 using Confluent.Kafka;
 using Crypto_lib.Service;
+using KafkaService_lib.BackgroundPublishing;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -42,6 +43,7 @@ public class QBCHIIIController(IMediator mediator,
         IDlPutServiceV3 dlPutServiceV3,
         ICertManagementService certManagement,
         IKafkaService kafka,
+        KafkaPublishQueue kafkaPublishQueue,
         ApiV3ContractRules contractRules,
         IConfiguration config,
         DbTimingContext dbTimingContext) : ControllerBase
@@ -58,6 +60,7 @@ public class QBCHIIIController(IMediator mediator,
     private readonly ApiV3ContractRules _contractRules = contractRules;
     private readonly IConfiguration _config = config;
     private readonly IKafkaService _kafka = kafka;
+    private readonly KafkaPublishQueue _kafkaPublishQueue = kafkaPublishQueue;
     private readonly DbTimingContext _dbTimingContext = dbTimingContext;
 
     private readonly string? _kafkaTopic = config.GetValue<string>("KafkaService:Topic");
@@ -165,8 +168,9 @@ public class QBCHIIIController(IMediator mediator,
                     ex.Message
                 });
 
-                // Попытка отправки в кафку уходит в фон: клиент не ждёт подтверждения от брокера.
-                _ = PublishToKafkaInBackground(message);
+                // Попытка отправки в кафку                    
+                if (!await _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic))
+                    _logger.LogCritical("Потерян ключ:{key}", transaction.Id);
             }
             catch (Exception e)
             {
@@ -295,7 +299,10 @@ public class QBCHIIIController(IMediator mediator,
 
                 LogActionEnd(nameof(DlAnswer_v_3), id, Response.StatusCode, actionStopwatch.Elapsed, guid);
 
-                _ = PublishToKafkaInBackground($"QBCH:{serviceName}:{guid}");
+                var dlAnswerKafkaKey = $"QBCH:{serviceName}:{guid}";
+
+                if (!_kafkaPublishQueue.TryEnqueue(() => _kafka.Produce(new Message<Null, string> { Value = dlAnswerKafkaKey }, _kafkaTopic)))
+                    _logger.LogCritical("Очередь отправки в Kafka переполнена: ключ={kafkaKey}. Уведомление архиватору не отправлено", dlAnswerKafkaKey);
             }
         }
         catch (Exception ex)
@@ -314,7 +321,8 @@ public class QBCHIIIController(IMediator mediator,
                    });
 
             // Выгрузка в кафку уходит в фон: клиент не ждёт подтверждения от брокера.
-            _ = PublishToKafkaInBackground(message);
+            if (!_kafkaPublishQueue.TryEnqueue(() => _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic)))
+                _logger.LogCritical("Очередь отправки в Kafka переполнена: сервис={QbchService}, guid={Guid}. Сведения об ошибке не выгружены", serviceName, guid);
 
             _logger.LogCritical(ex, "Возникла критическая ошибка");
             return StatusCode(500);
@@ -1192,24 +1200,6 @@ public class QBCHIIIController(IMediator mediator,
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Отправляет сообщение в Kafka фоновой задачей: клиент не ждёт подтверждения от брокера.
-    /// </summary>
-    /// <remarks>
-    /// Вызывается без await, через _ = ..., поэтому ответ клиенту не ждёт брокера.
-    /// </remarks>
-    private async Task PublishToKafkaInBackground(string message)
-    {
-        try
-        {
-            await _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogCritical(ex, "Критическая ошибка при фоновой отправке в Kafka: значение={kafkaMessage}", message);
-        }
     }
 
     /// <summary>
