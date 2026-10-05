@@ -129,15 +129,22 @@ public class QBCHValidationDispatcherV3(
         if (transaction.Status.Equals(QBCHProcessingStatus.Failure) || requestV3 is null)
             return;
 
-        if (requestV3.КодСведений == СправочникВидыСведений.Item8 && requestV3.ТипЗапроса == СправочникСпособыЗапросаV3.Item2)
-        {
-            var error = AnswerErrorCode.Code99_OtherError("Комбинация КодСведений=\"8\" и ТипЗапроса=\"2\" недопустима");
+        if (requestV3.КодСведений != СправочникВидыСведений.Item8)
+            return;
 
-            _logger.LogError("Не пройдена проверка совместимости антифрода и одного окна dlrequest v3: КодСведений={КодСведений}, ТипЗапроса={ТипЗапроса}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
-                requestV3.КодСведений, requestV3.ТипЗапроса, transaction.Id, error.Code, error.Message);
+        var isOneWindow = requestV3.ТипЗапроса == СправочникСпособыЗапросаV3.Item2;
+        var abonentOgrn = GetAbonentRequisitesV3(requestV3).ogrn;
+        var isQbchContragent = transaction.Requisites.Any(x => x.ogrn == abonentOgrn);
 
-            transaction.RiseCriticalError(error);
-        }
+        if (!isOneWindow && !isQbchContragent)
+            return;
+
+        var error = AnswerErrorCode.Code99_OtherError("Комбинация КодСведений=\"8\" и ТипЗапроса=\"2\" недопустима");
+
+        _logger.LogError("Не пройдена проверка совместимости антифрода и одного окна dlrequest v3: КодСведений={КодСведений}, ТипЗапроса={ТипЗапроса}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+            requestV3.КодСведений, requestV3.ТипЗапроса, transaction.Id, error.Code, error.Message);
+
+        transaction.RiseCriticalError(error);
     }
 
     private void ProcessSignV3(QBCHProcessingTransactionV3 transaction)

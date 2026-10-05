@@ -41,7 +41,9 @@ public class QBCHProcessingCompleteHandlerV3(
         }
 
         // Отправка в Kafka уходит в фон: клиент не ждёт подтверждения от брокера.
-        if (!_kafkaPublishQueue.TryEnqueue(() => SendDataToKafka(transaction)))
+        // Вторым действием передаётся выгрузка в backup-файл — она выполняется, если отправку
+        // не успели выполнить до остановки приложения.
+        if (!_kafkaPublishQueue.TryEnqueue(() => SendDataToKafka(transaction), () => SaveBackupData(transaction)))
         {
             _logger.LogCritical("Очередь отправки в Kafka переполнена: сервис={QbchService}. TransactionId={TransactionId}. Результат будет выгружен в backup-файл",
                 transaction.ServiceName, transaction.Id);

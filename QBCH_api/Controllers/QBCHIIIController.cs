@@ -168,9 +168,11 @@ public class QBCHIIIController(IMediator mediator,
                     ex.Message
                 });
 
-                // Попытка отправки в кафку                    
-                if (!await _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic))
-                    _logger.LogCritical("Потерян ключ:{key}", transaction.Id);
+                // Выгрузка в кафку уходит в фон: клиент не ждёт подтверждения от брокера.
+                if (!_kafkaPublishQueue.TryEnqueue(
+                        () => _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic),
+                        () => LogKafkaMessageNotPublished(message)))
+                    _logger.LogCritical("Очередь отправки в Kafka переполнена. Потерян ключ:{key}", transaction.Id);
             }
             catch (Exception e)
             {
@@ -300,8 +302,10 @@ public class QBCHIIIController(IMediator mediator,
                 LogActionEnd(nameof(DlAnswer_v_3), id, Response.StatusCode, actionStopwatch.Elapsed, guid);
 
                 var dlAnswerKafkaKey = $"QBCH:{serviceName}:{guid}";
-
-                if (!_kafkaPublishQueue.TryEnqueue(() => _kafka.Produce(new Message<Null, string> { Value = dlAnswerKafkaKey }, _kafkaTopic)))
+                
+                if (!_kafkaPublishQueue.TryEnqueue(
+                                        () => _kafka.Produce(new Message<Null, string> { Value = dlAnswerKafkaKey }, _kafkaTopic),
+                                        () => LogKafkaMessageNotPublished(dlAnswerKafkaKey)))
                     _logger.LogCritical("Очередь отправки в Kafka переполнена: ключ={kafkaKey}. Уведомление архиватору не отправлено", dlAnswerKafkaKey);
             }
         }
@@ -321,7 +325,9 @@ public class QBCHIIIController(IMediator mediator,
                    });
 
             // Выгрузка в кафку уходит в фон: клиент не ждёт подтверждения от брокера.
-            if (!_kafkaPublishQueue.TryEnqueue(() => _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic)))
+            if (!_kafkaPublishQueue.TryEnqueue(
+                    () => _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic),
+                    () => LogKafkaMessageNotPublished(message)))
                 _logger.LogCritical("Очередь отправки в Kafka переполнена: сервис={QbchService}, guid={Guid}. Сведения об ошибке не выгружены", serviceName, guid);
 
             _logger.LogCritical(ex, "Возникла критическая ошибка");
@@ -1200,6 +1206,16 @@ public class QBCHIIIController(IMediator mediator,
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Резервное действие очереди: отправку не выполнили до остановки приложения. Результат
+    /// обработки к этому моменту уже в Redis, поэтому достаточно записи в журнал.
+    /// </summary>
+    private Task LogKafkaMessageNotPublished(string message)
+    {
+        _logger.LogCritical("Отправка в Kafka не выполнена до остановки приложения: значение={kafkaMessage}", message);
+        return Task.CompletedTask;
     }
 
     /// <summary>
