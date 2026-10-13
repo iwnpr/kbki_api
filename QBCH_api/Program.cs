@@ -81,8 +81,8 @@ ThreadPool.SetMinThreads(200, 200);
 builder.Services.AddTransient<IKeyValueStorageService, KeyValueStorageService>();
 builder.Services.AddSingleton<IBKIRequisitsHandler, BKIRequsits>();
 builder.Services.AddSingleton<IKafkaService, KafkaService>();
-// Контекст замеров обращений к БД в рамках запроса (dbExecutionTime в итоговом логе).
 builder.Services.AddScoped<DbTimingContext>();
+builder.Services.AddScoped<KafkaTimingContext>();
 
 
 // V_3.0

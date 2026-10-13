@@ -46,7 +46,8 @@ public class QBCHIIIController(IMediator mediator,
         KafkaPublishQueue kafkaPublishQueue,
         ApiV3ContractRules contractRules,
         IConfiguration config,
-        DbTimingContext dbTimingContext) : ControllerBase
+        DbTimingContext dbTimingContext,
+        KafkaTimingContext kafkaTimingContext) : ControllerBase
 {
     private readonly IMediator _mediator = mediator;
     private readonly ICryptoService _cryptoService = cryptoService;
@@ -62,6 +63,13 @@ public class QBCHIIIController(IMediator mediator,
     private readonly IKafkaService _kafka = kafka;
     private readonly KafkaPublishQueue _kafkaPublishQueue = kafkaPublishQueue;
     private readonly DbTimingContext _dbTimingContext = dbTimingContext;
+    private readonly KafkaTimingContext _kafkaTimingContext = kafkaTimingContext;
+
+    private static readonly string RequestLogTemplate =
+        "Выполнен запрос {Action}, Bureau={Bureau}" + Environment.NewLine +
+        "  TransactionId={TransactionId}, RequestId={RequestId}, Status={StatusCode}" + Environment.NewLine +
+        "  КодСведений={InfoCode}, ТипЗапроса={RequestType}, РежимЗапроса={RequestMode}" + Environment.NewLine +
+        "  OnTime={IsOnTime}, TotalTime={TotalTime}ms, DbExecutionTime={DbExecutionTime}ms, KafkaTime={KafkaTime}ms";
 
     private readonly string? _kafkaTopic = config.GetValue<string>("KafkaService:Topic");
     private readonly string? _ourBureauPSRN = config.GetValue<string>("Bureau:PSRN");
@@ -97,7 +105,7 @@ public class QBCHIIIController(IMediator mediator,
 
             await _mediator.Publish(new QBCHProcessingCompleteV3(transaction));
 
-            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status400BadRequest, actionStopwatch.Elapsed);
+            LogActionEnd(nameof(DlRequest_v_3), transaction, StatusCodes.Status400BadRequest, actionStopwatch.Elapsed);
 
             return BadRequest(new MemoryStream(transaction.Response.SignedTicket!));
         }
@@ -140,7 +148,7 @@ public class QBCHIIIController(IMediator mediator,
 
             if (processingResult.Status == QBCHProcessingStatus.Accepted)
             {
-                LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status202Accepted, actionStopwatch.Elapsed);
+                LogActionEnd(nameof(DlRequest_v_3), transaction, StatusCodes.Status202Accepted, actionStopwatch.Elapsed);
                 return Accepted(new MemoryStream(processingResult.Response.SignedTicket!));
             }
 
@@ -150,7 +158,7 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             Response.StatusCode = StatusCodes.Status200OK;
-            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status200OK, actionStopwatch.Elapsed);
+            LogActionEnd(nameof(DlRequest_v_3), transaction, StatusCodes.Status200OK, actionStopwatch.Elapsed);
             return File(processingResult.Response.SignedResponse!, "application/octet-stream");
         }
         catch (Exception ex)
@@ -169,10 +177,18 @@ public class QBCHIIIController(IMediator mediator,
                 });
 
                 // Выгрузка в кафку уходит в фон: клиент не ждёт подтверждения от брокера.
+                var kafkaOperation = _kafkaTimingContext.RegisterOperation();
                 if (!_kafkaPublishQueue.TryEnqueue(
-                        () => _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic),
-                        () => LogKafkaMessageNotPublished(message)))
+                        () => kafkaOperation.MeasureAsync(() => _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic)),
+                        () =>
+                        {
+                            kafkaOperation.Skip();
+                            return LogKafkaMessageNotPublished(message);
+                        }))
+                {
+                    kafkaOperation.Skip();
                     _logger.LogCritical("Очередь отправки в Kafka переполнена. Потерян ключ:{key}", transaction.Id);
+                }
             }
             catch (Exception e)
             {
@@ -180,7 +196,7 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             _logger.LogError(ex, "Ошибка формирования HTTP-ответа для идентификатора {Id}", transaction.Id);
-            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
+            LogActionEnd(nameof(DlRequest_v_3), transaction, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
             return StatusCode(500);
         }
     }
@@ -246,7 +262,6 @@ public class QBCHIIIController(IMediator mediator,
 
                 if (!isCertificateValid & certValidationResult is not null)
                 {
-
                     var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(certValidationResult.ErrorCode, certValidationResult.Error));
                     responseXml = _xmlServiceV3.SerializeAsByteV3(ticket);
                     signedResponse = _cryptoService.SignMsg(responseXml);
@@ -302,7 +317,7 @@ public class QBCHIIIController(IMediator mediator,
                 LogActionEnd(nameof(DlAnswer_v_3), id, Response.StatusCode, actionStopwatch.Elapsed, guid);
 
                 var dlAnswerKafkaKey = $"QBCH:{serviceName}:{guid}";
-                
+
                 if (!_kafkaPublishQueue.TryEnqueue(
                                         () => _kafka.Produce(new Message<Null, string> { Value = dlAnswerKafkaKey }, _kafkaTopic),
                                         () => LogKafkaMessageNotPublished(dlAnswerKafkaKey)))
@@ -1219,6 +1234,38 @@ public class QBCHIIIController(IMediator mediator,
     }
 
     /// <summary>
+    /// Фиксирует время HTTP-запроса и записывает итоговый лог после завершения фоновых отправок Kafka.
+    /// </summary>
+    /// <param name="action">Имя действия контроллера.</param>
+    /// <param name="transaction">Идентификатор транзакции.</param>
+    /// <param name="statusCode">HTTP-код ответа.</param>
+    /// <param name="elapsed">Время выполнения действия.</param>
+    private void LogActionEnd(string action, QBCHProcessingTransactionV3 transaction, int statusCode, TimeSpan elapsed)
+    {
+        // Сохраняем значения до завершения HTTP-запроса: лог может записываться в фоне.
+        var bureau = HttpContext.Connection.ClientCertificate?.GetNameInfo(X509NameType.SimpleName, false);
+        var transactionId = transaction.Id;
+        var request = transaction.GetRequest<ЗапросСведений>();
+        var requestId = request?.ИдентификаторЗапроса;
+        var infoCode = request?.GetInfoCode();
+        var requestType = request?.GetRequestTypeCode();
+        var requestMode = request?.GetRequestModeCode();
+        var isOnTime = elapsed.TotalMilliseconds <= _contractRules.ImmediateResponseDeadlineMs;
+        var elapsedMs = (long)Math.Round(elapsed.TotalMilliseconds);
+        var dbExecutionTime = (long)Math.Round(_dbTimingContext.ElapsedMilliseconds);
+        var logger = _logger;
+
+        _kafkaTimingContext.OnCompleted(kafkaElapsedMs =>
+        {
+            var kafkaExecutionTime = (long)Math.Round(kafkaElapsedMs);
+            logger.LogInformation(RequestLogTemplate,
+                action, bureau, transactionId, requestId, statusCode,
+                infoCode, requestType, requestMode,
+                isOnTime, elapsedMs, dbExecutionTime, kafkaExecutionTime);
+        });
+    }
+
+    /// <summary>
     /// Логирует завершение действия.
     /// </summary>
     /// <param name="action">Имя действия контроллера.</param>
@@ -1226,7 +1273,6 @@ public class QBCHIIIController(IMediator mediator,
     /// <param name="statusCode">HTTP-код ответа.</param>
     /// <param name="elapsed">Время выполнения действия.</param>
     /// <param name="guid">Технический идентификатор вызова, если он используется действием.</param>
-    /// </param>
     private void LogActionEnd(string action, object transactionId, int statusCode, TimeSpan elapsed, string? guid = null)
     {
         var bureau = HttpContext.Connection.ClientCertificate?.GetNameInfo(X509NameType.SimpleName, false);
