@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Serilog.Context;
 
 namespace KafkaService_lib.BackgroundPublishing;
 
@@ -20,22 +21,24 @@ public sealed class KafkaPublishWorker(KafkaPublishQueue queue, ILogger<KafkaPub
         // нужно разобрать, а не бросить. Цикл завершает Complete() из StopAsync.
         await foreach (var item in _queue.ReadAllAsync(CancellationToken.None))
         {
-            try
+            using (LogContext.Push(item.LogEnricher))
             {
-                if (stoppingToken.IsCancellationRequested)
+                try
                 {
-                    fallbackCount++;
-                    await item.Fallback();
+                    if (stoppingToken.IsCancellationRequested)
+                    {
+                        fallbackCount++;
+                        await item.Fallback();
+                    }
+                    else
+                    {
+                        await item.Publish();
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    await item.Publish();
+                    _logger.LogCritical(ex, "Необработанная ошибка при фоновой отправке в Kafka");
                 }
-            }
-
-            catch (Exception ex)
-            {
-                _logger.LogCritical(ex, "Необработанная ошибка при фоновой отправке в Kafka");
             }
         }
 

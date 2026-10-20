@@ -4,8 +4,8 @@ using KafkaService_lib.BackgroundPublishing;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
 using qbch_lib;
+using qbch_lib.Diagnostics;
 using qbch_lib.domain.aggregate.V3;
-using QBCH_lib.Diagnostics;
 using QBCH_lib.domain.DTOs;
 using System.Text;
 using System.Text.Json;
@@ -17,7 +17,7 @@ public class QBCHProcessingCompleteHandlerV3(
     IKeyValueStorageService storageService,
     IKafkaService kafka,
     KafkaPublishQueue kafkaPublishQueue,
-    KafkaTimingContext kafkaTimingContext)
+    LoggingContext logContext)
     : INotificationHandler<QBCHProcessingCompleteV3>
 {
     private const string ApiVersion = "3.0";
@@ -31,7 +31,6 @@ public class QBCHProcessingCompleteHandlerV3(
     private readonly IKeyValueStorageService _storageService = storageService;
     private readonly IKafkaService _kafka = kafka;
     private readonly KafkaPublishQueue _kafkaPublishQueue = kafkaPublishQueue;
-    private readonly KafkaTimingContext _kafkaTimingContext = kafkaTimingContext;
 
     public async Task Handle(QBCHProcessingCompleteV3 notification, CancellationToken cancellationToken)
     {
@@ -46,16 +45,8 @@ public class QBCHProcessingCompleteHandlerV3(
         // Отправка в Kafka уходит в фон: клиент не ждёт подтверждения от брокера.
         // Вторым действием передаётся выгрузка в backup-файл — она выполняется, если отправку
         // не успели выполнить до остановки приложения.
-        var kafkaOperation = _kafkaTimingContext.RegisterOperation();
-        if (!_kafkaPublishQueue.TryEnqueue(
-                () => SendDataToKafka(transaction, kafkaOperation),
-                () =>
-                {
-                    kafkaOperation.Skip();
-                    return SaveBackupData(transaction);
-                }))
+        if (!_kafkaPublishQueue.TryEnqueue(() => SendDataToKafka(transaction), () => SaveBackupData(transaction), logContext))
         {
-            kafkaOperation.Skip();
             _logger.LogCritical("Очередь отправки в Kafka переполнена: сервис={QbchService}. TransactionId={TransactionId}. Результат будет выгружен в backup-файл",
                 transaction.ServiceName, transaction.Id);
             await SaveBackupData(transaction);
@@ -119,13 +110,12 @@ public class QBCHProcessingCompleteHandlerV3(
         }
     }
 
-    private async Task SendDataToKafka(QBCHProcessingTransactionV3 transaction, KafkaTimingContext.Operation kafkaOperation)
+    private async Task SendDataToKafka(QBCHProcessingTransactionV3 transaction)
     {
         try
         {
             var kafkaKey = $"QBCH:{RedisConstants.DlRequestV3Scope}:{transaction.Id}";
-            var isProduce = await kafkaOperation.MeasureAsync(
-                () => _kafka.Produce(new Message<Null, string> { Value = kafkaKey }));
+            var isProduce = await _kafka.Produce(new Message<Null, string> { Value = kafkaKey });
             if (!isProduce)
             {
                 _logger.LogCritical("Kafka-сообщение для ключа QBCH:{serviceName}:{TransactionId} не отправлено. Результат будет выгружен в backup-файл",

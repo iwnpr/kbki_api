@@ -13,6 +13,8 @@ using QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
 using QBCH_api.QBCHProcessing.V3.StoreProcessingData.Event;
 using QBCH_api.Services.Interfaces.V3;
 using qbch_lib;
+using qbch_lib.Diagnostics;
+using Serilog.Context;
 using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.errors;
 using QBCH_lib.CommonTypes.Api;
@@ -47,7 +49,7 @@ public class QBCHIIIController(IMediator mediator,
         ApiV3ContractRules contractRules,
         IConfiguration config,
         DbTimingContext dbTimingContext,
-        KafkaTimingContext kafkaTimingContext) : ControllerBase
+        LoggingContext logContext) : ControllerBase
 {
     private readonly IMediator _mediator = mediator;
     private readonly ICryptoService _cryptoService = cryptoService;
@@ -63,13 +65,12 @@ public class QBCHIIIController(IMediator mediator,
     private readonly IKafkaService _kafka = kafka;
     private readonly KafkaPublishQueue _kafkaPublishQueue = kafkaPublishQueue;
     private readonly DbTimingContext _dbTimingContext = dbTimingContext;
-    private readonly KafkaTimingContext _kafkaTimingContext = kafkaTimingContext;
 
     private static readonly string RequestLogTemplate =
-        "Выполнен запрос {Action}, Bureau={Bureau}" + Environment.NewLine +
-        "  TransactionId={TransactionId}, RequestId={RequestId}, Status={StatusCode}" + Environment.NewLine +
+        "Выполнен запрос {Action}, Bureau={Bureau}, Thumbprint={Thumbprint}" + Environment.NewLine +
+        "  TransactionId={TransactionId}, XmlRequestId={XmlRequestId}, Status={StatusCode}" + Environment.NewLine +
         "  КодСведений={InfoCode}, ТипЗапроса={RequestType}, РежимЗапроса={RequestMode}" + Environment.NewLine +
-        "  OnTime={IsOnTime}, TotalTime={TotalTime}ms, DbExecutionTime={DbExecutionTime}ms, KafkaTime={KafkaTime}ms";
+        "  OnTime={IsOnTime}, TotalTime={TotalTime}ms, DbExecutionTime={DbExecutionTime}ms";
 
     private readonly string? _kafkaTopic = config.GetValue<string>("KafkaService:Topic");
     private readonly string? _ourBureauPSRN = config.GetValue<string>("Bureau:PSRN");
@@ -105,7 +106,7 @@ public class QBCHIIIController(IMediator mediator,
 
             await _mediator.Publish(new QBCHProcessingCompleteV3(transaction));
 
-            LogActionEnd(nameof(DlRequest_v_3), transaction, StatusCodes.Status400BadRequest, actionStopwatch.Elapsed);
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status400BadRequest, actionStopwatch.Elapsed, request: transaction.ClentRequest.Request);
 
             return BadRequest(new MemoryStream(transaction.Response.SignedTicket!));
         }
@@ -148,7 +149,7 @@ public class QBCHIIIController(IMediator mediator,
 
             if (processingResult.Status == QBCHProcessingStatus.Accepted)
             {
-                LogActionEnd(nameof(DlRequest_v_3), transaction, StatusCodes.Status202Accepted, actionStopwatch.Elapsed);
+                LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status202Accepted, actionStopwatch.Elapsed, request: transaction.ClentRequest.Request);
                 return Accepted(new MemoryStream(processingResult.Response.SignedTicket!));
             }
 
@@ -158,7 +159,7 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             Response.StatusCode = StatusCodes.Status200OK;
-            LogActionEnd(nameof(DlRequest_v_3), transaction, StatusCodes.Status200OK, actionStopwatch.Elapsed);
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status200OK, actionStopwatch.Elapsed, request: transaction.ClentRequest.Request);
             return File(processingResult.Response.SignedResponse!, "application/octet-stream");
         }
         catch (Exception ex)
@@ -177,18 +178,11 @@ public class QBCHIIIController(IMediator mediator,
                 });
 
                 // Выгрузка в кафку уходит в фон: клиент не ждёт подтверждения от брокера.
-                var kafkaOperation = _kafkaTimingContext.RegisterOperation();
                 if (!_kafkaPublishQueue.TryEnqueue(
-                        () => kafkaOperation.MeasureAsync(() => _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic)),
-                        () =>
-                        {
-                            kafkaOperation.Skip();
-                            return LogKafkaMessageNotPublished(message);
-                        }))
-                {
-                    kafkaOperation.Skip();
+                        () => KafkaProduceWithLogContext(message),
+                        () => LogKafkaMessageNotPublished(message),
+                        logContext))
                     _logger.LogCritical("Очередь отправки в Kafka переполнена. Потерян ключ:{key}", transaction.Id);
-                }
             }
             catch (Exception e)
             {
@@ -196,14 +190,29 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             _logger.LogError(ex, "Ошибка формирования HTTP-ответа для идентификатора {Id}", transaction.Id);
-            LogActionEnd(nameof(DlRequest_v_3), transaction, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed);
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed, request: transaction.ClentRequest.Request);
             return StatusCode(500);
+        }
+    }
+
+    /// <summary>
+    /// Отправляет сообщение в Kafka с контекстом логирования запроса. Нужен для фоновой отправки:
+    /// она выполняется вне запроса, и без явного подключения контекста записи остались бы без TransactionId.
+    /// </summary>
+    private async Task KafkaProduceWithLogContext(string message)
+    {
+        using (LogContext.Push(logContext))
+        {
+            await _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic);
         }
     }
 
     [HttpGet("dlanswer")]
     public async Task<IActionResult> DlAnswer_v_3(string? id = null)
     {
+        if (!string.IsNullOrWhiteSpace(id))
+            logContext.TransactionId = id;
+
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
         var serviceName = RedisConstants.DlAnswerV3Scope;
@@ -319,8 +328,9 @@ public class QBCHIIIController(IMediator mediator,
                 var dlAnswerKafkaKey = $"QBCH:{serviceName}:{guid}";
 
                 if (!_kafkaPublishQueue.TryEnqueue(
-                                        () => _kafka.Produce(new Message<Null, string> { Value = dlAnswerKafkaKey }, _kafkaTopic),
-                                        () => LogKafkaMessageNotPublished(dlAnswerKafkaKey)))
+                                        () => KafkaProduceWithLogContext(dlAnswerKafkaKey),
+                                        () => LogKafkaMessageNotPublished(dlAnswerKafkaKey),
+                                        logContext))
                     _logger.LogCritical("Очередь отправки в Kafka переполнена: ключ={kafkaKey}. Уведомление архиватору не отправлено", dlAnswerKafkaKey);
             }
         }
@@ -341,8 +351,9 @@ public class QBCHIIIController(IMediator mediator,
 
             // Выгрузка в кафку уходит в фон: клиент не ждёт подтверждения от брокера.
             if (!_kafkaPublishQueue.TryEnqueue(
-                    () => _kafka.Produce(new Message<Null, string> { Value = message }, _kafkaTopic),
-                    () => LogKafkaMessageNotPublished(message)))
+                    () => KafkaProduceWithLogContext(message),
+                    () => LogKafkaMessageNotPublished(message),
+                    logContext))
                 _logger.LogCritical("Очередь отправки в Kafka переполнена: сервис={QbchService}, guid={Guid}. Сведения об ошибке не выгружены", serviceName, guid);
 
             _logger.LogCritical(ex, "Возникла критическая ошибка");
@@ -1234,38 +1245,6 @@ public class QBCHIIIController(IMediator mediator,
     }
 
     /// <summary>
-    /// Фиксирует время HTTP-запроса и записывает итоговый лог после завершения фоновых отправок Kafka.
-    /// </summary>
-    /// <param name="action">Имя действия контроллера.</param>
-    /// <param name="transaction">Идентификатор транзакции.</param>
-    /// <param name="statusCode">HTTP-код ответа.</param>
-    /// <param name="elapsed">Время выполнения действия.</param>
-    private void LogActionEnd(string action, QBCHProcessingTransactionV3 transaction, int statusCode, TimeSpan elapsed)
-    {
-        // Сохраняем значения до завершения HTTP-запроса: лог может записываться в фоне.
-        var bureau = HttpContext.Connection.ClientCertificate?.GetNameInfo(X509NameType.SimpleName, false);
-        var transactionId = transaction.Id;
-        var request = transaction.GetRequest<ЗапросСведений>();
-        var requestId = request?.ИдентификаторЗапроса;
-        var infoCode = request?.GetInfoCode();
-        var requestType = request?.GetRequestTypeCode();
-        var requestMode = request?.GetRequestModeCode();
-        var isOnTime = elapsed.TotalMilliseconds <= _contractRules.ImmediateResponseDeadlineMs;
-        var elapsedMs = (long)Math.Round(elapsed.TotalMilliseconds);
-        var dbExecutionTime = (long)Math.Round(_dbTimingContext.ElapsedMilliseconds);
-        var logger = _logger;
-
-        _kafkaTimingContext.OnCompleted(kafkaElapsedMs =>
-        {
-            var kafkaExecutionTime = (long)Math.Round(kafkaElapsedMs);
-            logger.LogInformation(RequestLogTemplate,
-                action, bureau, transactionId, requestId, statusCode,
-                infoCode, requestType, requestMode,
-                isOnTime, elapsedMs, dbExecutionTime, kafkaExecutionTime);
-        });
-    }
-
-    /// <summary>
     /// Логирует завершение действия.
     /// </summary>
     /// <param name="action">Имя действия контроллера.</param>
@@ -1273,21 +1252,34 @@ public class QBCHIIIController(IMediator mediator,
     /// <param name="statusCode">HTTP-код ответа.</param>
     /// <param name="elapsed">Время выполнения действия.</param>
     /// <param name="guid">Технический идентификатор вызова, если он используется действием.</param>
-    private void LogActionEnd(string action, object transactionId, int statusCode, TimeSpan elapsed, string? guid = null)
+    /// <param name="request">Разобранный запрос, если действие его принимает: его параметры попадают в запись.</param>
+    private void LogActionEnd(string action, object transactionId, int statusCode, TimeSpan elapsed, string? guid = null, ЗапросСведений? request = null)
     {
-        var bureau = HttpContext.Connection.ClientCertificate?.GetNameInfo(X509NameType.SimpleName, false);
+        var certificate = HttpContext.Connection.ClientCertificate;
+        var bureau = certificate?.GetNameInfo(X509NameType.SimpleName, false);
+        var thumbprint = certificate?.Thumbprint;
         var elapsedMs = elapsed.TotalMilliseconds;
         var isOnTime = elapsedMs <= _contractRules.ImmediateResponseDeadlineMs;
         var dbExecutionTime = _dbTimingContext.ElapsedMilliseconds;
+        var xmlRequestId = request?.ИдентификаторЗапроса;
+        var infoCode = request?.GetInfoCode();
+        var requestType = request?.GetRequestTypeCode();
+        var requestMode = request?.GetRequestModeCode();
 
-        if (guid is null)
+        if (request is not null)
         {
-            _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Bureau={Bureau}, Status={StatusCode}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
-                action, isOnTime, transactionId, bureau, statusCode, elapsedMs, dbExecutionTime);
+            _logger.LogInformation(RequestLogTemplate, action, bureau, thumbprint, transactionId, xmlRequestId, statusCode, infoCode, requestType, requestMode, isOnTime, elapsedMs, dbExecutionTime);
             return;
         }
 
-        _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Bureau={Bureau}, Status={StatusCode}, Guid={Guid}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
-            action, isOnTime, transactionId, bureau, statusCode, guid, elapsedMs, dbExecutionTime);
+        if (guid is null)
+        {
+            _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Bureau={Bureau}, Thumbprint={Thumbprint}, Status={StatusCode}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
+                action, isOnTime, transactionId, bureau, thumbprint, statusCode, elapsedMs, dbExecutionTime);
+            return;
+        }
+
+        _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Bureau={Bureau}, Thumbprint={Thumbprint}, Status={StatusCode}, Guid={Guid}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
+            action, isOnTime, transactionId, bureau, thumbprint, statusCode, guid, elapsedMs, dbExecutionTime);
     }
 }

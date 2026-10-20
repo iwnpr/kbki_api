@@ -1,20 +1,16 @@
-﻿using Cache_lib.Interfaces;
-using Crypto_lib.Service;
-using MediatR;
-using QBCH_api.Services.Interfaces.V3;
-using Qbch_db_lib.Services.Interfaces.V3;
+﻿using MediatR;
+using qbch_lib.Diagnostics;
 using qbch_lib.domain.aggregate.V3;
 using qbch_lib.domain.entities;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.domain.entities;
-using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 
 /// <summary>
 /// Создание и валидация транзакции для dlrequest
 /// </summary>
-public sealed class CreateAndValidateHandler(IQBCHValidationDispatcherV3 validationDispatcher, IBKIRequisitsHandler bKIRequisits, ILogger<CreateAndValidateHandler> logger) : IRequestHandler<CreateToValidateCommandV3, QBCHProcessingTransactionV3>
+public sealed class CreateAndValidateHandler(IQBCHValidationDispatcherV3 validationDispatcher, IBKIRequisitsHandler bKIRequisits, ILogger<CreateAndValidateHandler> logger, LoggingContext logContext) : IRequestHandler<CreateToValidateCommandV3, QBCHProcessingTransactionV3>
 {
     private readonly IQBCHValidationDispatcherV3 _validationDispatcher = validationDispatcher;
     private readonly IBKIRequisitsHandler _bKIRequisits = bKIRequisits;
@@ -45,6 +41,8 @@ public sealed class CreateAndValidateHandler(IQBCHValidationDispatcherV3 validat
         var requestBody = memoryStream.ToArray();
         var attachement = Attachment.Create(signedRequest: requestBody);
         var transaction = QBCHProcessingTransactionV3.Create(DateTime.Now, clientRequest, attachement, _bKIRequisits.GetBureaList());
+
+        logContext.TransactionId = transaction.Id.ToString();
 
         var result = await _validationDispatcher.ValidateV3(transaction, cancellationToken);
 

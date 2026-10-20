@@ -4,11 +4,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Timeout;
+using System.Diagnostics;
 
 namespace KafkaService_lib.Services.Implementation
 {
     public class KafkaService : IKafkaService
     {
+        private const int ProduceThresholdMs = 500;
+
         private IProducer<string, string>? _producer;
         private IProducer<Null, string>? _producerMsg;
         private IConsumer<string, string>? _consumer;
@@ -94,12 +97,15 @@ namespace KafkaService_lib.Services.Implementation
                     _ => TimeSpan.FromMilliseconds(_produceRetryDelayMs),
                     (exception, delay, retryNumber, _) =>
                     {
-                        _logger.LogWarning(exception, "Ошибка отправки сообщения в Kafka: значение={value}. Попытка {attempt}/{maxAttempts}, повтор через {delayMs} мс",
-                                                    message.Value, retryNumber, maxAttempts, (int)delay.TotalMilliseconds);
+                        _logger.LogWarning(
+                            exception,
+                            "Ошибка отправки сообщения в Kafka: Ключ={value}. Попытка {attempt}/{maxAttempts}, повтор через {delayMs} мс",
+                            message.Value, retryNumber, maxAttempts, (int)delay.TotalMilliseconds);
                     });
 
             var policy = Policy.WrapAsync(timeoutPolicy, retryPolicy);
 
+            var startedAt = Stopwatch.GetTimestamp();
             try
             {
                 await policy.ExecuteAsync(async token =>
@@ -113,10 +119,24 @@ namespace KafkaService_lib.Services.Implementation
             }
             catch (Exception e) when (e is ProduceException<Null, string> || e is TimeoutRejectedException)
             {
-                _logger.LogError(e, "Сообщение не отправлено в Kafka: значение={value}. Достигнут лимит попыток ({retryCount}) либо общего времени ({timeoutMs} мс)",
-                                    message.Value, _produceRetryCount, _produceRetryTotalTimeoutMs);
-                return false;
+                _logger.LogError(
+                    e,
+                    "Сообщение не отправлено в Kafka: значение={value}. Достигнут лимит попыток ({retryCount}) либо общего времени ({timeoutMs} мс)",
+                    message.Value, _produceRetryCount, _produceRetryTotalTimeoutMs);
 
+                return false;
+            }
+            finally
+            {
+                var elapsed = Stopwatch.GetElapsedTime(startedAt);
+                var elapsedMs = (long)Math.Round(elapsed.TotalMilliseconds);
+
+                if (elapsed.TotalMilliseconds > ProduceThresholdMs)
+                    _logger.LogWarning(
+                        "Отправка в Kafka заняла больше {thresholdMs} мс: topic={topic}, KafkaTime={KafkaTime}ms",
+                        ProduceThresholdMs, topic, elapsedMs);
+                else
+                    _logger.LogDebug("Время отправки в Kafka: topic={topic}, KafkaTime={KafkaTime}ms", topic, elapsedMs);
             }
         }
 
@@ -196,6 +216,5 @@ namespace KafkaService_lib.Services.Implementation
                 _logger.LogDebug("Завершение получения сообщения из Kafka");
             }
         }
-
     }
 }

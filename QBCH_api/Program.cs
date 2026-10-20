@@ -15,6 +15,7 @@ using QBCH_api.Services.Implementations.V3;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Implementations.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
+using qbch_lib.Diagnostics;
 using QBCH_lib.CommonTypes.Api;
 using QBCH_lib.Configuration;
 using QBCH_lib.Diagnostics;
@@ -32,7 +33,7 @@ using XmlService_lib.Services.Interfaces.V3;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
-var serilog = new LoggerConfiguration().ReadFrom.Configuration(configuration).CreateLogger();
+var serilog = new LoggerConfiguration().ReadFrom.Configuration(configuration).Enrich.FromLogContext().CreateLogger();
 
 builder.Services.Configure<ApiV3ContractOptions>(configuration.GetSection(ApiV3ContractOptions.SectionName));
 var contractOptions = configuration.GetSection(ApiV3ContractOptions.SectionName).Get<ApiV3ContractOptions>() ?? new ApiV3ContractOptions();
@@ -81,9 +82,8 @@ ThreadPool.SetMinThreads(200, 200);
 builder.Services.AddTransient<IKeyValueStorageService, KeyValueStorageService>();
 builder.Services.AddSingleton<IBKIRequisitsHandler, BKIRequsits>();
 builder.Services.AddSingleton<IKafkaService, KafkaService>();
+builder.Services.AddScoped<LoggingContext>();
 builder.Services.AddScoped<DbTimingContext>();
-builder.Services.AddScoped<KafkaTimingContext>();
-
 
 // V_3.0
 builder.Services.AddTransient<IXmlServiceV3, XmlServiceV3>();
@@ -187,6 +187,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+app.UseMiddleware<LoggingScopeMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseRouting();
 app.UseCertificateForwarding();

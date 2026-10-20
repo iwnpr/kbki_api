@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Serilog.Core;
 using System.Threading.Channels;
 
 namespace KafkaService_lib.BackgroundPublishing;
@@ -11,13 +12,19 @@ public sealed class KafkaPublishQueue
 {
     private const int DefaultCapacity = 500;
 
-    private readonly Channel<(Func<Task> Publish, Func<Task> Fallback)> _channel;
+    private readonly Channel<(
+        Func<Task> Publish, 
+        Func<Task> Fallback, 
+        ILogEventEnricher LogEnricher)> _channel;
 
     public KafkaPublishQueue(IConfiguration config)
     {
         var capacity = config.GetValue<int?>("KafkaService:PublishQueueCapacity") ?? DefaultCapacity;
 
-        _channel = Channel.CreateBounded<(Func<Task> Publish, Func<Task> Fallback)>(
+        _channel = Channel.CreateBounded<(
+            Func<Task> Publish, 
+            Func<Task> Fallback, 
+            ILogEventEnricher LogEnricher)>(
             new BoundedChannelOptions(capacity)
             {
                 // Wait в паре с TryWrite: при переполнении TryWrite возвращает false.
@@ -34,9 +41,14 @@ public sealed class KafkaPublishQueue
     /// <param name="publish">Отправка в Kafka.</param>
     /// <param name="fallback">Если отправку выполнить не успели: остаток очереди
     /// при остановке приложения уходит сюда, а не в брокер.</param>
+    /// <param name="logEnricher">Свойства логирования запроса (например, TransactionId). Фоновый обработчик
+    /// подключает их на время и отправки, и резервного действия, поэтому внутри лямбд это делать не нужно.</param>
     /// <returns><c>false</c>, если очередь переполнена или закрыта на запись.</returns>
-    public bool TryEnqueue(Func<Task> publish, Func<Task> fallback)
-        => _channel.Writer.TryWrite((publish, fallback));
+    public bool TryEnqueue(
+        Func<Task> publish, 
+        Func<Task> fallback, 
+        ILogEventEnricher logEnricher)
+        => _channel.Writer.TryWrite((publish, fallback, logEnricher));
 
     /// <summary>
     /// Текущее количество ожидающих отправок в очереди.
@@ -46,7 +58,7 @@ public sealed class KafkaPublishQueue
     /// <summary>
     /// Читает очередь до её закрытия.
     /// </summary>
-    public IAsyncEnumerable<(Func<Task> Publish, Func<Task> Fallback)> ReadAllAsync(CancellationToken cancellationToken)
+    public IAsyncEnumerable<(Func<Task> Publish, Func<Task> Fallback, ILogEventEnricher LogEnricher)> ReadAllAsync(CancellationToken cancellationToken)
     => _channel.Reader.ReadAllAsync(cancellationToken);
 
     /// <summary>
