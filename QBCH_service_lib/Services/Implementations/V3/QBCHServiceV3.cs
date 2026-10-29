@@ -1,4 +1,5 @@
-﻿using Cache_lib.Interfaces;
+﻿using QBCH_lib.core;
+using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -113,11 +114,7 @@ public class QBCHServiceV3(
                 Запрос = [requestItem]
             };
 
-            var xmlResult = _xmlSerializer.SerializeAsStringV3(template);
-            if (!xmlResult.IsSuccess)
-                throw ((OperationError)xmlResult.Error!).Exception;
-
-            var xml = xmlResult.Value;
+            var xml = _xmlSerializer.SerializeAsStringV3(template).GetValueOrThrow();
             var timer = Stopwatch.StartNew();
 
             var subjectKeys = await _qbchDb.GetSearchAllSubjectsV3(xml, timeLeft);
@@ -216,11 +213,7 @@ public class QBCHServiceV3(
             Запрос = request.Запрос
         };
 
-        var dlrequestBytesResult = _xmlSerializer.SerializeAsByteV3(externalRequest);
-        if (!dlrequestBytesResult.IsSuccess)
-            throw ((OperationError)dlrequestBytesResult.Error!).Exception;
-
-        var dlrequestBytes = dlrequestBytesResult.Value;
+        var dlrequestBytes = _xmlSerializer.SerializeAsByteV3(externalRequest).GetValueOrThrow();
         var signedDlrequestBytes = _cryptoService.SignMsg(dlrequestBytes);
         var dlrequestContent = new ByteArrayContent(signedDlrequestBytes);
 
@@ -273,11 +266,7 @@ public class QBCHServiceV3(
 
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 redisMsg.SetSignedResponse(ms.ToArray()).SetResponseXml(answerValidation.Body).SetResponseTime(DateTime.Now);
-                                var dlrequestResultParsing = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body);
-                                if (!dlrequestResultParsing.IsSuccess)
-                                    throw ((OperationError)dlrequestResultParsing.Error!).Exception;
-
-                                dlrequestResult = dlrequestResultParsing.Value;
+                                dlrequestResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body).GetValueOrThrow();
                                 await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{guid}:{bureau.ogrn}", "response_id", dlrequestResult?.ИдентификаторОтвета ?? "-");
                                 break;
@@ -293,11 +282,7 @@ public class QBCHServiceV3(
                                     break;
                                 }
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
-                                var badTicketResult = _xmlSerializer.DeserializeV3<Результат>(badValidation.Body);
-                                if (!badTicketResult.IsSuccess)
-                                    throw ((OperationError)badTicketResult.Error!).Exception;
-
-                                var badTicket = badTicketResult.Value;
+                                var badTicket = _xmlSerializer.DeserializeV3<Результат>(badValidation.Body).GetValueOrThrow();
 
                                 if (badTicket?.Item is ТипОшибка badError)
                                 {
@@ -324,11 +309,7 @@ public class QBCHServiceV3(
                                     break;
                                 }
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
-                                var ticketParsing = _xmlSerializer.DeserializeV3<Результат>(ticketValidation.Body);
-                                if (!ticketParsing.IsSuccess)
-                                    throw ((OperationError)ticketParsing.Error!).Exception;
-
-                                ticket = ticketParsing.Value;
+                                ticket = _xmlSerializer.DeserializeV3<Результат>(ticketValidation.Body).GetValueOrThrow();
 
                                 if (ticket?.Item is РезультатИдентификаторОтвета)
                                 {
@@ -495,11 +476,7 @@ public class QBCHServiceV3(
                         _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
                         await _storageService.ListSet(key: [RedisConstants.DlRequestV3Scope, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
 
-                        var answerResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведений>(okValidation.Body);
-                        if (!answerResult.IsSuccess)
-                            throw ((OperationError)answerResult.Error!).Exception;
-
-                        var answer = answerResult.Value;
+                        var answer = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведений>(okValidation.Body).GetValueOrThrow();
                         //NOTE: У Артема эта обработка отсутствует, но, имхо, она допустима
                         return answer ?? CreateErrorAnswerV3(bureau.ogrn!, "19", "Ответ не соответствует схеме", orderNumbers);
 
@@ -515,11 +492,7 @@ public class QBCHServiceV3(
                         }
 
                         _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
-                        var ticketResult = _xmlSerializer.DeserializeV3<Результат>(ticketValidation.Body);
-                        if (!ticketResult.IsSuccess)
-                            throw ((OperationError)ticketResult.Error!).Exception;
-
-                        var ticket = ticketResult.Value;
+                        var ticket = _xmlSerializer.DeserializeV3<Результат>(ticketValidation.Body).GetValueOrThrow();
                         //NOTE: Возвратил пропавший код Артема. И безусловное приведение вместо сравнения, это ошибка. 
                         if (ticket?.Item is ТипОшибка ticketError)
                         {
@@ -629,8 +602,7 @@ public class QBCHServiceV3(
         redisMessage?.SetResponseXml(cryptoResult.Body);
 
         var xsdValidation = _xsdValidator.Validate(cryptoResult.Body, [schemaName, @"xsd\3\qcb_common.xsd"]);
-        if (xsdValidation.Error is OperationError failure)
-            throw failure.Exception;
+        xsdValidation.Error.ThrowIfOperationFailed();
 
         if (!xsdValidation.IsSuccess)
         {
@@ -689,11 +661,7 @@ public class QBCHServiceV3(
             return;
         }
 
-        var ampResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml);
-        if (!ampResult.IsSuccess)
-            throw ((OperationError)ampResult.Error!).Exception;
-
-        var amp = ampResult.Value;
+        var amp = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml).GetValueOrThrow();
 
         if (amp?.БКИ is { Length: > 0 })
         {
@@ -717,11 +685,7 @@ public class QBCHServiceV3(
             return;
         }
 
-        var prohibitionResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(prohibitionXml);
-        if (!prohibitionResult.IsSuccess)
-            throw ((OperationError)prohibitionResult.Error!).Exception;
-
-        var prohibition = prohibitionResult.Value;
+        var prohibition = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(prohibitionXml).GetValueOrThrow();
 
         if (prohibition?.Условие is { Length: > 0 })
         {
@@ -751,11 +715,7 @@ public class QBCHServiceV3(
             return;
         }
 
-        var antifraudResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(antifraudXml);
-        if (!antifraudResult.IsSuccess)
-            throw ((OperationError)antifraudResult.Error!).Exception;
-
-        var antifraud = antifraudResult.Value;
+        var antifraud = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(antifraudXml).GetValueOrThrow();
 
         if (antifraud?.БКИ is { Length: > 0 })
         {
