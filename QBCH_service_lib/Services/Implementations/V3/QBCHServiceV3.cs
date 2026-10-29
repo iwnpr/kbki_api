@@ -176,7 +176,6 @@ public class QBCHServiceV3(
             if (!antifraud.IsSuccess)
                 return Result<QBCHTaskResult>.Failure(antifraud.Error!);
 
-
             _logger.LogDebug("Данные из БД упешно получены. Запрос: {TransactionId}", transaction.Id);
 
             response.КБКИ = [kbki];
@@ -560,6 +559,7 @@ public class QBCHServiceV3(
                             continue;
                         }
 
+                        //NOTE: У Артема эта обработка отсутствует, но, имхо, она допустима
                         return answerParsing.Value ?? CreateErrorAnswerV3(bureau.ogrn!, "19", "Ответ не соответствует схеме", orderNumbers);
 
                     case HttpStatusCode.Accepted:
@@ -737,91 +737,91 @@ public class QBCHServiceV3(
         };
     }
 
-    private Result<bool> FillObligationsSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAmp, XElement? ampXml)
+    private Result FillObligationsSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAmp, XElement? ampXml)
     {
         if (!includeAmp)
         {
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         if (ampXml == null || ampXml.Name == "ОбязательствНет")
         {
             kbki.ДобавитьПризнакОтсутствияОбязательств();
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         var amp = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml);
         if (!amp.IsSuccess)
-            return Result<bool>.Failure(amp.Error!);
+            return Result.Failure(amp.Error!);
 
         if (amp.Value?.БКИ is { Length: > 0 })
         {
             kbki.ДобавитьОбязательства(amp.Value);
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         kbki.ДобавитьПризнакОтсутствияОбязательств();
-        return Result<bool>.Success(true);
+        return Result.Success();
     }
-    private Result<bool> FillSelfProhibitionSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, XElement? prohibitionXml, bool isInnVerified)
+    private Result FillSelfProhibitionSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, XElement? prohibitionXml, bool isInnVerified)
     {
         if (!isInnVerified)
         {
             kbki.ДобавитьПризнакНепредоставленияСведенийОЗапрете();
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         if (prohibitionXml == null || prohibitionXml.Name == "СведенийОЗапретеНет")
         {
             kbki.ДобавитьПризнакОтсутствияСведенийОЗапрете();
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         var prohibition = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(prohibitionXml);
         if (!prohibition.IsSuccess)
-            return Result<bool>.Failure(prohibition.Error!);
+            return Result.Failure(prohibition.Error!);
 
         if (prohibition.Value?.Условие is { Length: > 0 })
         {
             kbki.ДобавитьУсловияЗапрета(prohibition.Value);
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         kbki.ДобавитьПризнакОтсутствияСведенийОЗапрете();
-        return Result<bool>.Success(true);
+        return Result.Success();
     }
 
-    private Result<bool> FillAntifraudSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAntifraud, XElement? antifraudXml, bool isInnVerified)
+    private Result FillAntifraudSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAntifraud, XElement? antifraudXml, bool isInnVerified)
     {
         if (!includeAntifraud)
         {
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         if (!isInnVerified)
         {
             kbki.ДобавитьПризнакНепредоставленияАнтифродСведений();
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         if (antifraudXml == null || antifraudXml.Name == "СведенийДляПредупрежденияНет")
         {
             kbki.ДобавитьПризнакОтсутствияАнтифродСведений();
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         var antifraud = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(antifraudXml);
         if (!antifraud.IsSuccess)
-            return Result<bool>.Failure(antifraud.Error!);
+            return Result.Failure(antifraud.Error!);
 
         if (antifraud.Value?.БКИ is { Length: > 0 })
         {
             kbki.ДобавитьСведенияДляПредупреждения(antifraud.Value);
-            return Result<bool>.Success(true);
+            return Result.Success();
         }
 
         kbki.ДобавитьПризнакОтсутствияАнтифродСведений();
-        return Result<bool>.Success(true);
+        return Result.Success();
     }
 
     private static bool IsInnVerified(ТипИННФЛсПризнаком? inn) =>

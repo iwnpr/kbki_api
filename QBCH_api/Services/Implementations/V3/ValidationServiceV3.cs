@@ -17,104 +17,154 @@ public class ValidationServiceV3(
     IRepositoryV3 repository,
     ILogger<ValidationServiceV3> logger) : IValidationServiceV3
 {
+    private readonly ICryptoService _cryptoService = cryptoService;
+    private readonly IKeyValueStorageService _cache = cache;
+    private readonly IRepositoryV3 _repository = repository;
+    private readonly ILogger<ValidationServiceV3> _logger = logger;
+
     /// <inheritdoc />
-    public Result<bool> ValidateEncodingV3(byte[] message) => Execute(() =>
+    public Result<bool> ValidateEncodingV3(byte[] message)
     {
-        logger.LogDebug("Начало проверки кодировки: messageLength={MessageLength}", message.Length);
         try
         {
-            new UTF8Encoding(false, true).GetCharCount(message);
+            _logger.LogDebug("Начало проверки кодировки: messageLength={messageLength}, method={methodName}", message.Length, nameof(ValidateEncodingV3));
+            var encoding = new UTF8Encoding(false, true);
+            encoding.GetCharCount(message);
+            _logger.LogDebug("Проверка кодировки успешно завершена. Кодировка UTF-8 корректна. method={methodName}", nameof(ValidateEncodingV3));
+
             return Result<bool>.Success(true);
         }
         catch (DecoderFallbackException ex)
         {
-            logger.LogError(ex, "Не пройдена проверка кодировки: тело запроса не является корректным UTF-8");
-            return Result<bool>.Failure(AnswerErrorCode.Code8_UnsupportedEncoding());
-        }
-    });
-
-    /// <inheritdoc />
-    public Result<bool> ValidateRequestDateV3(DateTime? requestDate) => Execute(() =>
-    {
-        var zone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
-        var currentDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone).Date;
-        logger.LogDebug("Проверка даты запроса: requestDate={RequestDate}, currentDate={CurrentDate}", requestDate, currentDate);
-        return requestDate?.Date == currentDate
-            ? Result<bool>.Success(true)
-            : Result<bool>.Failure(AnswerErrorCode.Code23_InvalidRerquestDate());
-    });
-
-    /// <inheritdoc />
-    public Result<bool> ValidateCertificateV3(X509Certificate2? requestCert) => Execute(() =>
-    {
-        // Старый контракт криптосервиса адаптируется только на этой границе.
-        var valid = cryptoService.ValidateCertificate(requestCert, out var result);
-        logger.LogDebug("Проверка сертификата: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, valid);
-        return valid
-            ? Result<bool>.Success(true)
-            : Result<bool>.Failure(new AnswerErrorCode(result!.ErrorCode, result.Error!));
-    });
-
-    /// <inheritdoc />
-    public Result<CryptoServiceResult> ValidateMsgV3(byte[] msg, X509Certificate2? requestCert,
-        byte[]? encodedSignature = null) => Execute(() =>
-        {
-            logger.LogDebug("Начало проверки подписи: thumbprint={Thumbprint}, msgLength={MsgLength}, hasDetachedSignature={HasDetachedSignature}",
-                requestCert?.Thumbprint, msg.Length, encodedSignature is not null);
-            var valid = cryptoService.ValidateMsg(msg, requestCert, out var result, encodedSignature);
-            logger.LogDebug("Проверка подписи: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, valid);
-            return valid
-                ? Result<CryptoServiceResult>.Success(result)
-                : Result<CryptoServiceResult>.Failure(new AnswerErrorCode(result!.ErrorCode, result.Error!));
-        });
-
-    /// <inheritdoc />
-    public Task<Result<bool>> ValidateRulesV3(string? thumbprint, string? serviceName,
-        CancellationToken? ct = null) => ExecuteAsync(async () =>
-    {
-        var granted = await repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
-        logger.LogDebug("Проверка прав доступа: thumbprint={Thumbprint}, serviceName={ServiceName}, granted={Granted}",
-            thumbprint, serviceName, granted);
-        return granted
-            ? Result<bool>.Success(true)
-            : Result<bool>.Failure(AnswerErrorCode.Code22_AccessDenied());
-    });
-
-    /// <inheritdoc />
-    public Task<Result<bool>> IsUniqueRequestIdV3Async(string requestId, string methodName,
-        string ogrn) => ExecuteAsync(async () =>
-    {
-        var unique = await cache.IsUniqueRequestId(requestId, ogrn, methodName);
-        logger.LogDebug("Проверка уникальности запроса: requestId={RequestId}, ogrn={Ogrn}, unique={Unique}",
-            requestId, ogrn, unique);
-        return unique
-            ? Result<bool>.Success(true)
-            : Result<bool>.Failure(AnswerErrorCode.Code11_RequestIdIsNotUnique());
-    });
-
-    private Result<T> Execute<T>(Func<Result<T>> validate)
-    {
-        try
-        {
-            return validate();
+            var error = AnswerErrorCode.Code8_UnsupportedEncoding();
+            _logger.LogError(ex, "Не пройдена проверка кодировки: тело запроса не является корректным UTF-8, code={QbchErrorCode}, message: {QbchErrorMessage}, method={methodName}", error.Code, error.Message, nameof(ValidateEncodingV3));
+            return Result<bool>.Failure(error);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
-            return Result<T>.Failure(new OperationError(ex));
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
+            return Result<bool>.Failure(new OperationError(ex));
         }
     }
 
-    private async Task<Result<T>> ExecuteAsync<T>(Func<Task<Result<T>>> validate)
+    /// <inheritdoc />
+    public Result<bool> ValidateRequestDateV3(DateTime? requestDate)
     {
         try
         {
-            return await validate();
+            var moscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
+            var currentMoscowDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, moscowTimeZone).Date;
+
+            if (requestDate?.Date != currentMoscowDate)
+            {
+                var error = AnswerErrorCode.Code23_InvalidRerquestDate();
+
+                return Result<bool>.Failure(error);
+            }
+
+            return Result<bool>.Success(true);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
-            return Result<T>.Failure(new OperationError(ex));
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
+            return Result<bool>.Failure(new OperationError(ex));
+        }
+    }
+
+    /// <inheritdoc />
+    public Result<CryptoServiceResult> ValidateMsgV3(byte[] msg, X509Certificate2? requestCert, byte[]? encodedSignature = null)
+    {
+        try
+        {
+            _logger.LogDebug("ValidationServiceV3.ValidateMsgV3:  начало проверки подписи сообщения, thumbprint={thumbprint}, msgLength={msgLength}, hasDetachedSignature={hasDetachedSignature}",
+                requestCert?.Thumbprint, msg.Length, encodedSignature is not null);
+
+            var isValid = _cryptoService.ValidateMsg(msg, requestCert, out var result, encodedSignature);
+
+            _logger.LogDebug("ValidationServiceV3.ValidateMsgV3 результат: isValid={isValid}, thumbprint={thumbprint}", isValid, requestCert?.Thumbprint);
+            return isValid
+                ? Result<CryptoServiceResult>.Success(result)
+                : Result<CryptoServiceResult>.Failure(new AnswerErrorCode(result.ErrorCode, result.Error!));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
+            return Result<CryptoServiceResult>.Failure(new OperationError(ex));
+        }
+    }
+
+    /// <inheritdoc />
+    public Result<bool> ValidateCertificateV3(X509Certificate2? requestCert)
+    {
+        try
+        {
+            _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: начало проверки сертификата, thumbprint={thumbprint}, notAfter={notAfter}",
+                requestCert?.Thumbprint, requestCert?.NotAfter);
+
+            var isValid = _cryptoService.ValidateCertificate(requestCert, out CryptoServiceResult? certResult);
+
+            if (!isValid)
+            {
+                var code = certResult.ErrorCode;
+                var message = certResult.Error;
+
+                _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: сертификат не прошел проверку, thumbprint={thumbprint}, errorCode={code}",
+                    requestCert?.Thumbprint, code);
+
+                return Result<bool>.Failure(new AnswerErrorCode(code, message));
+            }
+
+            _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: сертификат прошел проверку, thumbprint={thumbprint}",
+                requestCert?.Thumbprint);
+            return Result<bool>.Success(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
+            return Result<bool>.Failure(new OperationError(ex));
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
+    {
+        try
+        {
+            _logger.LogDebug("ValidationServiceV3.ValidateRulesV3: thumbprint={thumbprint}, serviceName={serviceName}", thumbprint, serviceName);
+            var isGranted = await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
+            _logger.LogDebug("ValidationServiceV3.ValidateRulesV3 результат: isGranted={isGranted}, thumbprint={thumbprint}, serviceName={serviceName}", isGranted, thumbprint, serviceName);
+            return isGranted
+                ? Result<bool>.Success(true)
+                : Result<bool>.Failure(AnswerErrorCode.Code22_AccessDenied());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
+            return Result<bool>.Failure(new OperationError(ex));
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
+    {
+        try
+        {
+            _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: начало проверки уникальности идентификатора запроса, requestId={requestId}, ogrn={ogrn}, method={methodName}", requestId, ogrn, methodName);
+            var isUnique = await _cache.IsUniqueRequestId(requestId, ogrn, methodName);
+
+            if (isUnique)
+            {
+                _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: requestId уникален, requestId={requestId}, ogrn={ogrn}", requestId, ogrn);
+                return Result<bool>.Success(true);
+            }
+
+            _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: requestId не уникален, requestId={requestId}, ogrn={ogrn}", requestId, ogrn);
+            return Result<bool>.Failure(AnswerErrorCode.Code11_RequestIdIsNotUnique());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
+            return Result<bool>.Failure(new OperationError(ex));
         }
     }
 }
