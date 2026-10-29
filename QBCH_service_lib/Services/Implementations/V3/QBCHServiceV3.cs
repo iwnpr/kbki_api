@@ -518,9 +518,7 @@ public class QBCHServiceV3(
                             return CreateErrorAnswerV3(bureau.ogrn!, "19", answerParsing.Error!.Message, orderNumbers);
                         }
 
-                        var answer = answerParsing.Value;
-                        //NOTE: У Артема эта обработка отсутствует, но, имхо, она допустима
-                        return answer ?? CreateErrorAnswerV3(bureau.ogrn!, "19", "Ответ не соответствует схеме", orderNumbers);
+                        return answerParsing.Value;
 
                     case HttpStatusCode.Accepted:
                     case HttpStatusCode.BadRequest:
@@ -708,14 +706,7 @@ public class QBCHServiceV3(
         }
 
         var amp = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml);
-        if (!amp.IsSuccess)
-        {
-            _logger.LogError("Не удалось прочитать сведения из БД: {Error}", amp.Error!.Message);
-            kbki.УстановитьОшибку(99, "Не удалось прочитать сведения из БД.");
-            return;
-        }
-
-        if (amp.Value?.БКИ is { Length: > 0 })
+        if (amp.IsSuccess && amp.Value.БКИ is { Length: > 0 })
         {
             kbki.ДобавитьОбязательства(amp.Value);
             return;
@@ -738,14 +729,7 @@ public class QBCHServiceV3(
         }
 
         var prohibition = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(prohibitionXml);
-        if (!prohibition.IsSuccess)
-        {
-            _logger.LogError("Не удалось прочитать сведения из БД: {Error}", prohibition.Error!.Message);
-            kbki.УстановитьОшибку(99, "Не удалось прочитать сведения из БД.");
-            return;
-        }
-
-        if (prohibition.Value?.Условие is { Length: > 0 })
+        if (prohibition.IsSuccess && prohibition.Value.Условие is { Length: > 0 })
         {
             kbki.ДобавитьУсловияЗапрета(prohibition.Value);
             return;
@@ -774,14 +758,7 @@ public class QBCHServiceV3(
         }
 
         var antifraud = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(antifraudXml);
-        if (!antifraud.IsSuccess)
-        {
-            _logger.LogError("Не удалось прочитать сведения из БД: {Error}", antifraud.Error!.Message);
-            kbki.УстановитьОшибку(99, "Не удалось прочитать сведения из БД.");
-            return;
-        }
-
-        if (antifraud.Value?.БКИ is { Length: > 0 })
+        if (antifraud.IsSuccess && antifraud.Value.БКИ is { Length: > 0 })
         {
             kbki.ДобавитьСведенияДляПредупреждения(antifraud.Value);
             return;

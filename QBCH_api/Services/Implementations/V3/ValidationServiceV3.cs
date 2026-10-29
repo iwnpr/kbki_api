@@ -24,8 +24,9 @@ public class ValidationServiceV3(
             new UTF8Encoding(false, true).GetCharCount(message);
             return Result<bool>.Success(true);
         }
-        catch (DecoderFallbackException)
+        catch (DecoderFallbackException ex)
         {
+            logger.LogError(ex, "Не пройдена проверка кодировки: тело запроса не является корректным UTF-8");
             return Result<bool>.Failure(AnswerErrorCode.Code8_UnsupportedEncoding());
         }
     });
@@ -34,6 +35,7 @@ public class ValidationServiceV3(
     {
         var zone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
         var currentDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone).Date;
+        logger.LogDebug("Проверка даты запроса: requestDate={RequestDate}, currentDate={CurrentDate}", requestDate, currentDate);
         return requestDate?.Date == currentDate
             ? Result<bool>.Success(true)
             : Result<bool>.Failure(AnswerErrorCode.Code23_InvalidRerquestDate());
@@ -42,19 +44,27 @@ public class ValidationServiceV3(
     public Result<bool> ValidateCertificateV3(X509Certificate2? requestCert) => Execute(() =>
     {
         // Старый контракт криптосервиса адаптируется только на этой границе.
-        return cryptoService.ValidateCertificate(requestCert, out var result)
+        var valid = cryptoService.ValidateCertificate(requestCert, out var result);
+        logger.LogDebug("Проверка сертификата: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, valid);
+        return valid
             ? Result<bool>.Success(true)
             : Result<bool>.Failure(new AnswerErrorCode(result.ErrorCode, result.Error ?? "Ошибка проверки сертификата."));
     });
 
     public Result<CryptoServiceResult> ValidateMsgV3(byte[] msg, X509Certificate2? requestCert,
         byte[]? encodedSignature = null) => Execute(() =>
-            cryptoService.ValidateMsg(msg, requestCert, encodedSignature));
+        {
+            var result = cryptoService.ValidateMsg(msg, requestCert, encodedSignature);
+            logger.LogDebug("Проверка подписи: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, result.IsSuccess);
+            return result;
+        });
 
     public Task<Result<bool>> ValidateRulesV3(string? thumbprint, string? serviceName,
         CancellationToken? ct = null) => ExecuteAsync(async () =>
     {
         var granted = await repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
+        logger.LogDebug("Проверка прав доступа: thumbprint={Thumbprint}, serviceName={ServiceName}, granted={Granted}",
+            thumbprint, serviceName, granted);
         return granted
             ? Result<bool>.Success(true)
             : Result<bool>.Failure(AnswerErrorCode.Code22_AccessDenied());
@@ -64,6 +74,8 @@ public class ValidationServiceV3(
         string ogrn) => ExecuteAsync(async () =>
     {
         var unique = await cache.IsUniqueRequestId(requestId, ogrn, methodName);
+        logger.LogDebug("Проверка уникальности запроса: requestId={RequestId}, ogrn={Ogrn}, unique={Unique}",
+            requestId, ogrn, unique);
         return unique
             ? Result<bool>.Success(true)
             : Result<bool>.Failure(AnswerErrorCode.Code11_RequestIdIsNotUnique());
