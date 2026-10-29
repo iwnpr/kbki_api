@@ -20,6 +20,7 @@ public class ValidationServiceV3(
     /// <inheritdoc />
     public Result<bool> ValidateEncodingV3(byte[] message) => Execute(() =>
     {
+        logger.LogDebug("Начало проверки кодировки: messageLength={MessageLength}", message.Length);
         try
         {
             new UTF8Encoding(false, true).GetCharCount(message);
@@ -51,16 +52,20 @@ public class ValidationServiceV3(
         logger.LogDebug("Проверка сертификата: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, valid);
         return valid
             ? Result<bool>.Success(true)
-            : Result<bool>.Failure(new AnswerErrorCode(result.ErrorCode, result.Error ?? "Ошибка проверки сертификата."));
+            : Result<bool>.Failure(new AnswerErrorCode(result!.ErrorCode, result.Error!));
     });
 
     /// <inheritdoc />
     public Result<CryptoServiceResult> ValidateMsgV3(byte[] msg, X509Certificate2? requestCert,
         byte[]? encodedSignature = null) => Execute(() =>
         {
-            var result = cryptoService.ValidateMsg(msg, requestCert, encodedSignature);
-            logger.LogDebug("Проверка подписи: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, result.IsSuccess);
-            return result;
+            logger.LogDebug("Начало проверки подписи: thumbprint={Thumbprint}, msgLength={MsgLength}, hasDetachedSignature={HasDetachedSignature}",
+                requestCert?.Thumbprint, msg.Length, encodedSignature is not null);
+            var valid = cryptoService.ValidateMsg(msg, requestCert, out var result, encodedSignature);
+            logger.LogDebug("Проверка подписи: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, valid);
+            return valid
+                ? Result<CryptoServiceResult>.Success(result)
+                : Result<CryptoServiceResult>.Failure(new AnswerErrorCode(result!.ErrorCode, result.Error!));
         });
 
     /// <inheritdoc />
@@ -96,7 +101,7 @@ public class ValidationServiceV3(
         catch (Exception ex)
         {
             logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
-            return Result<T>.Failure(AnswerErrorCode.Code99_OtherError("Не удалось выполнить проверку запроса."));
+            return Result<T>.Failure(new OperationError(ex));
         }
     }
 
@@ -109,7 +114,7 @@ public class ValidationServiceV3(
         catch (Exception ex)
         {
             logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
-            return Result<T>.Failure(AnswerErrorCode.Code99_OtherError("Не удалось выполнить проверку запроса."));
+            return Result<T>.Failure(new OperationError(ex));
         }
     }
 }

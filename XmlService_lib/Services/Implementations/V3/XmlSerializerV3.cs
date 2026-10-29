@@ -1,7 +1,6 @@
 using QBCH_lib.core;
 using qbch_lib.domain.errors;
 using System.Text;
-using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
 using XmlService_lib.Services.Interfaces.V3;
@@ -12,41 +11,45 @@ namespace XmlService_lib.Services.Implementations.V3;
 public class XmlSerializerV3 : IXmlSerializerV3
 {
     /// <inheritdoc />
-    public Result<T> DeserializeV3<T>(XElement? xml) where T : class
+    public Result<T?> DeserializeV3<T>(XElement? xml) where T : class
     {
         if (xml is null)
-            return Result<T>.Failure(AnswerErrorCode.Code2_EmptyRequestBody());
+            return Result<T?>.Success(null);
 
         try
         {
+            var serializer = new XmlSerializer(typeof(T));
             using var reader = xml.CreateReader();
-            return Deserialize<T>(reader);
+            try
+            {
+                return Result<T?>.Success(serializer.Deserialize(reader) as T);
+            }
+            catch
+            {
+                // XML-фрагменты из хранилища и раньше возвращали null при ошибке чтения.
+                return Result<T?>.Success(null);
+            }
         }
         catch (Exception ex)
         {
-            return Result<T>.Failure(AnswerErrorCode.Code9_InvalidRequestByScheme(ex.Message));
+            return Result<T?>.Failure(new OperationError(ex));
         }
     }
 
     /// <inheritdoc />
-    public Result<T> DeserializeV3<T>(byte[]? bytes) where T : class
+    public Result<T?> DeserializeV3<T>(byte[]? bytes) where T : class
     {
-        if (bytes is null || bytes.Length == 0)
-            return Result<T>.Failure(AnswerErrorCode.Code2_EmptyRequestBody());
+        if (bytes is null)
+            return Result<T?>.Success(null);
 
         try
         {
             using var stream = new MemoryStream(bytes);
-            using var reader = XmlReader.Create(stream, new XmlReaderSettings
-            {
-                DtdProcessing = DtdProcessing.Prohibit,
-                XmlResolver = null
-            });
-            return Deserialize<T>(reader);
+            return Result<T?>.Success(new XmlSerializer(typeof(T)).Deserialize(stream) as T);
         }
         catch (Exception ex)
         {
-            return Result<T>.Failure(AnswerErrorCode.Code9_InvalidRequestByScheme(ex.Message));
+            return Result<T?>.Failure(new OperationError(ex));
         }
     }
 
@@ -54,7 +57,7 @@ public class XmlSerializerV3 : IXmlSerializerV3
     public Result<byte[]> SerializeAsByteV3<T>(T? item) where T : class
     {
         if (item is null)
-            return Result<byte[]>.Failure(AnswerErrorCode.Code99_OtherError("Отсутствует объект для сериализации."));
+            return Result<byte[]>.Success([]);
 
         try
         {
@@ -65,12 +68,11 @@ public class XmlSerializerV3 : IXmlSerializerV3
             using var stream = new MemoryStream();
             using var writer = new StreamWriter(stream, new UTF8Encoding(false));
             serializer.Serialize(writer, item, namespaces);
-            writer.Flush();
             return Result<byte[]>.Success(stream.ToArray());
         }
         catch (Exception ex)
         {
-            return Result<byte[]>.Failure(AnswerErrorCode.Code99_OtherError($"Ошибка сериализации XML: {ex.Message}"));
+            return Result<byte[]>.Failure(new OperationError(ex));
         }
     }
 
@@ -78,34 +80,39 @@ public class XmlSerializerV3 : IXmlSerializerV3
     public Result<string> SerializeAsStringV3<T>(T? item) where T : class
     {
         var result = SerializeAsByteV3(item);
-        return result.IsSuccess
-            ? Result<string>.Success(Encoding.UTF8.GetString(result.Value))
-            : Result<string>.Failure(result.Error!);
-    }
-
-    /// <inheritdoc />
-    public Result<XDocument> SerializeAsXDocumentV3<T>(T? item) where T : class
-    {
-        var result = SerializeAsByteV3(item);
         if (!result.IsSuccess)
-            return Result<XDocument>.Failure(result.Error!);
+            return Result<string>.Failure(result.Error!);
 
         try
         {
             using var stream = new MemoryStream(result.Value);
-            return Result<XDocument>.Success(XDocument.Load(stream));
+            using var reader = new StreamReader(stream);
+            return Result<string>.Success(reader.ReadToEnd());
         }
         catch (Exception ex)
         {
-            return Result<XDocument>.Failure(AnswerErrorCode.Code99_OtherError($"Ошибка чтения XML: {ex.Message}"));
+            return Result<string>.Failure(new OperationError(ex));
         }
     }
 
-    private static Result<T> Deserialize<T>(XmlReader reader) where T : class
+    /// <inheritdoc />
+    public Result<XDocument?> SerializeAsXDocumentV3<T>(T? item) where T : class
     {
-        var value = new XmlSerializer(typeof(T)).Deserialize(reader) as T;
-        return value is not null
-            ? Result<T>.Success(value)
-            : Result<T>.Failure(AnswerErrorCode.Code9_InvalidRequestByScheme($"Не удалось прочитать {typeof(T).Name}."));
+        if (item is null)
+            return Result<XDocument?>.Success(null);
+
+        var result = SerializeAsByteV3(item);
+        if (!result.IsSuccess)
+            return Result<XDocument?>.Failure(result.Error!);
+
+        try
+        {
+            using var stream = new MemoryStream(result.Value);
+            return Result<XDocument?>.Success(XDocument.Load(stream));
+        }
+        catch (Exception ex)
+        {
+            return Result<XDocument?>.Failure(new OperationError(ex));
+        }
     }
 }

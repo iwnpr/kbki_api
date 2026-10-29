@@ -1,3 +1,4 @@
+using QBCH_lib.core;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib.domain.errors;
@@ -32,7 +33,8 @@ public class DlPutServiceV3(
     private readonly IRepositoryV3 _repository = repository;
     private readonly IXmlSerializerV3 _xmlSerializer = xmlSerializer;
 
-    public async Task<DlPutServiceV3ProcessingResult> ProcessAsync(ПредставлениеСведенийV3 request, bool returnAcceptedTicket = false, string? responseId = null)
+    /// <inheritdoc />
+    public async Task<Result<DlPutServiceV3ProcessingResult>> ProcessAsync(ПредставлениеСведенийV3 request, bool returnAcceptedTicket = false, string? responseId = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -46,13 +48,17 @@ public class DlPutServiceV3(
         {
             var acceptedId = !string.IsNullOrWhiteSpace(responseId) ? responseId : Guid.NewGuid().ToString();
             var accepted = _ticketServiceV3.CreateResultV3Accepted(request.ИдентификаторЗапроса, acceptedId, request.ДатаЗапроса);
-            return new DlPutServiceV3ProcessingResult(true, null, accepted);
+            return Result<DlPutServiceV3ProcessingResult>.Success(new DlPutServiceV3ProcessingResult(true, null, accepted));
         }
 
         var resultBlocks = new РезультатПредставленияСведенийРезультатV3[entities.Length];
         for (var i = 0; i < entities.Length; i++)
         {
-            resultBlocks[i] = await BuildResultBlock(entities[i]);
+            var block = await BuildResultBlock(entities[i]);
+            if (!block.IsSuccess)
+                return Result<DlPutServiceV3ProcessingResult>.Failure(block.Error!);
+
+            resultBlocks[i] = block.Value;
         }
 
         var result = new РезультатПредставленияСведенийV3
@@ -72,20 +78,20 @@ public class DlPutServiceV3(
             Результат = resultBlocks
         };
 
-        return new DlPutServiceV3ProcessingResult(false, result, null);
+        return Result<DlPutServiceV3ProcessingResult>.Success(new DlPutServiceV3ProcessingResult(false, result, null));
     }
 
-    private async Task<РезультатПредставленияСведенийРезультатV3> BuildResultBlock(ПредставлениеСведенийСведенияV3 source)
+    private async Task<Result<РезультатПредставленияСведенийРезультатV3>> BuildResultBlock(ПредставлениеСведенийСведенияV3 source)
     {
         return source.Item switch
         {
             ПредставлениеСведенийСведенияДоговорV3 deal => await BuildDealResult(deal),
-            ПредставлениеСведенийСведенияОбращениеV3 appeal => await BuildAppealResult(appeal),
-            _ => BuildUnknownBlockResult()
+            ПредставлениеСведенийСведенияОбращениеV3 appeal => Result<РезультатПредставленияСведенийРезультатV3>.Success(await BuildAppealResult(appeal)),
+            _ => Result<РезультатПредставленияСведенийРезультатV3>.Success(BuildUnknownBlockResult())
         };
     }
 
-    private async Task<РезультатПредставленияСведенийРезультатV3> BuildDealResult(ПредставлениеСведенийСведенияДоговорV3 source)
+    private async Task<Result<РезультатПредставленияСведенийРезультатV3>> BuildDealResult(ПредставлениеСведенийСведенияДоговорV3 source)
     {
         var result = new РезультатПредставленияСведенийРезультатV3();
         var deal = new РезультатПредставленияСведенийРезультатДоговорV3();
@@ -134,10 +140,7 @@ public class DlPutServiceV3(
 
                 var contractSubjectXml = _xmlSerializer.SerializeAsStringV3(source.Субъект);
                 if (!contractSubjectXml.IsSuccess)
-                {
-                    SetError(deal, new AnswerErrorCode(contractSubjectXml.Error!.Code, contractSubjectXml.Error.Message));
-                    break;
-                }
+                    return Result<РезультатПредставленияСведенийРезультатV3>.Failure(contractSubjectXml.Error!);
 
                 var contractSubjectIds = await _repository.SearchContractSubjectsForDlPutV3(contractSubjectXml.Value);
 
@@ -177,7 +180,7 @@ public class DlPutServiceV3(
         }
 
         result.УстановитьРезультатДоговора(deal);
-        return result;
+        return Result<РезультатПредставленияСведенийРезультатV3>.Success(result);
     }
 
     private async Task<РезультатПредставленияСведенийРезультатV3> BuildAppealResult(ПредставлениеСведенийСведенияОбращениеV3 source)

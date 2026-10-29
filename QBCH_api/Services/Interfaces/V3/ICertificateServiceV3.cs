@@ -15,10 +15,10 @@ public interface ICertificateServiceV3
     Task<Result<bool>> IsCertActiveV3(string thumbprint);
     /// <summary>Получает количество действующих сертификатов абонента по переданному сертификату.</summary>
     /// <param name="cert">Байты сертификата для определения абонента.</param>
-    /// <returns>Количество сертификатов либо ошибка чтения сертификата или обращения к хранилищу.</returns>
+    /// <returns>Количество сертификатов (0 для пустого массива) либо ошибка чтения сертификата или обращения к хранилищу.</returns>
     Task<Result<int>> GetActiveCertificatesCountV3(byte[] cert);
     /// <summary>Делает сертификат неактивным в хранилище.</summary>
     /// <param name="cert">Байты отзываемого сертификата.</param>
-    /// <returns>Признак выполнения отзыва либо ошибка чтения сертификата или обращения к хранилищу.</returns>
+    /// <returns>Признак выполнения отзыва (false для пустого массива) либо ошибка чтения сертификата или обращения к хранилищу.</returns>
     Task<Result<bool>> SetCertificateInactiveV3(byte[] cert);
 }

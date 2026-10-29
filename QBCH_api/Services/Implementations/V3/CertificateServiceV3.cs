@@ -11,7 +11,11 @@ public class CertificateServiceV3(IRepositoryV3 repository, ILogger<CertificateS
     : ICertificateServiceV3
 {
     /// <inheritdoc />
-    public Task<Result<bool>> IsCertExistsV3(byte[] cert) => ExecuteAsync(() => repository.IsCertExist(cert));
+    public Task<Result<bool>> IsCertExistsV3(byte[] cert) => ExecuteAsync(() =>
+    {
+        logger.LogDebug("Проверка наличия сертификата: certLength={CertLength}", cert.Length);
+        return repository.IsCertExist(cert);
+    });
 
     /// <inheritdoc />
     public Task<Result<bool>> IsCertActiveV3(string thumbprint) => ExecuteAsync(() => repository.IsCertActive(thumbprint));
@@ -19,15 +23,21 @@ public class CertificateServiceV3(IRepositoryV3 repository, ILogger<CertificateS
     /// <inheritdoc />
     public Task<Result<int>> GetActiveCertificatesCountV3(byte[] cert) => ExecuteAsync(async () =>
     {
+        if (cert.Length == 0)
+            return 0;
+
         using var certificate = new X509Certificate2(cert);
-        return await repository.GetActiveCertificatesCountByThumbprint(certificate.Thumbprint);
+        return await repository.GetActiveCertificatesCountByThumbprint(certificate.Thumbprint ?? string.Empty);
     });
 
     /// <inheritdoc />
     public Task<Result<bool>> SetCertificateInactiveV3(byte[] cert) => ExecuteAsync(async () =>
     {
+        if (cert.Length == 0)
+            return false;
+
         using var certificate = new X509Certificate2(cert);
-        return await repository.SetCertificateInactive(certificate.Thumbprint);
+        return await repository.SetCertificateInactive(certificate.Thumbprint ?? string.Empty);
     });
 
     private async Task<Result<T>> ExecuteAsync<T>(Func<Task<T>> operation)
@@ -39,7 +49,7 @@ public class CertificateServiceV3(IRepositoryV3 repository, ILogger<CertificateS
         catch (Exception ex)
         {
             logger.LogError(ex, "Не удалось выполнить операцию с сертификатом API 3.0");
-            return Result<T>.Failure(AnswerErrorCode.Code99_OtherError("Не удалось выполнить операцию с сертификатом."));
+            return Result<T>.Failure(new OperationError(ex));
         }
     }
 }

@@ -10,6 +10,11 @@ public interface IXSDValidatorV3
     /// <param name="schemaName">Имя набора схем API 3.0: dlrequest, dlput, qcb_result, qcb_answer или qcb_putanswer.</param>
     /// <returns>Успешный результат со значением true либо ошибка входных данных, загрузки схем или валидации.</returns>
     Result<bool> Validate(byte[]? xml, string schemaName);
+    /// <summary>Проверяет XML по схемам, расположенным по указанным путям.</summary>
+    /// <param name="xml">Байты XML-документа.</param>
+    /// <param name="schemaPaths">Пути к XSD, используемые вызывающим компонентом.</param>
+    /// <returns>Успешный результат со значением true, ошибка документа или внутренний сбой загрузки схем.</returns>
+    Result<bool> Validate(byte[]? xml, string[] schemaPaths);
     /// <summary>Проверяет XML по XSD и десериализует его при успешной проверке.</summary>
     /// <typeparam name="T">Тип объекта XML.</typeparam>
     /// <param name="xml">Байты XML-документа.</param>

@@ -9,26 +9,26 @@ public interface IXmlSerializerV3
     /// <summary>Десериализует XML-элемент в объект.</summary>
     /// <typeparam name="T">Тип объекта XML.</typeparam>
     /// <param name="xml">XML-элемент для десериализации.</param>
-    /// <returns>Объект или ошибка чтения XML; для отсутствующего элемента — ошибка пустого тела.</returns>
-    Result<T> DeserializeV3<T>(XElement? xml) where T : class;
+    /// <returns>Объект; для отсутствующего или нечитаемого фрагмента — успешный результат с null. Ошибка создания сериализатора возвращается как сбой операции.</returns>
+    Result<T?> DeserializeV3<T>(XElement? xml) where T : class;
     /// <summary>Десериализует XML из массива байтов в объект.</summary>
     /// <typeparam name="T">Тип объекта XML.</typeparam>
     /// <param name="bytes">Байты XML-документа.</param>
-    /// <returns>Объект или ошибка чтения XML; для пустого массива — ошибка пустого тела.</returns>
-    Result<T> DeserializeV3<T>(byte[]? bytes) where T : class;
+    /// <returns>Объект или ошибка чтения XML; для null — успешный результат с null.</returns>
+    Result<T?> DeserializeV3<T>(byte[]? bytes) where T : class;
     /// <summary>Сериализует объект в XML в кодировке UTF-8 без BOM.</summary>
     /// <typeparam name="T">Тип объекта XML.</typeparam>
     /// <param name="item">Объект для сериализации.</param>
-    /// <returns>Байты XML или ошибка сериализации, в том числе при отсутствии объекта.</returns>
+    /// <returns>Байты XML или ошибка сериализации; для null — пустой массив.</returns>
     Result<byte[]> SerializeAsByteV3<T>(T? item) where T : class;
     /// <summary>Сериализует объект в строку XML.</summary>
     /// <typeparam name="T">Тип объекта XML.</typeparam>
     /// <param name="item">Объект для сериализации.</param>
-    /// <returns>Строка XML или ошибка сериализации.</returns>
+    /// <returns>Строка XML или ошибка сериализации; для null — пустая строка.</returns>
     Result<string> SerializeAsStringV3<T>(T? item) where T : class;
     /// <summary>Сериализует объект в XML-документ.</summary>
     /// <typeparam name="T">Тип объекта XML.</typeparam>
     /// <param name="item">Объект для сериализации.</param>
-    /// <returns>XML-документ или ошибка сериализации либо чтения XML.</returns>
-    Result<XDocument> SerializeAsXDocumentV3<T>(T? item) where T : class;
+    /// <returns>XML-документ или ошибка сериализации либо чтения XML; для null — успешный результат с null.</returns>
+    Result<XDocument?> SerializeAsXDocumentV3<T>(T? item) where T : class;
 }
