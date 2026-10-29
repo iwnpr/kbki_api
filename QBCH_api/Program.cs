@@ -86,8 +86,9 @@ builder.Services.AddScoped<LoggingContext>();
 builder.Services.AddScoped<DbTimingContext>();
 
 // V_3.0
-builder.Services.AddTransient<IXmlServiceV3, XmlServiceV3>();
+builder.Services.AddTransient<IXmlServiceV3, XmlSerializationHelper>();
 builder.Services.AddTransient<IValidationServiceV3, ValidationServiceV3>();
+builder.Services.AddTransient<ICertificateServiceV3, CertificateServiceV3>();
 builder.Services.AddTransient<IRepositoryV3, RepositoryV3>();
 builder.Services.AddTransient<IQBCHServiceV3, QBCHServiceV3>();
 builder.Services.AddTransient<ITicketServiceV3, TicketServiceV3>();

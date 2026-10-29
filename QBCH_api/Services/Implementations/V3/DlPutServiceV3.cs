@@ -133,7 +133,13 @@ public class DlPutServiceV3(
                 deal.ДатаРасчетаSpecified = true;
 
                 var contractSubjectXml = _xmlService.SerializeAsStringV3(source.Субъект);
-                var contractSubjectIds = await _repository.SearchContractSubjectsForDlPutV3(contractSubjectXml);
+                if (!contractSubjectXml.IsSuccess)
+                {
+                    SetError(deal, new AnswerErrorCode(contractSubjectXml.Error!.Code, contractSubjectXml.Error.Message));
+                    break;
+                }
+
+                var contractSubjectIds = await _repository.SearchContractSubjectsForDlPutV3(contractSubjectXml.Value);
 
                 if (contractSubjectIds is null || contractSubjectIds.Count == 0)
                 {

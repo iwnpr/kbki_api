@@ -25,6 +25,7 @@ namespace QBCHService_lib.Services.Implementations.V3;
 public class QBCHServiceV3(
     ICryptoService cryptoService,
     IXmlServiceV3 xmlService,
+    IXSDValidatorV3 xsdValidator,
     ILogger<QBCHServiceV3> logger,
     IRepositoryV3 qbchDb,
     IKeyValueStorageService redisCache,
@@ -35,6 +36,7 @@ public class QBCHServiceV3(
 {
     private readonly ICryptoService _cryptoService = cryptoService;
     private readonly IXmlServiceV3 _xmlService = xmlService;
+    private readonly IXSDValidatorV3 _xsdValidator = xsdValidator;
     private readonly ILogger<QBCHServiceV3> _logger = logger;
     private readonly IRepositoryV3 _qbchDb = qbchDb;
     private readonly IKeyValueStorageService _storageService = redisCache;
@@ -112,9 +114,17 @@ public class QBCHServiceV3(
             };
 
             var xml = _xmlService.SerializeAsStringV3(template);
-            var timer = Stopwatch.StartNew();
 
-            var subjectKeys = await _qbchDb.GetSearchAllSubjectsV3(xml, timeLeft);
+            if (!xml.IsSuccess)
+            {
+                kbki.УстановитьОшибку(xml.Error!.Code, xml.Error.Message);
+                response.КБКИ = [kbki];
+                responseRows.Add(response);
+                continue;
+            }
+
+            var timer = Stopwatch.StartNew();
+            var subjectKeys = await _qbchDb.GetSearchAllSubjectsV3(xml.Value, timeLeft);
 
             timer.Stop();
             timeLeft -= timer.ElapsedMilliseconds;
@@ -210,7 +220,15 @@ public class QBCHServiceV3(
             Запрос = request.Запрос
         };
 
-        var dlrequestBytes = _xmlService.SerializeAsByteV3(externalRequest);
+        var requestSerialization = _xmlService.SerializeAsByteV3(externalRequest);
+        if (!requestSerialization.IsSuccess)
+        {
+            var error = requestSerialization.Error!;
+            return new QBCHTaskResult(bureau.ogrn!, answer3:
+                CreateErrorAnswerV3(bureau.ogrn!, error.Code.ToString(), error.Message, orderNumbers));
+        }
+
+        var dlrequestBytes = requestSerialization.Value;
         var signedDlrequestBytes = _cryptoService.SignMsg(dlrequestBytes);
         var dlrequestContent = new ByteArrayContent(signedDlrequestBytes);
 
@@ -251,7 +269,7 @@ public class QBCHServiceV3(
                         switch (responseMessage.StatusCode)
                         {
                             case HttpStatusCode.OK:
-                                var answerValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_answer.xsd", redisMsg, ticketCheckCts.Token);
+                                var answerValidation = ValidateAnswer(ms.ToArray(), bureau, "qcb_answer", redisMsg, ticketCheckCts.Token);
                                 if (answerValidation.IsError)
                                 {
                                     _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, answerValidation.Error);
@@ -263,13 +281,20 @@ public class QBCHServiceV3(
 
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 redisMsg.SetSignedResponse(ms.ToArray()).SetResponseXml(answerValidation.Body).SetResponseTime(DateTime.Now);
-                                dlrequestResult = _xmlService.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body);
+                                var dlrequestResultParsing = _xmlService.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body);
+                                if (!dlrequestResultParsing.IsSuccess)
+                                {
+                                    dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, "19", dlrequestResultParsing.Error!.Message, orderNumbers);
+                                    break;
+                                }
+
+                                dlrequestResult = dlrequestResultParsing.Value;
                                 await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
                                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{guid}:{bureau.ogrn}", "response_id", dlrequestResult?.ИдентификаторОтвета ?? "-");
                                 break;
 
                             case HttpStatusCode.BadRequest:
-                                var badValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", redisMsg, ticketCheckCts.Token);
+                                var badValidation = ValidateAnswer(ms.ToArray(), bureau, "qcb_result", redisMsg, ticketCheckCts.Token);
                                 if (badValidation.IsError)
                                 {
                                     _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, badValidation.Error);
@@ -279,7 +304,14 @@ public class QBCHServiceV3(
                                     break;
                                 }
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
-                                var badTicket = _xmlService.DeserializeV3<Результат>(badValidation.Body);
+                                var badTicketParsing = _xmlService.DeserializeV3<Результат>(badValidation.Body);
+                                if (!badTicketParsing.IsSuccess)
+                                {
+                                    dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, "19", badTicketParsing.Error!.Message, orderNumbers);
+                                    break;
+                                }
+
+                                var badTicket = badTicketParsing.Value;
 
                                 if (badTicket?.Item is ТипОшибка badError)
                                 {
@@ -296,7 +328,7 @@ public class QBCHServiceV3(
                                 break;
 
                             case HttpStatusCode.Accepted:
-                                var ticketValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", redisMsg, ticketCheckCts.Token);
+                                var ticketValidation = ValidateAnswer(ms.ToArray(), bureau, "qcb_result", redisMsg, ticketCheckCts.Token);
                                 if (ticketValidation.IsError)
                                 {
                                     _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, ticketValidation.Error);
@@ -306,7 +338,14 @@ public class QBCHServiceV3(
                                     break;
                                 }
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
-                                ticket = _xmlService.DeserializeV3<Результат>(ticketValidation.Body);
+                                var ticketParsing = _xmlService.DeserializeV3<Результат>(ticketValidation.Body);
+                                if (!ticketParsing.IsSuccess)
+                                {
+                                    dlrequestResult = CreateErrorAnswerV3(bureau.ogrn!, "19", ticketParsing.Error!.Message, orderNumbers);
+                                    break;
+                                }
+
+                                ticket = ticketParsing.Value;
 
                                 if (ticket?.Item is РезультатИдентификаторОтвета)
                                 {
@@ -460,7 +499,7 @@ public class QBCHServiceV3(
                 switch (responseMessage.StatusCode)
                 {
                     case HttpStatusCode.OK:
-                        var okValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_answer.xsd", redisMsg, ct);
+                        var okValidation = ValidateAnswer(ms.ToArray(), bureau, "qcb_answer", redisMsg, ct);
                         if (okValidation.IsError)
                         {
                             //NOTE: Возвратил пропавший код Артема
@@ -473,13 +512,19 @@ public class QBCHServiceV3(
                         _logger.LogDebug("{guid} {Bureau}: Valid xml", guid, bureau.ogrn);
                         await _storageService.ListSet(key: [RedisConstants.DlRequestV3Scope, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
 
-                        var answer = _xmlService.DeserializeV3<ОтветНаЗапросСведений>(okValidation.Body);
+                        var answerParsing = _xmlService.DeserializeV3<ОтветНаЗапросСведений>(okValidation.Body);
+                        if (!answerParsing.IsSuccess)
+                        {
+                            return CreateErrorAnswerV3(bureau.ogrn!, "19", answerParsing.Error!.Message, orderNumbers);
+                        }
+
+                        var answer = answerParsing.Value;
                         //NOTE: У Артема эта обработка отсутствует, но, имхо, она допустима
                         return answer ?? CreateErrorAnswerV3(bureau.ogrn!, "19", "Ответ не соответствует схеме", orderNumbers);
 
                     case HttpStatusCode.Accepted:
                     case HttpStatusCode.BadRequest:
-                        var ticketValidation = ValidateAnswer(ms.ToArray(), bureau, @"xsd\3\qcb_result.xsd", redisMsg, ct);
+                        var ticketValidation = ValidateAnswer(ms.ToArray(), bureau, "qcb_result", redisMsg, ct);
                         if (ticketValidation.IsError)
                         {
                             _logger.LogDebug("{guid} {Bureau}: Некорректный ответ {err}", guid, bureau.ogrn!, ticketValidation.Error);
@@ -489,7 +534,13 @@ public class QBCHServiceV3(
                         }
 
                         _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
-                        var ticket = _xmlService.DeserializeV3<Результат>(ticketValidation.Body);
+                        var ticketParsing = _xmlService.DeserializeV3<Результат>(ticketValidation.Body);
+                        if (!ticketParsing.IsSuccess)
+                        {
+                            return CreateErrorAnswerV3(bureau.ogrn!, "19", ticketParsing.Error!.Message, orderNumbers);
+                        }
+
+                        var ticket = ticketParsing.Value;
                         //NOTE: Возвратил пропавший код Артема. И безусловное приведение вместо сравнения, это ошибка. 
                         if (ticket?.Item is ТипОшибка ticketError)
                         {
@@ -598,14 +649,14 @@ public class QBCHServiceV3(
         result.Body = cryptoResult.Body;
         redisMessage?.SetResponseXml(cryptoResult.Body);
 
-        var xsdValidation = _xmlService.ValidateXmlV3(new MemoryStream(cryptoResult.Body), [schemaName, @"xsd\3\qcb_common.xsd"]);
-        if (xsdValidation != null && !string.IsNullOrWhiteSpace(xsdValidation.Error))
+        var xsdValidation = _xsdValidator.Validate(cryptoResult.Body, schemaName);
+        if (!xsdValidation.IsSuccess)
         {
-            result.Error = $"Ответ не соответствует схеме: {xsdValidation.Error}.";
+            result.Error = $"Ответ не соответствует схеме: {xsdValidation.Error!.Message}.";
             result.ErrorCode = 19;
             result.IsError = true;
             _logger.LogError("Ответ КБКИ {bureauName} (ОГРН {BureauPSRN}) не соответствует схеме {Schema}: {XsdError}. code={QbchErrorCode}: {QbchErrorMessage}",
-                bureau.Name, bureau.ogrn, schemaName, xsdValidation?.Error, result.ErrorCode, result.Error);
+                bureau.Name, bureau.ogrn, schemaName, xsdValidation.Error!.Message, result.ErrorCode, result.Error);
         }
 
         return result;
@@ -657,10 +708,16 @@ public class QBCHServiceV3(
         }
 
         var amp = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml);
-
-        if (amp?.БКИ is { Length: > 0 })
+        if (!amp.IsSuccess)
         {
-            kbki.ДобавитьОбязательства(amp);
+            _logger.LogError("Не удалось прочитать сведения из БД: {Error}", amp.Error!.Message);
+            kbki.УстановитьОшибку(99, "Не удалось прочитать сведения из БД.");
+            return;
+        }
+
+        if (amp.Value?.БКИ is { Length: > 0 })
+        {
+            kbki.ДобавитьОбязательства(amp.Value);
             return;
         }
 
@@ -681,10 +738,16 @@ public class QBCHServiceV3(
         }
 
         var prohibition = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(prohibitionXml);
-
-        if (prohibition?.Условие is { Length: > 0 })
+        if (!prohibition.IsSuccess)
         {
-            kbki.ДобавитьУсловияЗапрета(prohibition);
+            _logger.LogError("Не удалось прочитать сведения из БД: {Error}", prohibition.Error!.Message);
+            kbki.УстановитьОшибку(99, "Не удалось прочитать сведения из БД.");
+            return;
+        }
+
+        if (prohibition.Value?.Условие is { Length: > 0 })
+        {
+            kbki.ДобавитьУсловияЗапрета(prohibition.Value);
             return;
         }
 
@@ -711,10 +774,16 @@ public class QBCHServiceV3(
         }
 
         var antifraud = _xmlService.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(antifraudXml);
-
-        if (antifraud?.БКИ is { Length: > 0 })
+        if (!antifraud.IsSuccess)
         {
-            kbki.ДобавитьСведенияДляПредупреждения(antifraud);
+            _logger.LogError("Не удалось прочитать сведения из БД: {Error}", antifraud.Error!.Message);
+            kbki.УстановитьОшибку(99, "Не удалось прочитать сведения из БД.");
+            return;
+        }
+
+        if (antifraud.Value?.БКИ is { Length: > 0 })
+        {
+            kbki.ДобавитьСведенияДляПредупреждения(antifraud.Value);
             return;
         }
 

@@ -1,4 +1,5 @@
-﻿using Cache_lib.Interfaces;
+﻿using XmlService_lib.Services.Interfaces.V3;
+using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation;
@@ -60,7 +61,22 @@ public class QBCHValidationDispatcherV3(
         ProcessSignV3(transaction);
 
         // xsd
-        _xsdValidator.ValidateXml(transaction);
+        if (transaction.Status != QBCHProcessingStatus.Failure)
+        {
+            var xmlResult = _xsdValidator.ValidateAndDeserialize<ЗапросСведенийV3>(
+                transaction.Attachment.RequestBody, transaction.ServiceName);
+            if (xmlResult.IsSuccess)
+            {
+                transaction.ClentRequest.SetRequestId(xmlResult.Value.ИдентификаторЗапроса);
+                transaction.ClentRequest.SetRequest(xmlResult.Value);
+            }
+            else
+            {
+                _logger.LogError("Не пройдена проверка XML dlrequest v3. TransactionId={TransactionId}, code={Code}: {Message}",
+                    transaction.Id, xmlResult.Error!.Code, xmlResult.Error.Message);
+                transaction.RiseCriticalError(new AnswerErrorCode(xmlResult.Error!.Code, xmlResult.Error.Message));
+            }
+        }
 
         var requestV3 = transaction.GetRequest<ЗапросСведенийV3>();
 
@@ -176,12 +192,13 @@ public class QBCHValidationDispatcherV3(
             signValidationResult.Value.RequestINN,
             signValidationResult.Value.RequestOGRN);
 
-        if (!_validationService.ValidateEncodingV3(transaction.Attachment.RequestBody!, out var encodingValidationResult))
+        var encodingValidationResult = _validationService.ValidateEncodingV3(transaction.Attachment.RequestBody!);
+        if (!encodingValidationResult.IsSuccess)
         {
             _logger.LogError("Не пройдена проверка кодировки dlrequest v3: тело запроса не является корректным UTF-8. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
-                transaction.Id, encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка");
+                transaction.Id, encodingValidationResult.Error!.Code, encodingValidationResult.Error!.Message);
 
-            transaction.RiseCriticalError(new AnswerErrorCode(encodingValidationResult!.ErrorCode, encodingValidationResult.Error ?? "Неподдерживаемая кодировка"));
+            transaction.RiseCriticalError(new AnswerErrorCode(encodingValidationResult.Error!.Code, encodingValidationResult.Error!.Message));
         }
     }
 
@@ -284,9 +301,13 @@ public class QBCHValidationDispatcherV3(
     {
         _logger.LogDebug("Начало проверки даты запроса. requestDate={requestDate}, method={methodName}", requestV3?.ДатаЗапроса, nameof(ValidateRequestDateV3));
 
-        if (!transaction.Status.Equals(QBCHProcessingStatus.Failure) && requestV3 is not null && !_validationService.ValidateRequestDateV3(requestV3.ДатаЗапроса, out var dateValidationResult))
+        if (transaction.Status == QBCHProcessingStatus.Failure || requestV3 is null)
+            return;
+
+        var dateValidationResult = _validationService.ValidateRequestDateV3(requestV3.ДатаЗапроса);
+        if (!dateValidationResult.IsSuccess)
         {
-            var error = new AnswerErrorCode(dateValidationResult!.ErrorCode, dateValidationResult.Error ?? "Дата запроса указана некорректно");
+            var error = new AnswerErrorCode(dateValidationResult.Error!.Code, dateValidationResult.Error!.Message);
 
             _logger.LogError("Не пройдена проверка даты запроса: ДатаЗапроса={RequestDate}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 requestV3.ДатаЗапроса, transaction.Id, error.Code, error.Message);
