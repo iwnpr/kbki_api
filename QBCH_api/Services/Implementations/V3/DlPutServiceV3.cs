@@ -25,12 +25,12 @@ public class DlPutServiceV3(
     ApiV3ContractRules contractRules,
     ITicketServiceV3 ticketServiceV3,
     IRepositoryV3 repository,
-    IXmlServiceV3 xmlService) : IDlPutServiceV3
+    IXmlSerializerV3 xmlSerializer) : IDlPutServiceV3
 {
     private readonly ApiV3ContractRules _contractRules = contractRules;
     private readonly ITicketServiceV3 _ticketServiceV3 = ticketServiceV3;
     private readonly IRepositoryV3 _repository = repository;
-    private readonly IXmlServiceV3 _xmlService = xmlService;
+    private readonly IXmlSerializerV3 _xmlSerializer = xmlSerializer;
 
     public async Task<DlPutServiceV3ProcessingResult> ProcessAsync(ПредставлениеСведенийV3 request, bool returnAcceptedTicket = false, string? responseId = null)
     {
@@ -132,8 +132,14 @@ public class DlPutServiceV3(
                 deal.ДатаРасчета = delete.ДатаРасчета.Date;
                 deal.ДатаРасчетаSpecified = true;
 
-                var contractSubjectXml = _xmlService.SerializeAsStringV3(source.Субъект);
-                var contractSubjectIds = await _repository.SearchContractSubjectsForDlPutV3(contractSubjectXml);
+                var contractSubjectXml = _xmlSerializer.SerializeAsStringV3(source.Субъект);
+                if (!contractSubjectXml.IsSuccess)
+                {
+                    SetError(deal, new AnswerErrorCode(contractSubjectXml.Error!.Code, contractSubjectXml.Error.Message));
+                    break;
+                }
+
+                var contractSubjectIds = await _repository.SearchContractSubjectsForDlPutV3(contractSubjectXml.Value);
 
                 if (contractSubjectIds is null || contractSubjectIds.Count == 0)
                 {

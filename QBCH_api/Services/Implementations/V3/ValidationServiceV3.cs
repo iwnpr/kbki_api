@@ -3,211 +3,113 @@ using Crypto_lib.Model;
 using Crypto_lib.Service;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
-using qbch_lib.CommonTypes.Api;
+using QBCH_lib.core;
 using qbch_lib.domain.errors;
-using QBCH_lib.Services.Interfaces.V3;
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using XmlService_lib.Services.Interfaces.V3;
 
 namespace QBCH_api.Services.Implementations.V3;
 
+/// <summary>Проверки входящего запроса. Не изменяет транзакции и не формирует ответы.</summary>
 public class ValidationServiceV3(
-    IXmlServiceV3 xmlService,
     ICryptoService cryptoService,
     IKeyValueStorageService cache,
     IRepositoryV3 repository,
-    ITicketServiceV3 ticketService,
     ILogger<ValidationServiceV3> logger) : IValidationServiceV3
 {
-    private static readonly TimeZoneInfo MoscowTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
-    private readonly IXmlServiceV3 _xmlService = xmlService;
-    private readonly ICryptoService _cryptoService = cryptoService;
-    private readonly IKeyValueStorageService _cache = cache;
-    private readonly IRepositoryV3 _repository = repository;
-    private readonly ITicketServiceV3 _ticketService = ticketService;
-    private readonly ILogger<ValidationServiceV3> _logger = logger;
-
-    public bool ValidateXmlV3(MemoryStream memoryStream, string nameOfEndpoint, [NotNullWhen(false)] out BaseResult? result)
+    /// <inheritdoc />
+    public Result<bool> ValidateEncodingV3(byte[] message) => Execute(() =>
     {
-        _logger.LogDebug("Начало валидации XML. endpoint={nameOfEndpoint}, streamLength={streamLength}, method={methodName}", nameOfEndpoint, memoryStream.Length, nameof(ValidateXmlV3));
-        var isValid = _xmlService.ValidateXmlV3(memoryStream, nameOfEndpoint, out var xmlResult);
-
-        if (!isValid)
-        {
-            _logger.LogDebug("Валидация XML не пройдена. endpoint={nameOfEndpoint}, errorCode={errorCode}, method={methodName}", nameOfEndpoint, xmlResult.ErrorCode, nameof(ValidateXmlV3));
-            var error = new AnswerErrorCode(xmlResult.ErrorCode, xmlResult.Error);
-            result = CreateErrorResult(error);
-            return false;
-        }
-
-        _logger.LogDebug("Валидация XML успешно завершена. XML валиден. endpoint={nameOfEndpoint}, method={methodName}", nameOfEndpoint, nameof(ValidateXmlV3));
-
-        result = null;
-        return true;
-    }
-
-    public bool ValidateEncodingV3(byte[] message, [NotNullWhen(false)] out BaseResult? result)
-    {
-        _logger.LogDebug("Начало проверки кодировки: messageLength={messageLength}, method={methodName}", message.Length, nameof(ValidateEncodingV3));
         try
         {
-            var encoding = new UTF8Encoding(false, true);
-            encoding.GetCharCount(message);
+            new UTF8Encoding(false, true).GetCharCount(message);
+            return Result<bool>.Success(true);
         }
         catch (DecoderFallbackException ex)
         {
-            var error = AnswerErrorCode.Code8_UnsupportedEncoding();
-            
-            _logger.LogError(ex, "Не пройдена проверка кодировки: тело запроса не является корректным UTF-8, code={QbchErrorCode}, message: {QbchErrorMessage}, method={methodName}", error.Code, error.Message, nameof(ValidateEncodingV3));
-            result = CreateErrorResult(error);
-
-            return false;
+            logger.LogError(ex, "Не пройдена проверка кодировки: тело запроса не является корректным UTF-8");
+            return Result<bool>.Failure(AnswerErrorCode.Code8_UnsupportedEncoding());
         }
-        _logger.LogDebug("Проверка кодировки успешно завершена. Кодировка UTF-8 корректна. method={methodName}", nameof(ValidateEncodingV3));
+    });
 
-        result = null;
-        return true;
-    }
-
-    public bool ValidateRequestDateV3(DateTime? requestDate, [NotNullWhen(false)] out BaseResult? result)
+    /// <inheritdoc />
+    public Result<bool> ValidateRequestDateV3(DateTime? requestDate) => Execute(() =>
     {
-        var currentMoscowDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, MoscowTimeZone).Date;
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
+        var currentDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone).Date;
+        logger.LogDebug("Проверка даты запроса: requestDate={RequestDate}, currentDate={CurrentDate}", requestDate, currentDate);
+        return requestDate?.Date == currentDate
+            ? Result<bool>.Success(true)
+            : Result<bool>.Failure(AnswerErrorCode.Code23_InvalidRerquestDate());
+    });
 
-        if (requestDate?.Date != currentMoscowDate)
+    /// <inheritdoc />
+    public Result<bool> ValidateCertificateV3(X509Certificate2? requestCert) => Execute(() =>
+    {
+        // Старый контракт криптосервиса адаптируется только на этой границе.
+        var valid = cryptoService.ValidateCertificate(requestCert, out var result);
+        logger.LogDebug("Проверка сертификата: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, valid);
+        return valid
+            ? Result<bool>.Success(true)
+            : Result<bool>.Failure(new AnswerErrorCode(result.ErrorCode, result.Error ?? "Ошибка проверки сертификата."));
+    });
+
+    /// <inheritdoc />
+    public Result<CryptoServiceResult> ValidateMsgV3(byte[] msg, X509Certificate2? requestCert,
+        byte[]? encodedSignature = null) => Execute(() =>
         {
-            var error = AnswerErrorCode.Code23_InvalidRerquestDate();
-            result = CreateErrorResult(error);
-            return false;
+            var result = cryptoService.ValidateMsg(msg, requestCert, encodedSignature);
+            logger.LogDebug("Проверка подписи: thumbprint={Thumbprint}, valid={Valid}", requestCert?.Thumbprint, result.IsSuccess);
+            return result;
+        });
+
+    /// <inheritdoc />
+    public Task<Result<bool>> ValidateRulesV3(string? thumbprint, string? serviceName,
+        CancellationToken? ct = null) => ExecuteAsync(async () =>
+    {
+        var granted = await repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
+        logger.LogDebug("Проверка прав доступа: thumbprint={Thumbprint}, serviceName={ServiceName}, granted={Granted}",
+            thumbprint, serviceName, granted);
+        return granted
+            ? Result<bool>.Success(true)
+            : Result<bool>.Failure(AnswerErrorCode.Code22_AccessDenied());
+    });
+
+    /// <inheritdoc />
+    public Task<Result<bool>> IsUniqueRequestIdV3Async(string requestId, string methodName,
+        string ogrn) => ExecuteAsync(async () =>
+    {
+        var unique = await cache.IsUniqueRequestId(requestId, ogrn, methodName);
+        logger.LogDebug("Проверка уникальности запроса: requestId={RequestId}, ogrn={Ogrn}, unique={Unique}",
+            requestId, ogrn, unique);
+        return unique
+            ? Result<bool>.Success(true)
+            : Result<bool>.Failure(AnswerErrorCode.Code11_RequestIdIsNotUnique());
+    });
+
+    private Result<T> Execute<T>(Func<Result<T>> validate)
+    {
+        try
+        {
+            return validate();
         }
-
-        result = null;
-        return true;
-    }
-
-    public bool ValidateMsgV3(byte[] msg, X509Certificate2? requestCert, [NotNullWhen(false)] out CryptoServiceResult result, byte[]? encodedSignature = null)
-    {
-        _logger.LogDebug("ValidationServiceV3.ValidateMsgV3:  начало проверки подписи сообщения, thumbprint={thumbprint}, msgLength={msgLength}, hasDetachedSignature={hasDetachedSignature}",
-            requestCert?.Thumbprint, msg.Length, encodedSignature is not null);
-
-        var isValid = _cryptoService.ValidateMsg(msg, requestCert, out result, encodedSignature);
-
-        _logger.LogDebug("ValidationServiceV3.ValidateMsgV3 результат: isValid={isValid}, thumbprint={thumbprint}", isValid, requestCert?.Thumbprint);
-        return isValid;
-    }
-
-    /// <summary>
-    /// Проверка сертификата
-    /// </summary>
-    /// <param name="requestCert"></param>
-    /// <param name="result"></param>
-    /// <returns></returns>
-    public bool ValidateCertificateV3(X509Certificate2? requestCert, [NotNullWhen(false)] out BaseResult? result)
-    {
-        _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: начало проверки сертификата, thumbprint={thumbprint}, notAfter={notAfter}",
-            requestCert?.Thumbprint, requestCert?.NotAfter);
-
-        var isValid = _cryptoService.ValidateCertificate(requestCert, out CryptoServiceResult? certResult);
-
-        if (!isValid)
+        catch (Exception ex)
         {
-            var code = certResult.ErrorCode;
-            var message = certResult.Error;
-
-            _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: сертификат не прошел проверку, thumbprint={thumbprint}, errorCode={code}",
-                requestCert?.Thumbprint, code);
-            result = CreateErrorResult(new AnswerErrorCode(code, message));
-            return false;
+            logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
+            return Result<T>.Failure(AnswerErrorCode.Code99_OtherError("Не удалось выполнить проверку запроса."));
         }
-
-        _logger.LogDebug("ValidationServiceV3.ValidateCertificateV3: сертификат прошел проверку, thumbprint={thumbprint}",
-            requestCert?.Thumbprint);
-        result = null;
-        return true;
     }
 
-    public async Task<bool> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null)
+    private async Task<Result<T>> ExecuteAsync<T>(Func<Task<Result<T>>> validate)
     {
-        _logger.LogDebug("ValidationServiceV3.ValidateRulesV3: thumbprint={thumbprint}, serviceName={serviceName}", thumbprint, serviceName);
-        var isGranted = await _repository.IsPermissionGrantedV3(thumbprint, serviceName, ct);
-        _logger.LogDebug("ValidationServiceV3.ValidateRulesV3 результат: isGranted={isGranted}, thumbprint={thumbprint}, serviceName={serviceName}", isGranted, thumbprint, serviceName);
-        return isGranted;
-    }
-
-    public async Task<(bool IsUnique, BaseResult? Error)> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn)
-    {
-        _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: начало проверки уникальности идентификатора запроса, requestId={requestId}, ogrn={ogrn}, method={methodName}", requestId, ogrn, methodName);
-        var isUnique = await _cache.IsUniqueRequestId(requestId, ogrn, methodName);
-
-        if (isUnique)
+        try
         {
-            _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: requestId уникален, requestId={requestId}, ogrn={ogrn}", requestId, ogrn);
-            return (true, null);
+            return await validate();
         }
-
-        _logger.LogDebug("ValidationServiceV3.IsUniqueRequestIdV3Async: requestId не уникален, requestId={requestId}, ogrn={ogrn}", requestId, ogrn);
-        return (false, CreateErrorResult(AnswerErrorCode.Code11_RequestIdIsNotUnique()));
-    }
-
-    public async Task<bool> IsCertExistsV3(byte[] cert)
-    {
-        _logger.LogDebug("ValidationServiceV3.IsCertExistsV3: начало проверки наличия сертификата, certLength={certLength}", cert.Length);
-        var exists = await _repository.IsCertExist(cert);
-        _logger.LogDebug("ValidationServiceV3.IsCertExistsV3 результат: exists={exists}", exists);
-        return exists;
-    }
-
-    public async Task<bool> IsCertActiveV3(string thumbprint)
-    {
-        _logger.LogDebug("ValidationServiceV3.IsCertActiveV3: начало проверки активности сертификата, thumbprint={thumbprint}", thumbprint);
-        var isActive = await _repository.IsCertActive(thumbprint);
-        _logger.LogDebug("ValidationServiceV3.IsCertActiveV3 результат: isActive={isActive}, thumbprint={thumbprint}", isActive, thumbprint);
-        return isActive;
-    }
-
-    public async Task<int> GetActiveCertificatesCountV3(byte[] cert)
-    {
-        _logger.LogDebug("ValidationServiceV3.GetActiveCertificatesCountV3: начало подсчета активных сертификатов, certLength={certLength}", cert.Length);
-
-        if (cert.Length == 0)
+        catch (Exception ex)
         {
-            _logger.LogError("Невозможно получить количество активных сертификатов v3: входящий сертификат пустой (0 байт). Возвращено количество активных сертификатов = 0");
-            return 0;
+            logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
+            return Result<T>.Failure(AnswerErrorCode.Code99_OtherError("Не удалось выполнить проверку запроса."));
         }
-
-        using var certificate = new X509Certificate2(cert);
-
-        _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3: сертификат разобран, thumbprint={thumbprint}", certificate.Thumbprint);
-        var result = await _repository.GetActiveCertificatesCountByThumbprint(certificate.Thumbprint ?? string.Empty);
-        _logger.LogDebug("ValidationServiceV3.GetActiveCertificatesCountV3: количество активных сертификатов: {success}, thumbprint={thumbprint}", result, certificate.Thumbprint);
-        return result;
-    }
-
-    public async Task<bool> SetCertificateInactiveV3(byte[] cert)
-    {
-        if (cert.Length == 0)
-        {
-            _logger.LogError("Невозможно отозвать сертификат v3: входящий сертификат пустой (0 байт). Отзыв не выполнен");
-            return false;
-        }
-
-        using var certificate = new X509Certificate2(cert);
-        _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3: начало деактивации сертификата, thumbprint={thumbprint}", certificate.Thumbprint);
-        var success = await _repository.SetCertificateInactive(certificate.Thumbprint ?? string.Empty);
-
-        _logger.LogDebug("ValidationServiceV3.SetCertificateInactiveV3 результат: {success}, thumbprint={thumbprint}", success, certificate.Thumbprint);
-        return success;
-    }
-    private BaseResult CreateErrorResult(AnswerErrorCode error)
-    {
-        return new BaseResult
-        {
-            IsError = true,
-            ErrorCode = error.Code,
-            Error = error.Message,
-            ErrorMessage = error.Message,
-            Ticket = _ticketService.CreateResultV3Error(error)
-        };
     }
 }
