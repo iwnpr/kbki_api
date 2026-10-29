@@ -1,5 +1,4 @@
-﻿using QBCH_lib.core;
-using Cache_lib.Interfaces;
+﻿using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using MediatR;
 using QBCH.Lib.qcb_xml.v3_0;
@@ -69,15 +68,6 @@ public class QBCHProcessingHandlerV3(
             // Этап обработки: попадает в лог, чтобы по записи было видно, на чем именно упал сбор ответа.
             var processingStage = ProcessingStageTaskScheduling;
 
-            async Task RecordProcessingFailureAsync(AnswerErrorCode error)
-            {
-                _logger.LogCritical((error as OperationError)?.Exception,
-                    "Не удалось сформировать ответ dlrequest v3 на этапе \"{ProcessingStage}\": задач={TaskCount}, requestId={RequestId}, типЗапроса={RequestType}, режимЗапроса={RequestMode}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
-                    processingStage, _tasksList.Count, requestId, requestType, requestMode, transaction.Id, error.Code, error.Message);
-
-                await StoreProcessingErrorAsync(transaction, error);
-            }
-
             var process = Task.Run(async () =>
             {
                 try
@@ -100,27 +90,19 @@ public class QBCHProcessingHandlerV3(
                     processingStage = ProcessingStageAwaitingTasks;
 
                     var results = await Task.WhenAll(_tasksList);
-                    var failedTask = results.FirstOrDefault(result => result.Error is not null);
-                    if (failedTask is not null)
-                    {
-                        await RecordProcessingFailureAsync((AnswerErrorCode)failedTask.Error!);
-                        return;
-                    }
 
                     processingStage = ProcessingStageBuildingResponse;
-                    var aggregateResult = await BuildAndStoreAggregateResponseAsync(results, transaction, clientRequest, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
-                    if (!aggregateResult.IsSuccess)
-                    {
-                        var error = aggregateResult.Error!;
-                        await RecordProcessingFailureAsync((AnswerErrorCode)error);
-                        return;
-                    }
-
-                    responseXml = aggregateResult.Value;
+                    responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, clientRequest, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
                 }
                 catch (Exception ex)
                 {
-                    await RecordProcessingFailureAsync(new OperationError(ex));
+                    var error = AnswerErrorCode.Code99_OtherError(ex.Message);
+
+                    _logger.LogCritical(ex,
+                        "Не удалось сформировать ответ dlrequest v3 на этапе \"{ProcessingStage}\": задач={TaskCount}, requestId={RequestId}, типЗапроса={RequestType}, режимЗапроса={RequestMode}. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
+                        processingStage, _tasksList.Count, requestId, requestType, requestMode, transaction.Id, error.Code, error.Message);
+
+                    await StoreProcessingErrorAsync(transaction, error);
                 }
             }).Wait(TimeSpan.FromMilliseconds(_contractRules.ImmediateResponseDeadlineMs - transaction.TimeElapsedForValidation.ElapsedMilliseconds));
 
@@ -166,7 +148,7 @@ public class QBCHProcessingHandlerV3(
         await _storageService.TrySetKeyExpiration(RedisConstants.DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
     }
 
-    private async Task<Result<byte[]>> BuildAndStoreAggregateResponseAsync(
+    private async Task<byte[]> BuildAndStoreAggregateResponseAsync(
         QBCHTaskResult[] results,
         QBCHProcessingTransactionV3 transaction,
         ЗапросСведений clientRequest,
@@ -198,11 +180,12 @@ public class QBCHProcessingHandlerV3(
             var kbkiItems = new List<ОтветНаЗапросСведенийСведенияКБКИ>();
             foreach (var taskResult in results)
             {
-                var taskResultXml = _xmlSerializer.SerializeAsStringV3(taskResult.Answer3);
-                if (!taskResultXml.IsSuccess)
-                    return Result<byte[]>.Failure(taskResultXml.Error!);
+                var TaskResultXmlResult = _xmlSerializer.SerializeAsStringV3(taskResult.Answer3);
+                if (!TaskResultXmlResult.IsSuccess)
+                    throw ((OperationError)TaskResultXmlResult.Error!).Exception;
 
-                await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_result_xml", taskResultXml.Value);
+                var TaskResultXml = TaskResultXmlResult.Value;
+                await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_result_xml", TaskResultXml);
                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
                 var sourceInfo = taskResult.Answer3?.Сведения?.FirstOrDefault(x => x.ПорядковыйНомер == info.ПорядковыйНомер);
@@ -230,17 +213,17 @@ public class QBCHProcessingHandlerV3(
             info.КБКИ = kbkiItems.ToArray();
         }
 
-        var serialization = _xmlSerializer.SerializeAsByteV3(response);
-        if (!serialization.IsSuccess)
-            return serialization;
+        var responseXmlResult = _xmlSerializer.SerializeAsByteV3(response);
+        if (!responseXmlResult.IsSuccess)
+            throw ((OperationError)responseXmlResult.Error!).Exception;
 
-        var responseXml = serialization.Value;
+        var responseXml = responseXmlResult.Value;
         _logger.LogDebug("Агрегированный ответ сериализован, size={size} байт", responseXml.Length);
 
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-        return Result<byte[]>.Success(responseXml);
+        return responseXml;
     }
 
     private async Task<QBCHProcessingTransactionV3> CompleteAcceptedTransactionAsync(QBCHProcessingTransactionV3 transaction, string requestId, DateTime requestDate)
@@ -251,15 +234,11 @@ public class QBCHProcessingHandlerV3(
             requestDate: requestDate
             );
 
-        var serialization = _xmlSerializer.SerializeAsByteV3(acceptedTicket);
-        if (!serialization.IsSuccess)
-        {
-            var error = serialization.Error!;
-            transaction.RiseCriticalError((AnswerErrorCode)error);
-            return transaction;
-        }
+        var ticketBytesResult = _xmlSerializer.SerializeAsByteV3(acceptedTicket);
+        if (!ticketBytesResult.IsSuccess)
+            throw ((OperationError)ticketBytesResult.Error!).Exception;
 
-        var ticketBytes = serialization.Value;
+        var ticketBytes = ticketBytesResult.Value;
         transaction.Accepted();
         transaction.Complete(ticketBytes, _cryptoService.SignMsg(ticketBytes));
 

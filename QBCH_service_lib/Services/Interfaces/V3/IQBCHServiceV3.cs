@@ -13,7 +13,7 @@ public interface IQBCHServiceV3
     /// Формирует ответ на запрос сведений, используя данные из локальной базы.
     /// </summary>
     /// <param name="transaction ">Транзакция обработки с исходным запросом и состоянием валидации.</param>
-    /// <returns>Ответ КБКИ либо сбой, прерывающий сбор агрегированного ответа.</returns>
+    /// <returns>Результат обработки с заполненным ответом КБКИ или признаком ошибки.</returns>
     Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransactionV3 transaction);
 
     /// <summary>
@@ -22,6 +22,6 @@ public interface IQBCHServiceV3
     /// <param name="transaction ">Транзакция обработки с данными запроса.</param>
     /// <param name="client">HTTP-клиент для взаимодействия с внешним сервисом бюро.</param>
     /// <param name="bureau">Реквизиты целевого бюро кредитных историй.</param>
-    /// <returns>Ответ бюро либо сбой формирования исходящего XML, прерывающий сбор агрегированного ответа.</returns>
+    /// <returns>Результат обработки, содержащий ответ бюро или информацию об ошибке.</returns>
     Task<QBCHTaskResult> RequestFromExternalBureau(QBCHProcessingTransactionV3 transaction, HttpClient client, QBCHRequisite bureau);
 }
