@@ -61,22 +61,7 @@ public class QBCHValidationDispatcherV3(
         ProcessSignV3(transaction);
 
         // xsd
-        if (transaction.Status != QBCHProcessingStatus.Failure)
-        {
-            var xmlResult = _xsdValidator.ValidateAndDeserialize<ЗапросСведенийV3>(
-                transaction.Attachment.RequestBody, transaction.ServiceName);
-            if (xmlResult.IsSuccess)
-            {
-                transaction.ClentRequest.SetRequestId(xmlResult.Value.ИдентификаторЗапроса);
-                transaction.ClentRequest.SetRequest(xmlResult.Value);
-            }
-            else
-            {
-                _logger.LogError("Не пройдена проверка XML dlrequest v3. TransactionId={TransactionId}, code={Code}: {Message}",
-                    transaction.Id, xmlResult.Error!.Code, xmlResult.Error.Message);
-                transaction.RiseCriticalError((AnswerErrorCode)xmlResult.Error!);
-            }
-        }
+        ValidateXmlV3(transaction);
 
         var requestV3 = transaction.GetRequest<ЗапросСведенийV3>();
 
@@ -112,6 +97,28 @@ public class QBCHValidationDispatcherV3(
 
         transaction.ValidationComplete();
         return transaction;
+    }
+
+    /// <summary>Проверяет XML и сохраняет прочитанный запрос либо ошибку в транзакции.</summary>
+    /// <param name="transaction">Транзакция с телом запроса и результатами предыдущих проверок.</param>
+    private void ValidateXmlV3(QBCHProcessingTransactionV3 transaction)
+    {
+        if (transaction.Status != QBCHProcessingStatus.Failure)
+        {
+            var xmlResult = _xsdValidator.ValidateAndDeserialize<ЗапросСведенийV3>(
+                transaction.Attachment.RequestBody, transaction.ServiceName);
+            if (xmlResult.IsSuccess)
+            {
+                transaction.ClentRequest.SetRequestId(xmlResult.Value.ИдентификаторЗапроса);
+                transaction.ClentRequest.SetRequest(xmlResult.Value);
+            }
+            else
+            {
+                _logger.LogError("Не пройдена проверка XML dlrequest v3. TransactionId={TransactionId}, code={Code}: {Message}",
+                    transaction.Id, xmlResult.Error!.Code, xmlResult.Error.Message);
+                transaction.RiseCriticalError((AnswerErrorCode)xmlResult.Error!);
+            }
+        }
     }
 
     private void ValidateRequestMethodV3(QBCHProcessingTransactionV3 transaction)
