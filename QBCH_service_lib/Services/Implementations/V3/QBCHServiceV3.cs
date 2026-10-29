@@ -56,7 +56,7 @@ public class QBCHServiceV3(
     /// </summary>
     /// <param name="transaction">Транзакция с телом запроса и техническим контекстом обработки.</param>
     /// <returns>Результат обработки с ответом <c>ОтветНаЗапросСведений</c>.</returns>
-    public async Task<Result<QBCHTaskResult>> RequestFromDB(QBCHProcessingTransactionV3 transaction)
+    public async Task<QBCHTaskResult> RequestFromDB(QBCHProcessingTransactionV3 transaction)
     {
         _logger.LogDebug("Начало получения данных из внутренней БД. Запрос: {TransactionId}", transaction.Id);
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{_ourBureauPsrn}", "task_start_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
@@ -117,7 +117,7 @@ public class QBCHServiceV3(
             var xml = _xmlSerializer.SerializeAsStringV3(template);
 
             if (!xml.IsSuccess)
-                return Result<QBCHTaskResult>.Failure(xml.Error!);
+                return new QBCHTaskResult(_ourBureauPsrn) { Error = xml.Error! };
 
             var timer = Stopwatch.StartNew();
             var subjectKeys = await _qbchDb.GetSearchAllSubjectsV3(xml.Value, timeLeft);
@@ -166,15 +166,15 @@ public class QBCHServiceV3(
 
             var obligations = FillObligationsSection(kbki, includeAmp, getAmpTask?.Result);
             if (!obligations.IsSuccess)
-                return Result<QBCHTaskResult>.Failure(obligations.Error!);
+                return new QBCHTaskResult(_ourBureauPsrn) { Error = obligations.Error! };
 
             var prohibition = FillSelfProhibitionSection(kbki, getSelfProhibitionTask?.Result, isInnVerified);
             if (!prohibition.IsSuccess)
-                return Result<QBCHTaskResult>.Failure(prohibition.Error!);
+                return new QBCHTaskResult(_ourBureauPsrn) { Error = prohibition.Error! };
 
             var antifraud = FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result, isInnVerified);
             if (!antifraud.IsSuccess)
-                return Result<QBCHTaskResult>.Failure(antifraud.Error!);
+                return new QBCHTaskResult(_ourBureauPsrn) { Error = antifraud.Error! };
 
             _logger.LogDebug("Данные из БД упешно получены. Запрос: {TransactionId}", transaction.Id);
 
@@ -183,7 +183,7 @@ public class QBCHServiceV3(
         }
 
         answer.Сведения = responseRows.ToArray();
-        return Result<QBCHTaskResult>.Success(new QBCHTaskResult(_ourBureauPsrn, answer3: answer));
+        return new QBCHTaskResult(_ourBureauPsrn, answer3: answer);
     }
 
     /// <summary>
@@ -193,12 +193,12 @@ public class QBCHServiceV3(
     /// <param name="client">HTTP-клиент для взаимодействия с внешним сервисом бюро.</param>
     /// <param name="bureau">Реквизиты целевого бюро кредитных историй.</param>
     /// <returns>Результат обработки, содержащий ответ бюро или информацию об ошибке.</returns>
-    public async Task<Result<QBCHTaskResult>> RequestFromExternalBureau(QBCHProcessingTransactionV3 transaction, HttpClient client, QBCHRequisite bureau)
+    public async Task<QBCHTaskResult> RequestFromExternalBureau(QBCHProcessingTransactionV3 transaction, HttpClient client, QBCHRequisite bureau)
     {
         var request = transaction.GetRequest<ЗапросСведений>();
 
         if (request is null)
-            return Result<QBCHTaskResult>.Success(new QBCHTaskResult(bureau.ogrn));
+            return new QBCHTaskResult(bureau.ogrn);
 
         var guid = transaction.Id.ToString();
         var orderNumbers = request.Запрос?.Select(x => x.ПорядковыйНомер).ToArray() ?? [];
@@ -226,7 +226,7 @@ public class QBCHServiceV3(
 
         var requestSerialization = _xmlSerializer.SerializeAsByteV3(externalRequest);
         if (!requestSerialization.IsSuccess)
-            return Result<QBCHTaskResult>.Failure(requestSerialization.Error!);
+            return new QBCHTaskResult(bureau.ogrn) { Error = requestSerialization.Error };
 
         var dlrequestBytes = requestSerialization.Value;
         var signedDlrequestBytes = _cryptoService.SignMsg(dlrequestBytes);
@@ -434,7 +434,7 @@ public class QBCHServiceV3(
 
         if (dlrequestResult is not null)
         {
-            return Result<QBCHTaskResult>.Success(new QBCHTaskResult(bureau.ogrn!, answer3: dlrequestResult));
+            return new QBCHTaskResult(bureau.ogrn!, answer3: dlrequestResult);
         }
 
         _logger.LogDebug("{guid} {Bureau}: РежимЗапроса {req}", guid, bureau.ogrn!, transaction.ClentRequest.Request?.РежимЗапроса);
@@ -492,7 +492,7 @@ public class QBCHServiceV3(
 
         _logger.LogDebug("{guid} {Bureau}: получен ответ dlanswer {dt}", guid, bureau.ogrn!, DateTime.Now);
 
-        return Result<QBCHTaskResult>.Success(new QBCHTaskResult(bureau.ogrn!, answer3: dlanswerResult));
+        return new QBCHTaskResult(bureau.ogrn!, answer3: dlanswerResult);
 
     }
 

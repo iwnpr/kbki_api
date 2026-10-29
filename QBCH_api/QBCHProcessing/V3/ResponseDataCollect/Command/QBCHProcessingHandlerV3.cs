@@ -40,7 +40,7 @@ public class QBCHProcessingHandlerV3(
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly List<QBCHRequisite> _qbchList = bkiRequisitsHandler.GetBureaList();
     private readonly ApiV3ContractRules _contractRules = contractRules;
-    private readonly ConcurrentBag<Task<Result<QBCHTaskResult>>> _tasksList = [];
+    private readonly ConcurrentBag<Task<QBCHTaskResult>> _tasksList = [];
 
     private const string ProcessingStageTaskScheduling = "Постановка задач получения сведений";
     private const string ProcessingStageAwaitingTasks = "Ожидание ответов от источников сведений (БД и внешние КБКИ)";
@@ -99,15 +99,14 @@ public class QBCHProcessingHandlerV3(
                     _logger.LogDebug("Ожидание выполнения {taskCount} задач", _tasksList.Count);
                     processingStage = ProcessingStageAwaitingTasks;
 
-                    var taskResults = await Task.WhenAll(_tasksList);
-                    var failedTask = taskResults.FirstOrDefault(result => !result.IsSuccess);
+                    var results = await Task.WhenAll(_tasksList);
+                    var failedTask = results.FirstOrDefault(result => result.Error is not null);
                     if (failedTask is not null)
                     {
                         await RecordProcessingFailureAsync((AnswerErrorCode)failedTask.Error!);
                         return;
                     }
 
-                    var results = taskResults.Select(result => result.Value!).ToArray();
                     processingStage = ProcessingStageBuildingResponse;
                     var aggregateResult = await BuildAndStoreAggregateResponseAsync(results, transaction, clientRequest, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
                     if (!aggregateResult.IsSuccess)

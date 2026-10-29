@@ -1,4 +1,5 @@
-﻿using ОтветНаЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ОтветНаЗапросСведений;
+﻿using QBCH_lib.core;
+using ОтветНаЗапросСведенийV3 = QBCH.Lib.qcb_xml.v3_0.ОтветНаЗапросСведений;
 
 namespace QBCHService_lib.Models
 {
@@ -24,5 +25,11 @@ namespace QBCHService_lib.Models
         /// Ответ КБКИ API 3.0.
         /// </summary>
         public ОтветНаЗапросСведенийV3? Answer3 { get; set; } = answer3;
+
+        /// <summary>
+        /// Внутренний сбой XML-операции, прерывающий сбор агрегированного ответа.
+        /// Ошибки, возвращенные самим КБКИ, остаются в Answer3.
+        /// </summary>
+        public BaseError? Error { get; init; }
     }
 }
