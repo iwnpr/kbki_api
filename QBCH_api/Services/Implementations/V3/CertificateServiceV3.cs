@@ -10,16 +10,20 @@ namespace QBCH_api.Services.Implementations.V3;
 public class CertificateServiceV3(IRepositoryV3 repository, ILogger<CertificateServiceV3> logger)
     : ICertificateServiceV3
 {
+    /// <inheritdoc />
     public Task<Result<bool>> IsCertExistsV3(byte[] cert) => ExecuteAsync(() => repository.IsCertExist(cert));
 
+    /// <inheritdoc />
     public Task<Result<bool>> IsCertActiveV3(string thumbprint) => ExecuteAsync(() => repository.IsCertActive(thumbprint));
 
+    /// <inheritdoc />
     public Task<Result<int>> GetActiveCertificatesCountV3(byte[] cert) => ExecuteAsync(async () =>
     {
         using var certificate = new X509Certificate2(cert);
         return await repository.GetActiveCertificatesCountByThumbprint(certificate.Thumbprint);
     });
 
+    /// <inheritdoc />
     public Task<Result<bool>> SetCertificateInactiveV3(byte[] cert) => ExecuteAsync(async () =>
     {
         using var certificate = new X509Certificate2(cert);

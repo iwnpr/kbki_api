@@ -26,6 +26,7 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
         ["qcb_putanswer"] = ["qcb_putanswer.xsd", "qcb_common.xsd"]
     };
 
+    /// <inheritdoc />
     public Result<bool> Validate(byte[]? xml, string schemaName)
     {
         if (xml is null || xml.Length == 0)
@@ -64,6 +65,7 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
         }
     }
 
+    /// <inheritdoc />
     public Result<T> ValidateAndDeserialize<T>(byte[]? xml, string schemaName) where T : class
     {
         var validation = Validate(xml, schemaName);

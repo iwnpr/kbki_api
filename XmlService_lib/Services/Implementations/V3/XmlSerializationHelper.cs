@@ -11,6 +11,7 @@ namespace XmlService_lib.Services.Implementations.V3;
 /// <summary>Единая точка сериализации и десериализации XML API 3.0.</summary>
 public class XmlSerializationHelper : IXmlServiceV3
 {
+    /// <inheritdoc />
     public Result<T> DeserializeV3<T>(XElement? xml) where T : class
     {
         if (xml is null)
@@ -27,6 +28,7 @@ public class XmlSerializationHelper : IXmlServiceV3
         }
     }
 
+    /// <inheritdoc />
     public Result<T> DeserializeV3<T>(byte[]? bytes) where T : class
     {
         if (bytes is null || bytes.Length == 0)
@@ -48,6 +50,7 @@ public class XmlSerializationHelper : IXmlServiceV3
         }
     }
 
+    /// <inheritdoc />
     public Result<byte[]> SerializeAsByteV3<T>(T? item) where T : class
     {
         if (item is null)
@@ -71,6 +74,7 @@ public class XmlSerializationHelper : IXmlServiceV3
         }
     }
 
+    /// <inheritdoc />
     public Result<string> SerializeAsStringV3<T>(T? item) where T : class
     {
         var result = SerializeAsByteV3(item);
@@ -79,6 +83,7 @@ public class XmlSerializationHelper : IXmlServiceV3
             : Result<string>.Failure(result.Error!);
     }
 
+    /// <inheritdoc />
     public Result<XDocument> SerializeAsXDocumentV3<T>(T? item) where T : class
     {
         var result = SerializeAsByteV3(item);

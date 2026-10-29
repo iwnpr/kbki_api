@@ -17,6 +17,7 @@ public class ValidationServiceV3(
     IRepositoryV3 repository,
     ILogger<ValidationServiceV3> logger) : IValidationServiceV3
 {
+    /// <inheritdoc />
     public Result<bool> ValidateEncodingV3(byte[] message) => Execute(() =>
     {
         try
@@ -31,6 +32,7 @@ public class ValidationServiceV3(
         }
     });
 
+    /// <inheritdoc />
     public Result<bool> ValidateRequestDateV3(DateTime? requestDate) => Execute(() =>
     {
         var zone = TimeZoneInfo.FindSystemTimeZoneById("Russian Standard Time");
@@ -41,6 +43,7 @@ public class ValidationServiceV3(
             : Result<bool>.Failure(AnswerErrorCode.Code23_InvalidRerquestDate());
     });
 
+    /// <inheritdoc />
     public Result<bool> ValidateCertificateV3(X509Certificate2? requestCert) => Execute(() =>
     {
         // Старый контракт криптосервиса адаптируется только на этой границе.
@@ -51,6 +54,7 @@ public class ValidationServiceV3(
             : Result<bool>.Failure(new AnswerErrorCode(result.ErrorCode, result.Error ?? "Ошибка проверки сертификата."));
     });
 
+    /// <inheritdoc />
     public Result<CryptoServiceResult> ValidateMsgV3(byte[] msg, X509Certificate2? requestCert,
         byte[]? encodedSignature = null) => Execute(() =>
         {
@@ -59,6 +63,7 @@ public class ValidationServiceV3(
             return result;
         });
 
+    /// <inheritdoc />
     public Task<Result<bool>> ValidateRulesV3(string? thumbprint, string? serviceName,
         CancellationToken? ct = null) => ExecuteAsync(async () =>
     {
@@ -70,6 +75,7 @@ public class ValidationServiceV3(
             : Result<bool>.Failure(AnswerErrorCode.Code22_AccessDenied());
     });
 
+    /// <inheritdoc />
     public Task<Result<bool>> IsUniqueRequestIdV3Async(string requestId, string methodName,
         string ogrn) => ExecuteAsync(async () =>
     {
