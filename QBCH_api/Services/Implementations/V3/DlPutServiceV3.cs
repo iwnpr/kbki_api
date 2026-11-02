@@ -1,4 +1,3 @@
-using QBCH_lib.core;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib.domain.errors;
@@ -133,7 +132,11 @@ public class DlPutServiceV3(
                 deal.ДатаРасчета = delete.ДатаРасчета.Date;
                 deal.ДатаРасчетаSpecified = true;
 
-                var contractSubjectXml = _xmlSerializer.SerializeAsStringV3(source.Субъект).GetValueOrThrow();
+                var contractSubjectXmlResult = _xmlSerializer.SerializeAsStringV3(source.Субъект);
+                if (!contractSubjectXmlResult.IsSuccess)
+                    throw ((OperationError)contractSubjectXmlResult.Error!).Exception;
+
+                var contractSubjectXml = contractSubjectXmlResult.Value;
                 var contractSubjectIds = await _repository.SearchContractSubjectsForDlPutV3(contractSubjectXml);
 
                 if (contractSubjectIds is null || contractSubjectIds.Count == 0)
