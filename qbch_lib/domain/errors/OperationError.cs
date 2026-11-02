@@ -9,12 +9,12 @@ namespace qbch_lib.domain.errors;
 public sealed class OperationError : AnswerErrorCode
 {
     /// <summary>Создает результат сбоя с исходным сообщением исключения.</summary>
-    /// <param name="exception">Причина сбоя; используется для диагностики, не выбрасывается повторно.</param>
+    /// <param name="exception">Причина сбоя для диагностики и сохранения прежней обработки исключений вызывающим компонентом.</param>
     public OperationError(Exception exception) : base(99, exception.Message)
     {
         Exception = exception;
     }
 
-    /// <summary>Исходное исключение для записи диагностики.</summary>
+    /// <summary>Исходное исключение для диагностики и обработки сбоя вызывающим компонентом.</summary>
     public Exception Exception { get; }
 }

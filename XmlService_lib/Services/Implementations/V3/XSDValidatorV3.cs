@@ -74,7 +74,12 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
 
         var deserialization = xmlSerializer.DeserializeV3<T>(xml);
         if (!deserialization.IsSuccess)
+        {
+            if (deserialization.Error is OperationError failure)
+                logger.LogError(failure.Exception, "Ошибка десериализации XML после XSD-проверки. SchemaName={SchemaName}", schemaName);
+
             return Result<T>.Failure(AnswerErrorCode.Code9_InvalidRequestByScheme(deserialization.Error!.Message));
+        }
 
         return deserialization.Value is not null
             ? Result<T>.Success(deserialization.Value)

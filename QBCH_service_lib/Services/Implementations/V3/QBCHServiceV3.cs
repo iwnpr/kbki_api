@@ -1,4 +1,5 @@
-﻿using Cache_lib.Interfaces;
+﻿using System.Runtime.ExceptionServices;
+using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -115,7 +116,7 @@ public class QBCHServiceV3(
 
             var xmlResult = _xmlSerializer.SerializeAsStringV3(template);
             if (!xmlResult.IsSuccess)
-                throw ((OperationError)xmlResult.Error!).Exception;
+                ExceptionDispatchInfo.Throw(((OperationError)xmlResult.Error!).Exception);
 
             var xml = xmlResult.Value;
             var timer = Stopwatch.StartNew();
@@ -218,7 +219,7 @@ public class QBCHServiceV3(
 
         var dlrequestBytesResult = _xmlSerializer.SerializeAsByteV3(externalRequest);
         if (!dlrequestBytesResult.IsSuccess)
-            throw ((OperationError)dlrequestBytesResult.Error!).Exception;
+            ExceptionDispatchInfo.Throw(((OperationError)dlrequestBytesResult.Error!).Exception);
 
         var dlrequestBytes = dlrequestBytesResult.Value;
         var signedDlrequestBytes = _cryptoService.SignMsg(dlrequestBytes);
@@ -275,7 +276,7 @@ public class QBCHServiceV3(
                                 redisMsg.SetSignedResponse(ms.ToArray()).SetResponseXml(answerValidation.Body).SetResponseTime(DateTime.Now);
                                 var dlrequestResultParsing = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body);
                                 if (!dlrequestResultParsing.IsSuccess)
-                                    throw ((OperationError)dlrequestResultParsing.Error!).Exception;
+                                    ExceptionDispatchInfo.Throw(((OperationError)dlrequestResultParsing.Error!).Exception);
 
                                 dlrequestResult = dlrequestResultParsing.Value;
                                 await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
@@ -295,7 +296,7 @@ public class QBCHServiceV3(
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 var badTicketResult = _xmlSerializer.DeserializeV3<Результат>(badValidation.Body);
                                 if (!badTicketResult.IsSuccess)
-                                    throw ((OperationError)badTicketResult.Error!).Exception;
+                                    ExceptionDispatchInfo.Throw(((OperationError)badTicketResult.Error!).Exception);
 
                                 var badTicket = badTicketResult.Value;
 
@@ -326,7 +327,7 @@ public class QBCHServiceV3(
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 var ticketParsing = _xmlSerializer.DeserializeV3<Результат>(ticketValidation.Body);
                                 if (!ticketParsing.IsSuccess)
-                                    throw ((OperationError)ticketParsing.Error!).Exception;
+                                    ExceptionDispatchInfo.Throw(((OperationError)ticketParsing.Error!).Exception);
 
                                 ticket = ticketParsing.Value;
 
@@ -497,7 +498,7 @@ public class QBCHServiceV3(
 
                         var answerResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведений>(okValidation.Body);
                         if (!answerResult.IsSuccess)
-                            throw ((OperationError)answerResult.Error!).Exception;
+                            ExceptionDispatchInfo.Throw(((OperationError)answerResult.Error!).Exception);
 
                         var answer = answerResult.Value;
                         //NOTE: У Артема эта обработка отсутствует, но, имхо, она допустима
@@ -517,7 +518,7 @@ public class QBCHServiceV3(
                         _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                         var ticketResult = _xmlSerializer.DeserializeV3<Результат>(ticketValidation.Body);
                         if (!ticketResult.IsSuccess)
-                            throw ((OperationError)ticketResult.Error!).Exception;
+                            ExceptionDispatchInfo.Throw(((OperationError)ticketResult.Error!).Exception);
 
                         var ticket = ticketResult.Value;
                         //NOTE: Возвратил пропавший код Артема. И безусловное приведение вместо сравнения, это ошибка. 
@@ -630,7 +631,7 @@ public class QBCHServiceV3(
 
         var xsdValidation = _xsdValidator.Validate(cryptoResult.Body, [schemaName, @"xsd\3\qcb_common.xsd"]);
         if (xsdValidation.Error is OperationError failure)
-            throw failure.Exception;
+            ExceptionDispatchInfo.Throw(failure.Exception);
 
         if (!xsdValidation.IsSuccess)
         {
@@ -691,7 +692,7 @@ public class QBCHServiceV3(
 
         var ampResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml);
         if (!ampResult.IsSuccess)
-            throw ((OperationError)ampResult.Error!).Exception;
+            ExceptionDispatchInfo.Throw(((OperationError)ampResult.Error!).Exception);
 
         var amp = ampResult.Value;
 
@@ -719,7 +720,7 @@ public class QBCHServiceV3(
 
         var prohibitionResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(prohibitionXml);
         if (!prohibitionResult.IsSuccess)
-            throw ((OperationError)prohibitionResult.Error!).Exception;
+            ExceptionDispatchInfo.Throw(((OperationError)prohibitionResult.Error!).Exception);
 
         var prohibition = prohibitionResult.Value;
 
@@ -753,7 +754,7 @@ public class QBCHServiceV3(
 
         var antifraudResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(antifraudXml);
         if (!antifraudResult.IsSuccess)
-            throw ((OperationError)antifraudResult.Error!).Exception;
+            ExceptionDispatchInfo.Throw(((OperationError)antifraudResult.Error!).Exception);
 
         var antifraud = antifraudResult.Value;
 

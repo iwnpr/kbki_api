@@ -1,4 +1,5 @@
-﻿using Cache_lib.Interfaces;
+﻿using System.Runtime.ExceptionServices;
+using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using MediatR;
 using QBCH.Lib.qcb_xml.v3_0;
@@ -182,7 +183,7 @@ public class QBCHProcessingHandlerV3(
             {
                 var TaskResultXmlResult = _xmlSerializer.SerializeAsStringV3(taskResult.Answer3);
                 if (!TaskResultXmlResult.IsSuccess)
-                    throw ((OperationError)TaskResultXmlResult.Error!).Exception;
+                    ExceptionDispatchInfo.Throw(((OperationError)TaskResultXmlResult.Error!).Exception);
 
                 var TaskResultXml = TaskResultXmlResult.Value;
                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_result_xml", TaskResultXml);
@@ -215,7 +216,7 @@ public class QBCHProcessingHandlerV3(
 
         var responseXmlResult = _xmlSerializer.SerializeAsByteV3(response);
         if (!responseXmlResult.IsSuccess)
-            throw ((OperationError)responseXmlResult.Error!).Exception;
+            ExceptionDispatchInfo.Throw(((OperationError)responseXmlResult.Error!).Exception);
 
         var responseXml = responseXmlResult.Value;
         _logger.LogDebug("Агрегированный ответ сериализован, size={size} байт", responseXml.Length);
@@ -236,7 +237,7 @@ public class QBCHProcessingHandlerV3(
 
         var ticketBytesResult = _xmlSerializer.SerializeAsByteV3(acceptedTicket);
         if (!ticketBytesResult.IsSuccess)
-            throw ((OperationError)ticketBytesResult.Error!).Exception;
+            ExceptionDispatchInfo.Throw(((OperationError)ticketBytesResult.Error!).Exception);
 
         var ticketBytes = ticketBytesResult.Value;
         transaction.Accepted();
