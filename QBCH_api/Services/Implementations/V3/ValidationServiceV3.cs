@@ -42,7 +42,6 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
             return Result<bool>.Failure(new OperationError(ex));
         }
     }
@@ -66,7 +65,6 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
             return Result<bool>.Failure(new OperationError(ex));
         }
     }
@@ -88,7 +86,6 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
             return Result<CryptoServiceResult>.Failure(new OperationError(ex));
         }
     }
@@ -120,7 +117,6 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
             return Result<bool>.Failure(new OperationError(ex));
         }
     }
@@ -139,7 +135,6 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
             return Result<bool>.Failure(new OperationError(ex));
         }
     }
@@ -163,7 +158,6 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Не удалось выполнить проверку запроса API 3.0");
             return Result<bool>.Failure(new OperationError(ex));
         }
     }

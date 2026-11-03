@@ -79,13 +79,20 @@ public class XmlSerializerV3 : IXmlSerializerV3
     /// <inheritdoc />
     public Result<string> SerializeAsStringV3<T>(T? item) where T : class
     {
-        var result = SerializeAsByteV3(item);
-        if (!result.IsSuccess)
-            return Result<string>.Failure(result.Error!);
+        if (item is null)
+            return Result<string>.Success(string.Empty);
 
         try
         {
-            using var stream = new MemoryStream(result.Value);
+            var serializer = new XmlSerializer(typeof(T));
+            var namespaces = new XmlSerializerNamespaces();
+            namespaces.Add("", "");
+
+            using var stream = new MemoryStream();
+            using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+            serializer.Serialize(writer, item, namespaces);
+            stream.Position = 0;
+
             using var reader = new StreamReader(stream);
             return Result<string>.Success(reader.ReadToEnd());
         }

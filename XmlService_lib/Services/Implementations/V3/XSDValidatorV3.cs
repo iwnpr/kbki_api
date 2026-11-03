@@ -35,7 +35,6 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Не удалось загрузить XSD-схемы {SchemaName}", schemaName);
             return Result<bool>.Failure(new OperationError(ex));
         }
     }
@@ -57,7 +56,6 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Не удалось загрузить XSD-схемы");
             return Result<bool>.Failure(new OperationError(ex));
         }
     }
