@@ -9,7 +9,6 @@ using KafkaService_lib.BackgroundPublishing;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
 using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 using QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
@@ -54,7 +53,7 @@ public class QBCHIIIController(IMediator mediator,
         ApiV3ContractRules contractRules,
         IConfiguration config,
         DbTimingContext dbTimingContext,
-        LoggingContext logContext) : ControllerBase, IAsyncActionFilter
+        LoggingContext logContext) : ControllerBase
 {
     private readonly IMediator _mediator = mediator;
     private readonly ICryptoService _cryptoService = cryptoService;
@@ -93,23 +92,6 @@ public class QBCHIIIController(IMediator mediator,
     private const string FirstPollAllowedAtUtcField = "first_poll_allowed_at_utc";
     private const string ResponseExpireAtUtcField = "response_expire_at_utc";
     private const string LastPollUtcField = "last_poll_utc";
-
-    /// <summary>Преобразует необработанные ошибки действий API v3 в подписанную квитанцию.</summary>
-    /// <param name="context">Контекст вызываемого действия.</param>
-    /// <param name="next">Выполнение действия контроллера.</param>
-    [NonAction]
-    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
-    {
-        var executed = await next();
-        if (executed.Exception is null || executed.ExceptionHandled)
-            return;
-
-        _logger.LogError(executed.Exception, "Не удалось выполнить действие API v3 {Action}", context.ActionDescriptor.DisplayName);
-        executed.Result = CreateV3ErrorResponse(
-            AnswerErrorCode.Code99_OtherError(executed.Exception.Message),
-            StatusCodes.Status400BadRequest).ActionResult;
-        executed.ExceptionHandled = true;
-    }
 
     [HttpPost("dlrequest")]
     public async Task<IActionResult> DlRequest_v_3(ApiVersion apiVersion)
@@ -345,10 +327,15 @@ public class QBCHIIIController(IMediator mediator,
                 await _storageService.AddHash(serviceName, guid, "error_code", "500");
                 await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
                 var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-                var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
-                responseXml = errorResult.ResponseXml;
-                signedResponse = errorResult.SignedResponse;
-                return errorResult.ActionResult;
+                var ticket = _ticketServiceV3.CreateResultV3Error(failure);
+                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
+                if (!responseSerialization.IsSuccess)
+                    ExceptionDispatchInfo.Throw(((OperationError)responseSerialization.Error!).Exception);
+
+                responseXml = responseSerialization.Value;
+                signedResponse = _cryptoService.SignMsg(responseXml);
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                return File(signedResponse, "application/octet-stream");
             }
             finally
             {
@@ -397,7 +384,15 @@ public class QBCHIIIController(IMediator mediator,
                 _logger.LogCritical("Очередь отправки в Kafka переполнена: сервис={QbchService}, guid={Guid}. Сведения об ошибке не выгружены", serviceName, guid);
 
             _logger.LogCritical(ex, "Возникла критическая ошибка");
-            return CreateV3ErrorResponse(AnswerErrorCode.Code99_OtherError(ex.Message), StatusCodes.Status400BadRequest).ActionResult;
+            var ticket = _ticketServiceV3.CreateResultV3Error(AnswerErrorCode.Code99_OtherError(ex.Message));
+            responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
+            if (!responseSerialization.IsSuccess)
+                ExceptionDispatchInfo.Throw(((OperationError)responseSerialization.Error!).Exception);
+
+            responseXml = responseSerialization.Value;
+            signedResponse = _cryptoService.SignMsg(responseXml);
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return File(signedResponse, "application/octet-stream");
         }
     }
 
@@ -691,10 +686,15 @@ public class QBCHIIIController(IMediator mediator,
             await _storageService.AddHash(serviceName, guid, "error_code", "500");
             await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-            var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
-            responseXml = errorResult.ResponseXml;
-            signedResponse = errorResult.SignedResponse;
-            return errorResult.ActionResult;
+            var ticket = _ticketServiceV3.CreateResultV3Error(failure);
+            responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
+            if (!responseSerialization.IsSuccess)
+                ExceptionDispatchInfo.Throw(((OperationError)responseSerialization.Error!).Exception);
+
+            responseXml = responseSerialization.Value;
+            signedResponse = _cryptoService.SignMsg(responseXml);
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return File(signedResponse, "application/octet-stream");
         }
         finally
         {
@@ -863,10 +863,15 @@ public class QBCHIIIController(IMediator mediator,
             await _storageService.AddHash(serviceName, guid, "error_code", "500");
             await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-            var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
-            responseXml = errorResult.ResponseXml;
-            signedResponse = errorResult.SignedResponse;
-            return errorResult.ActionResult;
+            var ticket = _ticketServiceV3.CreateResultV3Error(failure);
+            responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
+            if (!responseSerialization.IsSuccess)
+                ExceptionDispatchInfo.Throw(((OperationError)responseSerialization.Error!).Exception);
+
+            responseXml = responseSerialization.Value;
+            signedResponse = _cryptoService.SignMsg(responseXml);
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return File(signedResponse, "application/octet-stream");
         }
         finally
         {
@@ -1088,10 +1093,15 @@ public class QBCHIIIController(IMediator mediator,
             await _storageService.AddHash(serviceName, guid, "error_code", "500");
             await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-            var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
-            responseXml = errorResult.ResponseXml;
-            signedResponse = errorResult.SignedResponse;
-            return errorResult.ActionResult;
+            var ticket = _ticketServiceV3.CreateResultV3Error(failure);
+            responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
+            if (!responseSerialization.IsSuccess)
+                ExceptionDispatchInfo.Throw(((OperationError)responseSerialization.Error!).Exception);
+
+            responseXml = responseSerialization.Value;
+            signedResponse = _cryptoService.SignMsg(responseXml);
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return File(signedResponse, "application/octet-stream");
         }
         finally
         {
@@ -1311,10 +1321,15 @@ public class QBCHIIIController(IMediator mediator,
             await _storageService.AddHash(serviceName, guid, "error_code", "500");
             await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-            var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
-            responseXml = errorResult.ResponseXml;
-            signedResponse = errorResult.SignedResponse;
-            return errorResult.ActionResult;
+            var ticket = _ticketServiceV3.CreateResultV3Error(failure);
+            responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
+            if (!responseSerialization.IsSuccess)
+                ExceptionDispatchInfo.Throw(((OperationError)responseSerialization.Error!).Exception);
+
+            responseXml = responseSerialization.Value;
+            signedResponse = _cryptoService.SignMsg(responseXml);
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return File(signedResponse, "application/octet-stream");
         }
         finally
         {
@@ -1343,13 +1358,7 @@ public class QBCHIIIController(IMediator mediator,
         await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
         await _storageService.AddHash(serviceName, guid, "error_message", message);
 
-        return CreateV3ErrorResponse(new AnswerErrorCode(code, message), statusCode);
-    }
-
-    /// <summary>Формирует подписанную квитанцию независимо от доступности хранилища.</summary>
-    private V3ErrorResponseBuildResult CreateV3ErrorResponse(AnswerErrorCode error, int statusCode)
-    {
-        var ticket = _ticketServiceV3.CreateResultV3Error(error);
+        var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(code, message));
         var responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
         if (!responseSerialization.IsSuccess)
             ExceptionDispatchInfo.Throw(((OperationError)responseSerialization.Error!).Exception);
