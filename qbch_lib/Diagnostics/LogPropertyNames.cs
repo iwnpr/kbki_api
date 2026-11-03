@@ -9,4 +9,9 @@ public static class LogPropertyNames
     /// Идентификатор бизнес-транзакции.
     /// </summary>
     public const string TransactionId = "TransactionId";
+
+    /// <summary>
+    /// Контрагент, от имени которого выполняется входящий запрос.
+    /// </summary>
+    public const string Counterparty = "Контрагент";
 }

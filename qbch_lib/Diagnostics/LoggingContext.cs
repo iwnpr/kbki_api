@@ -18,15 +18,21 @@ public sealed class LoggingContext : ILogEventEnricher
     public string? TransactionId { get; set; }
 
     /// <summary>
-    /// Добавляет идентификатор транзакции в событие, если он задан и сообщение не передало своё значение.
+    /// Имя контрагента из клиентского сертификата. Без сертификата не задано.
+    /// </summary>
+    public string? Counterparty { get; set; }
+
+    /// <summary>
+    /// Добавляет свойства контекста в событие, если они заданы и сообщение не передало своё значение.
     /// </summary>
     /// <param name="logEvent">Обогащаемое событие логирования.</param>
     /// <param name="propertyFactory">Фабрика структурированных свойств Serilog.</param>
     public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
     {
-        if (TransactionId is null)
-            return;
+        if (TransactionId is not null)
+            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.TransactionId, TransactionId));
 
-        logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.TransactionId, TransactionId));
+        if (!string.IsNullOrWhiteSpace(Counterparty))
+            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.Counterparty, Counterparty));
     }
 }

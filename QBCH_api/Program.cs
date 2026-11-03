@@ -187,10 +187,10 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+app.UseCertificateForwarding();
 app.UseMiddleware<LoggingScopeMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseRouting();
-app.UseCertificateForwarding();
 app.UseDeveloperExceptionPage();
 
 // Enable middleware to serve generated Swagger as a JSON endpoint.

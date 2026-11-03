@@ -67,7 +67,7 @@ public class QBCHIIIController(IMediator mediator,
     private readonly DbTimingContext _dbTimingContext = dbTimingContext;
 
     private static readonly string RequestLogTemplate =
-        "Выполнен запрос {Action}, Bureau={Bureau}, Thumbprint={Thumbprint}" + Environment.NewLine +
+        "Выполнен запрос {Action}, Thumbprint={Thumbprint}" + Environment.NewLine +
         "  TransactionId={TransactionId}, XmlRequestId={XmlRequestId}, Status={StatusCode}" + Environment.NewLine +
         "  КодСведений={InfoCode}, ТипЗапроса={RequestType}, РежимЗапроса={RequestMode}" + Environment.NewLine +
         "  OnTime={IsOnTime}, TotalTime={TotalTime}ms, DbExecutionTime={DbExecutionTime}ms";
@@ -1256,7 +1256,6 @@ public class QBCHIIIController(IMediator mediator,
     private void LogActionEnd(string action, object transactionId, int statusCode, TimeSpan elapsed, string? guid = null, ЗапросСведений? request = null)
     {
         var certificate = HttpContext.Connection.ClientCertificate;
-        var bureau = certificate?.GetNameInfo(X509NameType.SimpleName, false);
         var thumbprint = certificate?.Thumbprint;
         var elapsedMs = elapsed.TotalMilliseconds;
         var isOnTime = elapsedMs <= _contractRules.ImmediateResponseDeadlineMs;
@@ -1268,18 +1267,18 @@ public class QBCHIIIController(IMediator mediator,
 
         if (request is not null)
         {
-            _logger.LogInformation(RequestLogTemplate, action, bureau, thumbprint, transactionId, xmlRequestId, statusCode, infoCode, requestType, requestMode, isOnTime, elapsedMs, dbExecutionTime);
+            _logger.LogInformation(RequestLogTemplate, action, thumbprint, transactionId, xmlRequestId, statusCode, infoCode, requestType, requestMode, isOnTime, elapsedMs, dbExecutionTime);
             return;
         }
 
         if (guid is null)
         {
-            _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Bureau={Bureau}, Thumbprint={Thumbprint}, Status={StatusCode}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
-                action, isOnTime, transactionId, bureau, thumbprint, statusCode, elapsedMs, dbExecutionTime);
+            _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Thumbprint={Thumbprint}, Status={StatusCode}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
+                action, isOnTime, transactionId, thumbprint, statusCode, elapsedMs, dbExecutionTime);
             return;
         }
 
-        _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Bureau={Bureau}, Thumbprint={Thumbprint}, Status={StatusCode}, Guid={Guid}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
-            action, isOnTime, transactionId, bureau, thumbprint, statusCode, guid, elapsedMs, dbExecutionTime);
+        _logger.LogInformation("Выполнен запрос {Action}, OnTime={IsOnTime}, TransactionId={TransactionId}, Thumbprint={Thumbprint}, Status={StatusCode}, Guid={Guid}, Elapsed={ElapsedMs}ms, DbExecutionTime={DbExecutionTime}ms",
+            action, isOnTime, transactionId, thumbprint, statusCode, guid, elapsedMs, dbExecutionTime);
     }
 }
