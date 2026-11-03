@@ -9,6 +9,7 @@ using KafkaService_lib.BackgroundPublishing;
 using KafkaService_lib.Services.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using QBCH.Lib.qcb_xml.v3_0;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation.Command;
 using QBCH_api.QBCHProcessing.V3.ResponseDataCollect.Command;
@@ -53,7 +54,7 @@ public class QBCHIIIController(IMediator mediator,
         ApiV3ContractRules contractRules,
         IConfiguration config,
         DbTimingContext dbTimingContext,
-        LoggingContext logContext) : ControllerBase
+        LoggingContext logContext) : ControllerBase, IAsyncActionFilter
 {
     private readonly IMediator _mediator = mediator;
     private readonly ICryptoService _cryptoService = cryptoService;
@@ -93,6 +94,23 @@ public class QBCHIIIController(IMediator mediator,
     private const string ResponseExpireAtUtcField = "response_expire_at_utc";
     private const string LastPollUtcField = "last_poll_utc";
 
+    /// <summary>Преобразует необработанные ошибки действий API v3 в подписанную квитанцию.</summary>
+    /// <param name="context">Контекст вызываемого действия.</param>
+    /// <param name="next">Выполнение действия контроллера.</param>
+    [NonAction]
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        var executed = await next();
+        if (executed.Exception is null || executed.ExceptionHandled)
+            return;
+
+        _logger.LogError(executed.Exception, "Не удалось выполнить действие API v3 {Action}", context.ActionDescriptor.DisplayName);
+        executed.Result = CreateV3ErrorResponse(
+            AnswerErrorCode.Code99_OtherError(executed.Exception.Message),
+            StatusCodes.Status400BadRequest).ActionResult;
+        executed.ExceptionHandled = true;
+    }
+
     [HttpPost("dlrequest")]
     public async Task<IActionResult> DlRequest_v_3(ApiVersion apiVersion)
     {
@@ -102,9 +120,6 @@ public class QBCHIIIController(IMediator mediator,
         _logger.LogInformation("Начало = {Action} {RequestTime}", nameof(DlRequest_v_3), requestTime);
 
         var transaction = await _mediator.Send(new CreateToValidateCommandV3(apiVersion, Request));
-
-        if (transaction.ProcessingErrors.FirstOrDefault() is OperationError validationFailure)
-            ExceptionDispatchInfo.Throw(validationFailure.Exception);
 
         if (transaction.ProcessingErrors.Count != 0)
         {
@@ -204,8 +219,8 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             _logger.LogError(ex, "Ошибка формирования HTTP-ответа для идентификатора {Id}", transaction.Id);
-            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed, request: transaction.ClentRequest.Request);
-            return StatusCode(500);
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status400BadRequest, actionStopwatch.Elapsed, request: transaction.ClentRequest.Request);
+            return CreateV3ErrorResponse(AnswerErrorCode.Code99_OtherError(ex.Message), StatusCodes.Status400BadRequest).ActionResult;
         }
     }
 
@@ -273,8 +288,6 @@ public class QBCHIIIController(IMediator mediator,
                 await _storageService.AddHash(serviceName, guid, "response_guid", id);
 
                 var rightsResult = await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, RedisConstants.DlRequestV3Scope);
-                if (rightsResult.Error is OperationError)
-                    ExceptionDispatchInfo.Throw(((OperationError)rightsResult.Error).Exception);
 
                 if (!rightsResult.IsSuccess)
                 {
@@ -287,8 +300,6 @@ public class QBCHIIIController(IMediator mediator,
                 }
 
                 var certValidationResult = _validationServiceV3.ValidateCertificateV3(certificate);
-                if (certValidationResult.Error is OperationError)
-                    ExceptionDispatchInfo.Throw(((OperationError)certValidationResult.Error).Exception);
 
                 if (!certValidationResult.IsSuccess)
                 {
@@ -331,9 +342,11 @@ public class QBCHIIIController(IMediator mediator,
             catch (Exception ex)
             {
                 _logger.LogCritical(ex, "Возникла критическая ошибка в /dlanswer v3");
-                await _storageService.AddHash(serviceName, guid, "error_code", "500");
-                await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
-                return StatusCode(500);
+                var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
+                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+                responseXml = errorResult.ResponseXml;
+                signedResponse = errorResult.SignedResponse;
+                return errorResult.ActionResult;
             }
             finally
             {
@@ -382,7 +395,7 @@ public class QBCHIIIController(IMediator mediator,
                 _logger.LogCritical("Очередь отправки в Kafka переполнена: сервис={QbchService}, guid={Guid}. Сведения об ошибке не выгружены", serviceName, guid);
 
             _logger.LogCritical(ex, "Возникла критическая ошибка");
-            return StatusCode(500);
+            return CreateV3ErrorResponse(AnswerErrorCode.Code99_OtherError(ex.Message), StatusCodes.Status400BadRequest).ActionResult;
         }
     }
 
@@ -441,8 +454,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var certValidationResult = _validationServiceV3.ValidateCertificateV3(certificate);
-            if (certValidationResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)certValidationResult.Error).Exception);
 
             if (!certValidationResult.IsSuccess)
             {
@@ -459,8 +470,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var encodingValidationResult = _validationServiceV3.ValidateEncodingV3(bodyBytes);
-            if (encodingValidationResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)encodingValidationResult.Error).Exception);
 
             if (!encodingValidationResult.IsSuccess)
             {
@@ -478,8 +487,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var rightsResult = await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, serviceName);
-            if (rightsResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)rightsResult.Error).Exception);
 
             if (!rightsResult.IsSuccess)
             {
@@ -496,8 +503,6 @@ public class QBCHIIIController(IMediator mediator,
             var xsdValidation = _xsdValidator.Validate(bodyBytes, serviceName);
             if (!xsdValidation.IsSuccess)
             {
-                if (xsdValidation.Error is OperationError)
-                    ExceptionDispatchInfo.Throw(((OperationError)xsdValidation.Error).Exception);
 
                 var error = xsdValidation.Error!;
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(error.Code, error.Message));
@@ -568,8 +573,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var dateValidationResult = _validationServiceV3.ValidateRequestDateV3(requestV3.ДатаЗапроса);
-            if (dateValidationResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)dateValidationResult.Error).Exception);
 
             if (!dateValidationResult.IsSuccess)
             {
@@ -591,8 +594,6 @@ public class QBCHIIIController(IMediator mediator,
             var requestOgrn = requestV3.БКИ?.ОГРН ?? string.Empty;
 
             var uniqueValidationResult = await _validationServiceV3.IsUniqueRequestIdV3Async(requestId, serviceName, requestOgrn);
-            if (uniqueValidationResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)uniqueValidationResult.Error).Exception);
 
             if (!uniqueValidationResult.IsSuccess)
             {
@@ -685,9 +686,11 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /dlput v3");
-            await _storageService.AddHash(serviceName, guid, "error_code", "500");
-            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
-            return StatusCode(500);
+            var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
+            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+            responseXml = errorResult.ResponseXml;
+            signedResponse = errorResult.SignedResponse;
+            return errorResult.ActionResult;
         }
         finally
         {
@@ -760,8 +763,6 @@ public class QBCHIIIController(IMediator mediator,
             await _storageService.AddHash(serviceName, guid, "response_guid", id);
 
             var certValidationResult = _validationServiceV3.ValidateCertificateV3(certificate);
-            if (certValidationResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)certValidationResult.Error).Exception);
 
             if (!certValidationResult.IsSuccess)
             {
@@ -779,8 +780,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var rightsResult = await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, RedisConstants.DlPutV3Scope);
-            if (rightsResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)rightsResult.Error).Exception);
 
             if (!rightsResult.IsSuccess)
             {
@@ -857,9 +856,11 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /dlputanswer v3");
-            await _storageService.AddHash(serviceName, guid, "error_code", "500");
-            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
-            return StatusCode(500);
+            var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
+            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+            responseXml = errorResult.ResponseXml;
+            signedResponse = errorResult.SignedResponse;
+            return errorResult.ActionResult;
         }
         finally
         {
@@ -917,8 +918,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var rightsResult = await _validationServiceV3.ValidateRulesV3(certificate?.Thumbprint, serviceName);
-            if (rightsResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)rightsResult.Error).Exception);
 
             if (!rightsResult.IsSuccess)
             {
@@ -933,8 +932,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var certValidationResult = _validationServiceV3.ValidateCertificateV3(certificate);
-            if (certValidationResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)certValidationResult.Error).Exception);
 
             if (!certValidationResult.IsSuccess)
             {
@@ -1025,8 +1022,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var uniqueValidationResult = await _validationServiceV3.IsUniqueRequestIdV3Async(form.id, serviceName, validateMsgResult.RequestOGRN);
-            if (uniqueValidationResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)uniqueValidationResult.Error).Exception);
 
             if (!uniqueValidationResult.IsSuccess)
             {
@@ -1084,9 +1079,11 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /certadd v3");
-            await _storageService.AddHash(serviceName, guid, "error_code", "500");
-            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
-            return StatusCode(500);
+            var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
+            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+            responseXml = errorResult.ResponseXml;
+            signedResponse = errorResult.SignedResponse;
+            return errorResult.ActionResult;
         }
         finally
         {
@@ -1129,8 +1126,6 @@ public class QBCHIIIController(IMediator mediator,
         try
         {
             var rightsResult = await _validationServiceV3.ValidateRulesV3(requestCertificate?.Thumbprint, serviceName);
-            if (rightsResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)rightsResult.Error).Exception);
 
             if (!rightsResult.IsSuccess)
             {
@@ -1232,8 +1227,6 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var uniqueResult = await _validationServiceV3.IsUniqueRequestIdV3Async(form.id, serviceName, cryptoResult.RequestOGRN ?? string.Empty);
-            if (uniqueResult.Error is OperationError)
-                ExceptionDispatchInfo.Throw(((OperationError)uniqueResult.Error).Exception);
 
             if (!uniqueResult.IsSuccess)
             {
@@ -1307,9 +1300,11 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /certrevoke v3");
-            await _storageService.AddHash(serviceName, guid, "error_code", "500");
-            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
-            return StatusCode(500);
+            var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
+            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+            responseXml = errorResult.ResponseXml;
+            signedResponse = errorResult.SignedResponse;
+            return errorResult.ActionResult;
         }
         finally
         {
@@ -1335,10 +1330,24 @@ public class QBCHIIIController(IMediator mediator,
     private async Task<V3ErrorResponseBuildResult> BuildV3ErrorResponseAsync(string serviceName, string guid, int code, string message, int statusCode)
     {
         _logger.LogError("Ошибка обработки v3 service={QbchService} guid={Guid} code={QbchErrorCode} status={StatusCode}: {QbchErrorMessage}", serviceName, guid, code, statusCode, message);
-        await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
-        await _storageService.AddHash(serviceName, guid, "error_message", message);
+        var result = CreateV3ErrorResponse(new AnswerErrorCode(code, message), statusCode);
+        try
+        {
+            await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
+            await _storageService.AddHash(serviceName, guid, "error_message", message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Не удалось сохранить квитанцию API v3. ServiceName={ServiceName}, Guid={Guid}", serviceName, guid);
+        }
 
-        var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(code, message));
+        return result;
+    }
+
+    /// <summary>Формирует подписанную квитанцию независимо от доступности хранилища.</summary>
+    private V3ErrorResponseBuildResult CreateV3ErrorResponse(AnswerErrorCode error, int statusCode)
+    {
+        var ticket = _ticketServiceV3.CreateResultV3Error(error);
         var responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
         if (!responseSerialization.IsSuccess)
             ExceptionDispatchInfo.Throw(((OperationError)responseSerialization.Error!).Exception);
