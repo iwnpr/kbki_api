@@ -342,8 +342,10 @@ public class QBCHIIIController(IMediator mediator,
             catch (Exception ex)
             {
                 _logger.LogCritical(ex, "Возникла критическая ошибка в /dlanswer v3");
+                await _storageService.AddHash(serviceName, guid, "error_code", "500");
+                await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
                 var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-                var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+                var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
                 responseXml = errorResult.ResponseXml;
                 signedResponse = errorResult.SignedResponse;
                 return errorResult.ActionResult;
@@ -686,8 +688,10 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /dlput v3");
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+            var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
             responseXml = errorResult.ResponseXml;
             signedResponse = errorResult.SignedResponse;
             return errorResult.ActionResult;
@@ -856,8 +860,10 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /dlputanswer v3");
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+            var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
             responseXml = errorResult.ResponseXml;
             signedResponse = errorResult.SignedResponse;
             return errorResult.ActionResult;
@@ -1079,8 +1085,10 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /certadd v3");
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+            var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
             responseXml = errorResult.ResponseXml;
             signedResponse = errorResult.SignedResponse;
             return errorResult.ActionResult;
@@ -1300,8 +1308,10 @@ public class QBCHIIIController(IMediator mediator,
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Возникла критическая ошибка в /certrevoke v3");
+            await _storageService.AddHash(serviceName, guid, "error_code", "500");
+            await _storageService.AddHash(serviceName, guid, "error_message", ex.ToString());
             var failure = AnswerErrorCode.Code99_OtherError(ex.Message);
-            var errorResult = await BuildV3ErrorResponseAsync(serviceName, guid, failure.Code, failure.Message, StatusCodes.Status400BadRequest);
+            var errorResult = CreateV3ErrorResponse(failure, StatusCodes.Status400BadRequest);
             responseXml = errorResult.ResponseXml;
             signedResponse = errorResult.SignedResponse;
             return errorResult.ActionResult;
@@ -1330,18 +1340,10 @@ public class QBCHIIIController(IMediator mediator,
     private async Task<V3ErrorResponseBuildResult> BuildV3ErrorResponseAsync(string serviceName, string guid, int code, string message, int statusCode)
     {
         _logger.LogError("Ошибка обработки v3 service={QbchService} guid={Guid} code={QbchErrorCode} status={StatusCode}: {QbchErrorMessage}", serviceName, guid, code, statusCode, message);
-        var result = CreateV3ErrorResponse(new AnswerErrorCode(code, message), statusCode);
-        try
-        {
-            await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
-            await _storageService.AddHash(serviceName, guid, "error_message", message);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Не удалось сохранить квитанцию API v3. ServiceName={ServiceName}, Guid={Guid}", serviceName, guid);
-        }
+        await _storageService.AddHash(serviceName, guid, "error_code", code.ToString());
+        await _storageService.AddHash(serviceName, guid, "error_message", message);
 
-        return result;
+        return CreateV3ErrorResponse(new AnswerErrorCode(code, message), statusCode);
     }
 
     /// <summary>Формирует подписанную квитанцию независимо от доступности хранилища.</summary>
