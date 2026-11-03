@@ -10,6 +10,7 @@ using KafkaService_lib.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.FeatureManagement;
 using Microsoft.OpenApi.Models;
+using QBCH_api.Middleware;
 using QBCH_api.QBCHProcessing.V3.CreateAndValidation;
 using QBCH_api.Services.Implementations.V3;
 using QBCH_api.Services.Interfaces.V3;
@@ -189,6 +190,7 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 app.UseCertificateForwarding();
 app.UseMiddleware<LoggingScopeMiddleware>();
+app.UseMiddleware<CounterpartyLoggingContextMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseRouting();
 app.UseDeveloperExceptionPage();

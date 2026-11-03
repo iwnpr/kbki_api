@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 using Serilog.Context;
-using System.Security.Cryptography.X509Certificates;
 
 namespace qbch_lib.Diagnostics;
 
@@ -19,9 +18,6 @@ public sealed class LoggingScopeMiddleware(RequestDelegate next)
     /// <returns>Задача, представляющая обработку запроса.</returns>
     public async Task InvokeAsync(HttpContext httpContext, LoggingContext logContext)
     {
-        var certificate = await httpContext.Connection.GetClientCertificateAsync(httpContext.RequestAborted);
-        logContext.Counterparty = certificate?.GetNameInfo(X509NameType.SimpleName, false);
-
         using (LogContext.Push(logContext))
         {
             await next(httpContext);
