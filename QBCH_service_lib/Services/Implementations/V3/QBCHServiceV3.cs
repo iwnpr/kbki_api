@@ -1,4 +1,4 @@
-﻿using System.Runtime.ExceptionServices;
+﻿using QBCH_lib.core;
 using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using Microsoft.Extensions.Configuration;
@@ -116,7 +116,12 @@ public class QBCHServiceV3(
 
             var xmlResult = _xmlSerializer.SerializeAsStringV3(template);
             if (!xmlResult.IsSuccess)
-                ExceptionDispatchInfo.Throw(((OperationError)xmlResult.Error!).Exception);
+            {
+                kbki.УстановитьОшибку(xmlResult.Error!.Code, xmlResult.Error.Message);
+                response.КБКИ = [kbki];
+                responseRows.Add(response);
+                continue;
+            }
 
             var xml = xmlResult.Value;
             var timer = Stopwatch.StartNew();
@@ -165,9 +170,13 @@ public class QBCHServiceV3(
                 continue;
             }
 
-            FillObligationsSection(kbki, includeAmp, getAmpTask?.Result);
-            FillSelfProhibitionSection(kbki, getSelfProhibitionTask?.Result, isInnVerified);
-            FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result, isInnVerified);
+            var fillingResult = FillObligationsSection(kbki, includeAmp, getAmpTask?.Result);
+            if (fillingResult.IsSuccess)
+                fillingResult = FillSelfProhibitionSection(kbki, getSelfProhibitionTask?.Result, isInnVerified);
+            if (fillingResult.IsSuccess)
+                fillingResult = FillAntifraudSection(kbki, includeAntifraud, getAntifraudTask?.Result, isInnVerified);
+            if (!fillingResult.IsSuccess)
+                kbki.УстановитьОшибку(fillingResult.Error!.Code, fillingResult.Error.Message);
 
             _logger.LogDebug("Данные из БД упешно получены. Запрос: {TransactionId}", transaction.Id);
 
@@ -219,7 +228,8 @@ public class QBCHServiceV3(
 
         var dlrequestBytesResult = _xmlSerializer.SerializeAsByteV3(externalRequest);
         if (!dlrequestBytesResult.IsSuccess)
-            ExceptionDispatchInfo.Throw(((OperationError)dlrequestBytesResult.Error!).Exception);
+            return new QBCHTaskResult(bureau.ogrn, answer3: CreateErrorAnswerV3(bureau.ogrn!,
+                dlrequestBytesResult.Error!.Code.ToString(), dlrequestBytesResult.Error.Message, orderNumbers));
 
         var dlrequestBytes = dlrequestBytesResult.Value;
         var signedDlrequestBytes = _cryptoService.SignMsg(dlrequestBytes);
@@ -276,7 +286,12 @@ public class QBCHServiceV3(
                                 redisMsg.SetSignedResponse(ms.ToArray()).SetResponseXml(answerValidation.Body).SetResponseTime(DateTime.Now);
                                 var dlrequestResultParsing = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведений>(answerValidation.Body);
                                 if (!dlrequestResultParsing.IsSuccess)
-                                    ExceptionDispatchInfo.Throw(((OperationError)dlrequestResultParsing.Error!).Exception);
+                                {
+                                    var parsingError = AnswerErrorCode.Code99_OtherError("Ошибка получения ответа от КБКИ");
+                                    redisMsg.SetError(parsingError.Code.ToString(), $"{parsingError.Message}: {lastResponseText}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+                                    await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
+                                    break;
+                                }
 
                                 dlrequestResult = dlrequestResultParsing.Value;
                                 await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
@@ -296,7 +311,12 @@ public class QBCHServiceV3(
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 var badTicketResult = _xmlSerializer.DeserializeV3<Результат>(badValidation.Body);
                                 if (!badTicketResult.IsSuccess)
-                                    ExceptionDispatchInfo.Throw(((OperationError)badTicketResult.Error!).Exception);
+                                {
+                                    var parsingError = AnswerErrorCode.Code99_OtherError("Ошибка получения ответа от КБКИ");
+                                    redisMsg.SetError(parsingError.Code.ToString(), $"{parsingError.Message}: {lastResponseText}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+                                    await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
+                                    break;
+                                }
 
                                 var badTicket = badTicketResult.Value;
 
@@ -327,7 +347,12 @@ public class QBCHServiceV3(
                                 _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                                 var ticketParsing = _xmlSerializer.DeserializeV3<Результат>(ticketValidation.Body);
                                 if (!ticketParsing.IsSuccess)
-                                    ExceptionDispatchInfo.Throw(((OperationError)ticketParsing.Error!).Exception);
+                                {
+                                    var parsingError = AnswerErrorCode.Code99_OtherError("Ошибка получения ответа от КБКИ");
+                                    redisMsg.SetError(parsingError.Code.ToString(), $"{parsingError.Message}: {lastResponseText}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+                                    await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
+                                    break;
+                                }
 
                                 ticket = ticketParsing.Value;
 
@@ -498,7 +523,11 @@ public class QBCHServiceV3(
 
                         var answerResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведений>(okValidation.Body);
                         if (!answerResult.IsSuccess)
-                            ExceptionDispatchInfo.Throw(((OperationError)answerResult.Error!).Exception);
+                        {
+                            redisMsg.SetError("99", $"Код ответа: {lastStatusCode} Message:{lastResponseText ?? string.Empty}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+                            await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
+                            break;
+                        }
 
                         var answer = answerResult.Value;
                         //NOTE: У Артема эта обработка отсутствует, но, имхо, она допустима
@@ -518,7 +547,11 @@ public class QBCHServiceV3(
                         _logger.LogDebug("{guid} {Bureau}: XML ответа валиден", guid, bureau.ogrn);
                         var ticketResult = _xmlSerializer.DeserializeV3<Результат>(ticketValidation.Body);
                         if (!ticketResult.IsSuccess)
-                            ExceptionDispatchInfo.Throw(((OperationError)ticketResult.Error!).Exception);
+                        {
+                            redisMsg.SetError("99", $"Код ответа: {lastStatusCode} Message:{lastResponseText ?? string.Empty}").SetResponseCode(lastStatusCode).SetResponseTime(DateTime.Now);
+                            await _storageService.ListSet(key: [redisMsg.Name, guid, bureau.ogrn!, redisMsg.Name], value: JsonSerializer.Serialize(redisMsg));
+                            break;
+                        }
 
                         var ticket = ticketResult.Value;
                         //NOTE: Возвратил пропавший код Артема. И безусловное приведение вместо сравнения, это ошибка. 
@@ -630,13 +663,12 @@ public class QBCHServiceV3(
         redisMessage?.SetResponseXml(cryptoResult.Body);
 
         var xsdValidation = _xsdValidator.Validate(cryptoResult.Body, [schemaName, @"xsd\3\qcb_common.xsd"]);
-        if (xsdValidation.Error is OperationError failure)
-            ExceptionDispatchInfo.Throw(failure.Exception);
 
         if (!xsdValidation.IsSuccess)
         {
-            result.Error = $"Ответ не соответствует схеме: {xsdValidation.Error!.Message}.";
-            result.ErrorCode = 19;
+            var error = xsdValidation.Error!;
+            result.Error = error.Code == 9 ? $"Ответ не соответствует схеме: {error.Message}." : error.Message;
+            result.ErrorCode = error.Code == 9 ? 19 : error.Code;
             result.IsError = true;
             _logger.LogError("Ответ КБКИ {bureauName} (ОГРН {BureauPSRN}) не соответствует схеме {Schema}: {XsdError}. code={QbchErrorCode}: {QbchErrorMessage}",
                 bureau.Name, bureau.ogrn, schemaName, xsdValidation.Error!.Message, result.ErrorCode, result.Error);
@@ -677,94 +709,97 @@ public class QBCHServiceV3(
         };
     }
 
-    private void FillObligationsSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAmp, XElement? ampXml)
+    private Result FillObligationsSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAmp, XElement? ampXml)
     {
         if (!includeAmp)
         {
-            return;
+            return Result.Success();
         }
 
         if (ampXml == null || ampXml.Name == "ОбязательствНет")
         {
             kbki.ДобавитьПризнакОтсутствияОбязательств();
-            return;
+            return Result.Success();
         }
 
         var ampResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИОбязательства>(ampXml);
         if (!ampResult.IsSuccess)
-            ExceptionDispatchInfo.Throw(((OperationError)ampResult.Error!).Exception);
+            return Result.Failure(ampResult.Error!);
 
         var amp = ampResult.Value;
 
         if (amp?.БКИ is { Length: > 0 })
         {
             kbki.ДобавитьОбязательства(amp);
-            return;
+            return Result.Success();
         }
 
         kbki.ДобавитьПризнакОтсутствияОбязательств();
+        return Result.Success();
     }
-    private void FillSelfProhibitionSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, XElement? prohibitionXml, bool isInnVerified)
+    private Result FillSelfProhibitionSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, XElement? prohibitionXml, bool isInnVerified)
     {
         if (!isInnVerified)
         {
             kbki.ДобавитьПризнакНепредоставленияСведенийОЗапрете();
-            return;
+            return Result.Success();
         }
 
         if (prohibitionXml == null || prohibitionXml.Name == "СведенийОЗапретеНет")
         {
             kbki.ДобавитьПризнакОтсутствияСведенийОЗапрете();
-            return;
+            return Result.Success();
         }
 
         var prohibitionResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИУсловияЗапрета>(prohibitionXml);
         if (!prohibitionResult.IsSuccess)
-            ExceptionDispatchInfo.Throw(((OperationError)prohibitionResult.Error!).Exception);
+            return Result.Failure(prohibitionResult.Error!);
 
         var prohibition = prohibitionResult.Value;
 
         if (prohibition?.Условие is { Length: > 0 })
         {
             kbki.ДобавитьУсловияЗапрета(prohibition);
-            return;
+            return Result.Success();
         }
 
         kbki.ДобавитьПризнакОтсутствияСведенийОЗапрете();
+        return Result.Success();
     }
 
-    private void FillAntifraudSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAntifraud, XElement? antifraudXml, bool isInnVerified)
+    private Result FillAntifraudSection(ОтветНаЗапросСведенийСведенияКБКИ kbki, bool includeAntifraud, XElement? antifraudXml, bool isInnVerified)
     {
         if (!includeAntifraud)
         {
-            return;
+            return Result.Success();
         }
 
         if (!isInnVerified)
         {
             kbki.ДобавитьПризнакНепредоставленияАнтифродСведений();
-            return;
+            return Result.Success();
         }
 
         if (antifraudXml == null || antifraudXml.Name == "СведенийДляПредупрежденияНет")
         {
             kbki.ДобавитьПризнакОтсутствияАнтифродСведений();
-            return;
+            return Result.Success();
         }
 
         var antifraudResult = _xmlSerializer.DeserializeV3<ОтветНаЗапросСведенийСведенияКБКИСведенияДляПредупреждения>(antifraudXml);
         if (!antifraudResult.IsSuccess)
-            ExceptionDispatchInfo.Throw(((OperationError)antifraudResult.Error!).Exception);
+            return Result.Failure(antifraudResult.Error!);
 
         var antifraud = antifraudResult.Value;
 
         if (antifraud?.БКИ is { Length: > 0 })
         {
             kbki.ДобавитьСведенияДляПредупреждения(antifraud);
-            return;
+            return Result.Success();
         }
 
         kbki.ДобавитьПризнакОтсутствияАнтифродСведений();
+        return Result.Success();
     }
 
     private static bool IsInnVerified(ТипИННФЛсПризнаком? inn) =>

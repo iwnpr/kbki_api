@@ -1,5 +1,4 @@
-﻿using System.Runtime.ExceptionServices;
-using XmlService_lib.Services.Interfaces.V3;
+﻿using XmlService_lib.Services.Interfaces.V3;
 using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using QBCH.Lib.qcb_xml.v3_0;
@@ -115,8 +114,6 @@ public class QBCHValidationDispatcherV3(
             }
             else
             {
-                if (xmlResult.Error is OperationError failure)
-                    ExceptionDispatchInfo.Throw(failure.Exception);
 
                 _logger.LogError("Не пройдена проверка XML dlrequest v3. TransactionId={TransactionId}, code={Code}: {Message}",
                     transaction.Id, xmlResult.Error!.Code, xmlResult.Error.Message);
@@ -206,8 +203,6 @@ public class QBCHValidationDispatcherV3(
         var encodingValidationResult = _validationService.ValidateEncodingV3(transaction.Attachment.RequestBody!);
         if (!encodingValidationResult.IsSuccess)
         {
-            if (encodingValidationResult.Error is OperationError failure)
-                ExceptionDispatchInfo.Throw(failure.Exception);
 
             _logger.LogError("Не пройдена проверка кодировки dlrequest v3: тело запроса не является корректным UTF-8. TransactionId={TransactionId}, code={QbchErrorCode}: {QbchErrorMessage}",
                 transaction.Id, encodingValidationResult.Error!.Code, encodingValidationResult.Error!.Message);
@@ -320,8 +315,6 @@ public class QBCHValidationDispatcherV3(
             var dateValidationResult = _validationService.ValidateRequestDateV3(requestV3.ДатаЗапроса);
             if (!dateValidationResult.IsSuccess)
             {
-                if (dateValidationResult.Error is OperationError failure)
-                    ExceptionDispatchInfo.Throw(failure.Exception);
 
                 var error = (AnswerErrorCode)dateValidationResult.Error!;
 

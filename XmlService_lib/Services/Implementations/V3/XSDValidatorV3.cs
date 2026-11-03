@@ -35,7 +35,8 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
         }
         catch (Exception ex)
         {
-            return Result<bool>.Failure(new OperationError(ex));
+            logger.LogError(ex, "Не удалось загрузить XSD-схемы API v3");
+            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -56,7 +57,8 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
         }
         catch (Exception ex)
         {
-            return Result<bool>.Failure(new OperationError(ex));
+            logger.LogError(ex, "Не удалось загрузить XSD-схемы API v3");
+            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -73,9 +75,6 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
         var deserialization = xmlSerializer.DeserializeV3<T>(xml);
         if (!deserialization.IsSuccess)
         {
-            if (deserialization.Error is OperationError failure)
-                logger.LogError(failure.Exception, "Ошибка десериализации XML после XSD-проверки. SchemaName={SchemaName}", schemaName);
-
             return Result<T>.Failure(AnswerErrorCode.Code9_InvalidRequestByScheme(deserialization.Error!.Message));
         }
 

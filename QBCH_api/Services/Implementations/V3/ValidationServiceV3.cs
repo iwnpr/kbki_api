@@ -42,7 +42,8 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            return Result<bool>.Failure(new OperationError(ex));
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API v3");
+            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -65,7 +66,8 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            return Result<bool>.Failure(new OperationError(ex));
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API v3");
+            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -86,7 +88,8 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            return Result<CryptoServiceResult>.Failure(new OperationError(ex));
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API v3");
+            return Result<CryptoServiceResult>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -117,7 +120,8 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            return Result<bool>.Failure(new OperationError(ex));
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API v3");
+            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -135,7 +139,8 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            return Result<bool>.Failure(new OperationError(ex));
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API v3");
+            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -158,7 +163,8 @@ public class ValidationServiceV3(
         }
         catch (Exception ex)
         {
-            return Result<bool>.Failure(new OperationError(ex));
+            _logger.LogError(ex, "Не удалось выполнить проверку запроса API v3");
+            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 }

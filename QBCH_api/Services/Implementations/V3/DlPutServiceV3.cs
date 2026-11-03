@@ -1,4 +1,3 @@
-using System.Runtime.ExceptionServices;
 using QBCH_api.Services.Interfaces.V3;
 using Qbch_db_lib.Services.Interfaces.V3;
 using qbch_lib.domain.errors;
@@ -135,7 +134,10 @@ public class DlPutServiceV3(
 
                 var contractSubjectXmlResult = _xmlSerializer.SerializeAsStringV3(source.Субъект);
                 if (!contractSubjectXmlResult.IsSuccess)
-                    ExceptionDispatchInfo.Throw(((OperationError)contractSubjectXmlResult.Error!).Exception);
+                {
+                    SetError(deal, (AnswerErrorCode)contractSubjectXmlResult.Error!);
+                    break;
+                }
 
                 var contractSubjectXml = contractSubjectXmlResult.Value;
                 var contractSubjectIds = await _repository.SearchContractSubjectsForDlPutV3(contractSubjectXml);

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using QBCH_lib.core;
 using qbch_lib.domain.errors;
 using System.Text;
@@ -8,7 +9,7 @@ using XmlService_lib.Services.Interfaces.V3;
 namespace XmlService_lib.Services.Implementations.V3;
 
 /// <summary>Единая точка сериализации и десериализации XML API 3.0.</summary>
-public class XmlSerializerV3 : IXmlSerializerV3
+public class XmlSerializerV3(ILogger<XmlSerializerV3> logger) : IXmlSerializerV3
 {
     /// <inheritdoc />
     public Result<T?> DeserializeV3<T>(XElement? xml) where T : class
@@ -32,7 +33,8 @@ public class XmlSerializerV3 : IXmlSerializerV3
         }
         catch (Exception ex)
         {
-            return Result<T?>.Failure(new OperationError(ex));
+            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
+            return Result<T?>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -49,7 +51,8 @@ public class XmlSerializerV3 : IXmlSerializerV3
         }
         catch (Exception ex)
         {
-            return Result<T?>.Failure(new OperationError(ex));
+            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
+            return Result<T?>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -72,7 +75,8 @@ public class XmlSerializerV3 : IXmlSerializerV3
         }
         catch (Exception ex)
         {
-            return Result<byte[]>.Failure(new OperationError(ex));
+            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
+            return Result<byte[]>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -98,7 +102,8 @@ public class XmlSerializerV3 : IXmlSerializerV3
         }
         catch (Exception ex)
         {
-            return Result<string>.Failure(new OperationError(ex));
+            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
+            return Result<string>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 
@@ -119,7 +124,8 @@ public class XmlSerializerV3 : IXmlSerializerV3
         }
         catch (Exception ex)
         {
-            return Result<XDocument?>.Failure(new OperationError(ex));
+            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
+            return Result<XDocument?>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
         }
     }
 }
