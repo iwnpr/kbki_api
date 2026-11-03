@@ -219,8 +219,8 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             _logger.LogError(ex, "Ошибка формирования HTTP-ответа для идентификатора {Id}", transaction.Id);
-            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status400BadRequest, actionStopwatch.Elapsed, request: transaction.ClentRequest.Request);
-            return CreateV3ErrorResponse(AnswerErrorCode.Code99_OtherError(ex.Message), StatusCodes.Status400BadRequest).ActionResult;
+            LogActionEnd(nameof(DlRequest_v_3), transaction.Id, StatusCodes.Status500InternalServerError, actionStopwatch.Elapsed, request: transaction.ClentRequest.Request);
+            return StatusCode(500);
         }
     }
 
