@@ -29,12 +29,12 @@ public interface IValidationServiceV3
     /// <param name="thumbprint">Отпечаток сертификата.</param>
     /// <param name="serviceName">Имя сервиса.</param>
     /// <param name="ct">Необязательный токен отмены операции хранилища.</param>
-    /// <returns>Успешный результат со значением true либо ошибка доступа или выполнения проверки.</returns>
+    /// <returns>Успешный результат со значением true либо ошибка доступа.</returns>
     Task<Result<bool>> ValidateRulesV3(string? thumbprint, string? serviceName, CancellationToken? ct = null);
     /// <summary>Проверяет уникальность идентификатора запроса для абонента и метода.</summary>
     /// <param name="requestId">Идентификатор запроса.</param>
     /// <param name="methodName">Имя метода API.</param>
     /// <param name="ogrn">ОГРН абонента.</param>
-    /// <returns>Успешный результат со значением true либо ошибка повторного идентификатора или выполнения проверки.</returns>
+    /// <returns>Успешный результат со значением true либо ошибка повторного идентификатора.</returns>
     Task<Result<bool>> IsUniqueRequestIdV3Async(string requestId, string methodName, string ogrn);
 }

@@ -1,5 +1,4 @@
-﻿using QBCH_lib.core;
-using Asp.Versioning;
+﻿using Asp.Versioning;
 using Cache_lib.Interfaces;
 using CertManagement.Services.Interfaces;
 using Confluent.Kafka;
@@ -95,7 +94,6 @@ public class QBCHIIIController(IMediator mediator,
     [HttpPost("dlrequest")]
     public async Task<IActionResult> DlRequest_v_3(ApiVersion apiVersion)
     {
-        Result<byte[]> responseSerialization;
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var actionStopwatch = System.Diagnostics.Stopwatch.StartNew();
         _logger.LogInformation("Начало = {Action} {RequestTime}", nameof(DlRequest_v_3), requestTime);
@@ -105,15 +103,7 @@ public class QBCHIIIController(IMediator mediator,
         if (transaction.ProcessingErrors.Count != 0)
         {
             var errorTicket = _ticketServiceV3.CreateResultV3Error(transaction.ProcessingErrors.First());
-            responseSerialization = _xmlSerializer.SerializeAsByteV3(errorTicket);
-            if (!responseSerialization.IsSuccess)
-            {
-                var serializationError = responseSerialization.Error!;
-                var serializationFailure = await BuildV3ErrorResponseAsync(transaction.ServiceName, transaction.Id.ToString(), serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                return serializationFailure.ActionResult;
-            }
-
-            var errorResult = responseSerialization.Value;
+            var errorResult = _xmlSerializer.SerializeAsByteV3(errorTicket).Value!;
             var signedResp = _cryptoService.SignMsg(errorResult);
 
             transaction.Complete(errorResult, signedResp);
@@ -169,9 +159,7 @@ public class QBCHIIIController(IMediator mediator,
 
             if (processingResult.Status == QBCHProcessingStatus.Failure)
             {
-                var error = processingResult.ProcessingErrors.First();
-                var errorResult = await BuildV3ErrorResponseAsync(transaction.ServiceName, transaction.Id.ToString(), error.Code, error.Message, StatusCodes.Status400BadRequest);
-                return errorResult.ActionResult;
+                _logger.LogError("Обработка вернула статус Failure, что было не предусмотрено системой.", nameof(DlRequest_v_3), apiVersion, requestTime);
             }
 
             Response.StatusCode = StatusCodes.Status200OK;
@@ -226,7 +214,6 @@ public class QBCHIIIController(IMediator mediator,
     [HttpGet("dlanswer")]
     public async Task<IActionResult> DlAnswer_v_3(string? id = null)
     {
-        Result<byte[]> responseSerialization;
         if (!string.IsNullOrWhiteSpace(id))
             logContext.TransactionId = id;
 
@@ -291,17 +278,7 @@ public class QBCHIIIController(IMediator mediator,
                 if (!certValidationResult.IsSuccess)
                 {
                     var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(certValidationResult.Error!.Code, certValidationResult.Error!.Message));
-                    responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                    if (!responseSerialization.IsSuccess)
-                    {
-                        var serializationError = responseSerialization.Error!;
-                        var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                        responseXml = serializationFailure.ResponseXml;
-                        signedResponse = serializationFailure.SignedResponse;
-                        return serializationFailure.ActionResult;
-                    }
-
-                    responseXml = responseSerialization.Value;
+                    responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                     signedResponse = _cryptoService.SignMsg(responseXml);
 
                     await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult.Error?.Code.ToString() ?? "5");
@@ -393,7 +370,6 @@ public class QBCHIIIController(IMediator mediator,
     [HttpPost("dlput")]
     public async Task<IActionResult> DlPut_v_3(ApiVersion apiVersion)
     {
-        Result<byte[]> responseSerialization;
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
         const string serviceName = RedisConstants.DlPutV3Scope;
@@ -449,17 +425,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!certValidationResult.IsSuccess)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(certValidationResult.Error!.Code, certValidationResult.Error!.Message));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult.Error?.Code.ToString() ?? "5");
                 await _storageService.AddHash(serviceName, guid, "error_message", certValidationResult.Error!.Message ?? "Ошибка проверки сертификата");
@@ -471,17 +437,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!encodingValidationResult.IsSuccess)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(encodingValidationResult.Error!.Code, encodingValidationResult.Error!.Message));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 await _storageService.AddHash(serviceName, guid, "error_code", encodingValidationResult.Error?.Code.ToString() ?? "8");
                 await _storageService.AddHash(serviceName, guid, "error_message", encodingValidationResult.Error!.Message ?? "Неподдерживаемая кодировка, файл не в кодировке Utf-8");
@@ -509,34 +465,14 @@ public class QBCHIIIController(IMediator mediator,
 
                 var error = xsdValidation.Error!;
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(error.Code, error.Message));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 await _storageService.AddHash(serviceName, guid, "error_code", error.Code.ToString());
                 await _storageService.AddHash(serviceName, guid, "error_message", error.Message);
                 return BadRequest(new MemoryStream(signedResponse));
             }
 
-            var requestResult = _xmlSerializer.DeserializeV3<ПредставлениеСведений>(bodyBytes);
-            if (!requestResult.IsSuccess)
-            {
-                var serializationError = requestResult.Error!;
-                var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                responseXml = serializationFailure.ResponseXml;
-                signedResponse = serializationFailure.SignedResponse;
-                return serializationFailure.ActionResult;
-            }
-
-            var requestV3 = requestResult.Value;
+            var requestV3 = _xmlSerializer.DeserializeV3<ПредставлениеСведений>(bodyBytes).Value;
             if (requestV3 is null)
             {
                 _logger.LogError("Не удалось десериализовать тело запроса dlput v3");
@@ -592,17 +528,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!dateValidationResult.IsSuccess)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(dateValidationResult.Error!.Code, dateValidationResult.Error!.Message));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
                 await _storageService.AddHash(serviceName, guid, "error_code", dateValidationResult.Error?.Code.ToString() ?? "23");
@@ -619,17 +545,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!uniqueValidationResult.IsSuccess)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(uniqueValidationResult.Error!.Code, uniqueValidationResult.Error!.Message));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 await _storageService.AddHash(serviceName, guid, "error_code", uniqueValidationResult.Error?.Code.ToString() ?? "11");
                 await _storageService.AddHash(serviceName, guid, "error_message", uniqueValidationResult.Error!.Message ?? "Идентификатор запроса не уникален");
@@ -658,17 +574,7 @@ public class QBCHIIIController(IMediator mediator,
                     acceptedResponseId.ВремяГотовности = Math.Max(1, (long)(readyAtUtc - acceptedCreatedAtUtc).TotalMilliseconds);
                     acceptedResponseId.ВремяГотовностиSpecified = true;
 
-                    responseSerialization = _xmlSerializer.SerializeAsByteV3(dlPutResult.AcceptedTicket);
-                    if (!responseSerialization.IsSuccess)
-                    {
-                        var serializationError = responseSerialization.Error!;
-                        var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                        responseXml = serializationFailure.ResponseXml;
-                        signedResponse = serializationFailure.SignedResponse;
-                        return serializationFailure.ActionResult;
-                    }
-
-                    responseXml = responseSerialization.Value;
+                    responseXml = _xmlSerializer.SerializeAsByteV3(dlPutResult.AcceptedTicket).Value!;
                     signedResponse = _cryptoService.SignMsg(responseXml);
 
                     await _storageService.AddHash(serviceName, acceptedResponseId.ИдентификаторОтвета, DlPutAnswerV3ExistsField, "1");
@@ -681,34 +587,14 @@ public class QBCHIIIController(IMediator mediator,
                 }
                 else
                 {
-                    responseSerialization = _xmlSerializer.SerializeAsByteV3(dlPutResult.AcceptedTicket);
-                    if (!responseSerialization.IsSuccess)
-                    {
-                        var serializationError = responseSerialization.Error!;
-                        var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                        responseXml = serializationFailure.ResponseXml;
-                        signedResponse = serializationFailure.SignedResponse;
-                        return serializationFailure.ActionResult;
-                    }
-
-                    responseXml = responseSerialization.Value;
+                    responseXml = _xmlSerializer.SerializeAsByteV3(dlPutResult.AcceptedTicket).Value!;
                     signedResponse = _cryptoService.SignMsg(responseXml);
                 }
 
                 return Accepted(new MemoryStream(signedResponse));
             }
 
-            responseSerialization = _xmlSerializer.SerializeAsByteV3(dlPutResult.ReadyResult);
-            if (!responseSerialization.IsSuccess)
-            {
-                var serializationError = responseSerialization.Error!;
-                var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                responseXml = serializationFailure.ResponseXml;
-                signedResponse = serializationFailure.SignedResponse;
-                return serializationFailure.ActionResult;
-            }
-
-            responseXml = responseSerialization.Value;
+            responseXml = _xmlSerializer.SerializeAsByteV3(dlPutResult.ReadyResult).Value!;
             signedResponse = _cryptoService.SignMsg(responseXml);
 
             await _storageService.AddUniqueRequestId(serviceName, requestId, requestOgrn, requestV3.ДатаЗапроса);
@@ -754,7 +640,6 @@ public class QBCHIIIController(IMediator mediator,
     [HttpGet("dlputanswer")]
     public async Task<IActionResult> DlPutAnswer_v_3(ApiVersion version, string? id = null)
     {
-        Result<byte[]> responseSerialization;
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
         const string serviceName = RedisConstants.DlPutAnswerV3Scope;
@@ -810,17 +695,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!certValidationResult.IsSuccess)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(certValidationResult.Error!.Code, certValidationResult.Error!.Message));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
                 await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult.Error?.Code.ToString() ?? "5");
@@ -928,7 +803,6 @@ public class QBCHIIIController(IMediator mediator,
     [HttpPost("certadd")]
     public async Task<IActionResult> CertAdd_v_3([FromForm] CertForm form)
     {
-        Result<byte[]> responseSerialization;
         var requestTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff");
         var guid = Guid.NewGuid().ToString();
         var serviceName = "certadd";
@@ -983,17 +857,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!certValidationResult.IsSuccess)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(certValidationResult.Error!.Code, certValidationResult.Error!.Message));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
                 await _storageService.AddHash(serviceName, guid, "error_code", certValidationResult.Error?.Code.ToString() ?? "5");
@@ -1052,17 +916,7 @@ public class QBCHIIIController(IMediator mediator,
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(validateMsgResult.ErrorCode, validateMsgResult.ErrorMessage));
 
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
                 await _storageService.AddHash(serviceName, guid, "error_code", validateMsgResult.ErrorCode.ToString());
@@ -1085,17 +939,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!uniqueValidationResult.IsSuccess)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(uniqueValidationResult.Error!.Code, uniqueValidationResult.Error!.Message));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
 
                 await _storageService.AddHash(serviceName, guid, "error_code", uniqueValidationResult.Error?.Code.ToString() ?? "11");
@@ -1129,17 +973,7 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var successTicket = _ticketServiceV3.CreateResultV3Success(form.id, DateTime.Today);
-            responseSerialization = _xmlSerializer.SerializeAsByteV3(successTicket);
-            if (!responseSerialization.IsSuccess)
-            {
-                var serializationError = responseSerialization.Error!;
-                var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                responseXml = serializationFailure.ResponseXml;
-                signedResponse = serializationFailure.SignedResponse;
-                return serializationFailure.ActionResult;
-            }
-
-            responseXml = responseSerialization.Value;
+            responseXml = _xmlSerializer.SerializeAsByteV3(successTicket).Value!;
             signedResponse = _cryptoService.SignMsg(responseXml);
             return File(signedResponse, "application/octet-stream");
         }
@@ -1169,7 +1003,6 @@ public class QBCHIIIController(IMediator mediator,
     [HttpPost("certrevoke")]
     public async Task<IActionResult> CertRevoke_v_3([FromForm] CertForm form)
     {
-        Result<byte[]> responseSerialization;
         byte[]? responseXml = null;
         byte[]? signedResponse = null;
         var guid = Guid.NewGuid().ToString();
@@ -1264,17 +1097,7 @@ public class QBCHIIIController(IMediator mediator,
             if (!isMsgValid & cryptoResult is not null)
             {
                 var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(cryptoResult.ErrorCode, cryptoResult.Error));
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 await _storageService.AddHash(serviceName, guid, "error_code", cryptoResult.ErrorCode.ToString());
                 await _storageService.AddHash(serviceName, guid, "error_message", cryptoResult.Error ?? "-");
@@ -1297,17 +1120,7 @@ public class QBCHIIIController(IMediator mediator,
 
             if (!uniqueResult.IsSuccess)
             {
-                responseSerialization = _xmlSerializer.SerializeAsByteV3(_ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(uniqueResult.Error!.Code, uniqueResult.Error.Message)));
-                if (!responseSerialization.IsSuccess)
-                {
-                    var serializationError = responseSerialization.Error!;
-                    var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                    responseXml = serializationFailure.ResponseXml;
-                    signedResponse = serializationFailure.SignedResponse;
-                    return serializationFailure.ActionResult;
-                }
-
-                responseXml = responseSerialization.Value;
+                responseXml = _xmlSerializer.SerializeAsByteV3(_ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(uniqueResult.Error!.Code, uniqueResult.Error.Message))).Value!;
                 signedResponse = _cryptoService.SignMsg(responseXml);
                 await _storageService.AddHash(serviceName, guid, "error_code", uniqueResult.Error!.Code.ToString());
                 await _storageService.AddHash(serviceName, guid, "error_message", uniqueResult.Error!.Message ?? "-");
@@ -1351,17 +1164,7 @@ public class QBCHIIIController(IMediator mediator,
             }
 
             var successTicket = _ticketServiceV3.CreateResultV3Success(form.id, DateTime.Now);
-            responseSerialization = _xmlSerializer.SerializeAsByteV3(successTicket);
-            if (!responseSerialization.IsSuccess)
-            {
-                var serializationError = responseSerialization.Error!;
-                var serializationFailure = await BuildV3ErrorResponseAsync(serviceName, guid, serializationError.Code, serializationError.Message, StatusCodes.Status400BadRequest);
-                responseXml = serializationFailure.ResponseXml;
-                signedResponse = serializationFailure.SignedResponse;
-                return serializationFailure.ActionResult;
-            }
-
-            responseXml = responseSerialization.Value;
+            responseXml = _xmlSerializer.SerializeAsByteV3(successTicket).Value!;
             signedResponse = _cryptoService.SignMsg(responseXml);
             return File(signedResponse, "application/octet-stream");
         }
@@ -1388,8 +1191,8 @@ public class QBCHIIIController(IMediator mediator,
 
     private sealed class V3ErrorResponseBuildResult
     {
-        public byte[]? ResponseXml { get; init; }
-        public byte[]? SignedResponse { get; init; }
+        public byte[] ResponseXml { get; init; } = Array.Empty<byte>();
+        public byte[] SignedResponse { get; init; } = Array.Empty<byte>();
         public IActionResult ActionResult { get; init; } = default!;
     }
 
@@ -1400,14 +1203,7 @@ public class QBCHIIIController(IMediator mediator,
         await _storageService.AddHash(serviceName, guid, "error_message", message);
 
         var ticket = _ticketServiceV3.CreateResultV3Error(new AnswerErrorCode(code, message));
-        var responseSerialization = _xmlSerializer.SerializeAsByteV3(ticket);
-        if (!responseSerialization.IsSuccess)
-        {
-            _logger.LogError("Не удалось сериализовать квитанцию API v3: {Error}", responseSerialization.Error!.Message);
-            return new V3ErrorResponseBuildResult { ActionResult = StatusCode(StatusCodes.Status500InternalServerError) };
-        }
-
-        var responseXml = responseSerialization.Value;
+        var responseXml = _xmlSerializer.SerializeAsByteV3(ticket).Value!;
         var signedResponse = _cryptoService.SignMsg(responseXml);
 
         Response.StatusCode = statusCode;

@@ -1,6 +1,4 @@
-using Microsoft.Extensions.Logging;
 using QBCH_lib.core;
-using qbch_lib.domain.errors;
 using System.Text;
 using System.Xml.Linq;
 using System.Xml.Serialization;
@@ -8,8 +6,8 @@ using XmlService_lib.Services.Interfaces.V3;
 
 namespace XmlService_lib.Services.Implementations.V3;
 
-/// <summary>Единая точка сериализации и десериализации XML API 3.0.</summary>
-public class XmlSerializerV3(ILogger<XmlSerializerV3> logger) : IXmlSerializerV3
+/// <summary>Сериализация и десериализация XML API 3.0.</summary>
+public class XmlSerializerV3 : IXmlSerializerV3
 {
     /// <inheritdoc />
     public Result<T?> DeserializeV3<T>(XElement? xml) where T : class
@@ -17,24 +15,16 @@ public class XmlSerializerV3(ILogger<XmlSerializerV3> logger) : IXmlSerializerV3
         if (xml is null)
             return Result<T?>.Success(null);
 
+        var serializer = CreateSerializerV3<T>();
+        using var reader = xml.CreateReader();
+
         try
         {
-            var serializer = new XmlSerializer(typeof(T));
-            using var reader = xml.CreateReader();
-            try
-            {
-                return Result<T?>.Success(serializer.Deserialize(reader) as T);
-            }
-            catch
-            {
-                // XML-фрагменты из хранилища и раньше возвращали null при ошибке чтения.
-                return Result<T?>.Success(null);
-            }
+            return Result<T?>.Success(serializer.Deserialize(reader) as T);
         }
-        catch (Exception ex)
+        catch
         {
-            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
-            return Result<T?>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
+            return Result<T?>.Success(null);
         }
     }
 
@@ -44,16 +34,9 @@ public class XmlSerializerV3(ILogger<XmlSerializerV3> logger) : IXmlSerializerV3
         if (bytes is null)
             return Result<T?>.Success(null);
 
-        try
-        {
-            using var stream = new MemoryStream(bytes);
-            return Result<T?>.Success(new XmlSerializer(typeof(T)).Deserialize(stream) as T);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
-            return Result<T?>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
-        }
+        using var ms = new MemoryStream(bytes);
+        var serializer = CreateSerializerV3<T>();
+        return Result<T?>.Success(serializer.Deserialize(ms) as T);
     }
 
     /// <inheritdoc />
@@ -62,22 +45,15 @@ public class XmlSerializerV3(ILogger<XmlSerializerV3> logger) : IXmlSerializerV3
         if (item is null)
             return Result<byte[]>.Success([]);
 
-        try
-        {
-            var serializer = new XmlSerializer(typeof(T));
-            var namespaces = new XmlSerializerNamespaces();
-            namespaces.Add("", "");
+        var serializer = CreateSerializerV3<T>();
+        XmlSerializerNamespaces ns = new();
+        ns.Add("", "");
 
-            using var stream = new MemoryStream();
-            using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-            serializer.Serialize(writer, item, namespaces);
-            return Result<byte[]>.Success(stream.ToArray());
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
-            return Result<byte[]>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
-        }
+        using var ms = new MemoryStream();
+        using var sw = new StreamWriter(ms, new UTF8Encoding(false));
+        serializer.Serialize(sw, item, ns);
+
+        return Result<byte[]>.Success(ms.ToArray());
     }
 
     /// <inheritdoc />
@@ -86,25 +62,17 @@ public class XmlSerializerV3(ILogger<XmlSerializerV3> logger) : IXmlSerializerV3
         if (item is null)
             return Result<string>.Success(string.Empty);
 
-        try
-        {
-            var serializer = new XmlSerializer(typeof(T));
-            var namespaces = new XmlSerializerNamespaces();
-            namespaces.Add("", "");
+        var serializer = CreateSerializerV3<T>();
+        XmlSerializerNamespaces ns = new();
+        ns.Add("", "");
 
-            using var stream = new MemoryStream();
-            using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-            serializer.Serialize(writer, item, namespaces);
-            stream.Position = 0;
+        using var ms = new MemoryStream();
+        using var sw = new StreamWriter(ms, new UTF8Encoding(false));
+        serializer.Serialize(sw, item, ns);
+        ms.Position = 0;
 
-            using var reader = new StreamReader(stream);
-            return Result<string>.Success(reader.ReadToEnd());
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
-            return Result<string>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
-        }
+        using var sr = new StreamReader(ms);
+        return Result<string>.Success(sr.ReadToEnd());
     }
 
     /// <inheritdoc />
@@ -113,19 +81,11 @@ public class XmlSerializerV3(ILogger<XmlSerializerV3> logger) : IXmlSerializerV3
         if (item is null)
             return Result<XDocument?>.Success(null);
 
-        var result = SerializeAsByteV3(item);
-        if (!result.IsSuccess)
-            return Result<XDocument?>.Failure(result.Error!);
-
-        try
-        {
-            using var stream = new MemoryStream(result.Value);
-            return Result<XDocument?>.Success(XDocument.Load(stream));
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Ошибка сериализации или десериализации XML API v3");
-            return Result<XDocument?>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
-        }
+        var xml = SerializeAsByteV3(item).Value!;
+        using var ms = new MemoryStream(xml);
+        return Result<XDocument?>.Success(XDocument.Load(ms));
     }
+
+    private static XmlSerializer CreateSerializerV3<T>() where T : class
+        => new(typeof(T));
 }

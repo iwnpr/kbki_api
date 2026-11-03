@@ -29,37 +29,21 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
     /// <inheritdoc />
     public Result<bool> Validate(byte[]? xml, string schemaName)
     {
-        try
-        {
-            return Validate(xml, GetXmlSchemaSetV3(schemaName));
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Не удалось загрузить XSD-схемы API v3");
-            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
-        }
+        return Validate(xml, GetXmlSchemaSetV3(schemaName));
     }
 
     /// <inheritdoc />
     public Result<bool> Validate(byte[]? xml, string[] schemaPaths)
     {
-        try
-        {
-            var cacheKey = $"3.0:schemaset:{string.Join('|', schemaPaths)}";
-            if (!_cache.TryGetValue(cacheKey, out XmlSchemaSet? schemas) || schemas is null)
-                schemas = new XmlSchemaSet { XmlResolver = new XmlUrlResolver() };
+        var cacheKey = $"3.0:schemaset:{string.Join('|', schemaPaths)}";
+        if (!_cache.TryGetValue(cacheKey, out XmlSchemaSet? schemas) || schemas is null)
+            schemas = new XmlSchemaSet { XmlResolver = new XmlUrlResolver() };
 
-            foreach (var path in schemaPaths)
-                schemas.Add(null, path);
+        foreach (var path in schemaPaths)
+            schemas.Add(null, path);
 
-            _cache.Set(cacheKey, schemas, new MemoryCacheEntryOptions().SetPriority(CacheItemPriority.NeverRemove));
-            return Validate(xml, schemas);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Не удалось загрузить XSD-схемы API v3");
-            return Result<bool>.Failure(AnswerErrorCode.Code99_OtherError(ex.Message));
-        }
+        _cache.Set(cacheKey, schemas, new MemoryCacheEntryOptions().SetPriority(CacheItemPriority.NeverRemove));
+        return Validate(xml, schemas);
     }
 
     /// <inheritdoc />
@@ -72,15 +56,19 @@ public class XSDValidatorV3(IMemoryCache memoryCache, IConfiguration config,
         if (!validation.IsSuccess)
             return Result<T>.Failure(validation.Error!);
 
-        var deserialization = xmlSerializer.DeserializeV3<T>(xml);
-        if (!deserialization.IsSuccess)
+        try
         {
-            return Result<T>.Failure(AnswerErrorCode.Code9_InvalidRequestByScheme(deserialization.Error!.Message));
+            var request = xmlSerializer.DeserializeV3<T>(xml).Value;
+            return request is not null
+                ? Result<T>.Success(request)
+                : Result<T>.Failure(AnswerErrorCode.Code9_InvalidRequestByScheme($"Не был десериализован в {typeof(T).Name}."));
         }
-
-        return deserialization.Value is not null
-            ? Result<T>.Success(deserialization.Value)
-            : Result<T>.Failure(AnswerErrorCode.Code9_InvalidRequestByScheme($"Не был десериализован в {typeof(T).Name}."));
+        catch (Exception ex)
+        {
+            var error = AnswerErrorCode.Code9_InvalidRequestByScheme(ex.Message);
+            logger.LogError(ex, "Ошибка десериализации XML после XSD-проверки. SchemaName={SchemaName}", schemaName);
+            return Result<T>.Failure(error);
+        }
     }
 
     private Result<bool> Validate(byte[]? xml, XmlSchemaSet schemas)

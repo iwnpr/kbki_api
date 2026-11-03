@@ -1,5 +1,4 @@
-﻿using QBCH_lib.core;
-using Cache_lib.Interfaces;
+﻿using Cache_lib.Interfaces;
 using Crypto_lib.Service;
 using MediatR;
 using QBCH.Lib.qcb_xml.v3_0;
@@ -93,14 +92,7 @@ public class QBCHProcessingHandlerV3(
                     var results = await Task.WhenAll(_tasksList);
 
                     processingStage = ProcessingStageBuildingResponse;
-                    var aggregateResult = await BuildAndStoreAggregateResponseAsync(results, transaction, clientRequest, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
-                    if (!aggregateResult.IsSuccess)
-                    {
-                        await StoreProcessingErrorAsync(transaction, (AnswerErrorCode)aggregateResult.Error!);
-                        return;
-                    }
-
-                    responseXml = aggregateResult.Value;
+                    responseXml = await BuildAndStoreAggregateResponseAsync(results, transaction, clientRequest, request.OurBureauPSRN, requestId, requestDate, requestType, requestMode);
                 }
                 catch (Exception ex)
                 {
@@ -156,7 +148,7 @@ public class QBCHProcessingHandlerV3(
         await _storageService.TrySetKeyExpiration(RedisConstants.DlRequestV3Scope, responseId, _contractRules.ResponseRetentionMinutes);
     }
 
-    private async Task<Result<byte[]>> BuildAndStoreAggregateResponseAsync(
+    private async Task<byte[]> BuildAndStoreAggregateResponseAsync(
         QBCHTaskResult[] results,
         QBCHProcessingTransactionV3 transaction,
         ЗапросСведений clientRequest,
@@ -188,11 +180,7 @@ public class QBCHProcessingHandlerV3(
             var kbkiItems = new List<ОтветНаЗапросСведенийСведенияКБКИ>();
             foreach (var taskResult in results)
             {
-                var TaskResultXmlResult = _xmlSerializer.SerializeAsStringV3(taskResult.Answer3);
-                if (!TaskResultXmlResult.IsSuccess)
-                    return Result<byte[]>.Failure(TaskResultXmlResult.Error!);
-
-                var TaskResultXml = TaskResultXmlResult.Value;
+                var TaskResultXml = _xmlSerializer.SerializeAsStringV3(taskResult.Answer3).Value!;
                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_result_xml", TaskResultXml);
                 await _storageService.AddHash(RedisConstants.DlRequestV3Scope, $"{transaction.Id}:{taskResult.BureauPSRN}", "task_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
@@ -221,17 +209,13 @@ public class QBCHProcessingHandlerV3(
             info.КБКИ = kbkiItems.ToArray();
         }
 
-        var responseXmlResult = _xmlSerializer.SerializeAsByteV3(response);
-        if (!responseXmlResult.IsSuccess)
-            return Result<byte[]>.Failure(responseXmlResult.Error!);
-
-        var responseXml = responseXmlResult.Value;
+        var responseXml = _xmlSerializer.SerializeAsByteV3(response).Value!;
         _logger.LogDebug("Агрегированный ответ сериализован, size={size} байт", responseXml.Length);
 
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_aggregate_xml", responseXml);
         await _storageService.AddHash(RedisConstants.DlRequestV3Scope, transaction.Id.ToString(), "qbch_tasks_end_date_time", DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss:ffff"));
 
-        return Result<byte[]>.Success(responseXml);
+        return responseXml;
     }
 
     private async Task<QBCHProcessingTransactionV3> CompleteAcceptedTransactionAsync(QBCHProcessingTransactionV3 transaction, string requestId, DateTime requestDate)
@@ -242,14 +226,7 @@ public class QBCHProcessingHandlerV3(
             requestDate: requestDate
             );
 
-        var ticketBytesResult = _xmlSerializer.SerializeAsByteV3(acceptedTicket);
-        if (!ticketBytesResult.IsSuccess)
-        {
-            transaction.RiseCriticalError((AnswerErrorCode)ticketBytesResult.Error!);
-            return transaction;
-        }
-
-        var ticketBytes = ticketBytesResult.Value;
+        var ticketBytes = _xmlSerializer.SerializeAsByteV3(acceptedTicket).Value!;
         transaction.Accepted();
         transaction.Complete(ticketBytes, _cryptoService.SignMsg(ticketBytes));
 
