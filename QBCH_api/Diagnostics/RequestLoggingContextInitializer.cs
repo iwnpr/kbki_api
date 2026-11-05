@@ -1,25 +1,22 @@
 using qbch_lib.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 
-namespace QBCH_api.Middleware;
+namespace QBCH_api.Diagnostics;
 
 /// <summary>
-/// Заполняет контрагента в контексте логирования входящего запроса.
+/// Заполняет свойства логирования, определяемые из данных входящего запроса API.
 /// </summary>
-/// <param name="next">Следующий компонент конвейера обработки запроса.</param>
-public sealed class CounterpartyLoggingContextMiddleware(RequestDelegate next)
+public sealed class RequestLoggingContextInitializer : ILoggingContextInitializer
 {
     /// <summary>
     /// Определяет имя контрагента из клиентского сертификата один раз перед обработкой запроса.
     /// </summary>
     /// <param name="httpContext">Контекст текущего HTTP-запроса.</param>
     /// <param name="logContext">Общие для запроса свойства логирования.</param>
-    /// <returns>Задача обработки запроса.</returns>
-    public async Task InvokeAsync(HttpContext httpContext, LoggingContext logContext)
+    /// <returns>Задача инициализации контекста.</returns>
+    public async Task InitializeAsync(HttpContext httpContext, LoggingContext logContext)
     {
         var certificate = await httpContext.Connection.GetClientCertificateAsync(httpContext.RequestAborted);
         logContext.Counterparty = certificate?.GetNameInfo(X509NameType.SimpleName, false);
-
-        await next(httpContext);
     }
 }
