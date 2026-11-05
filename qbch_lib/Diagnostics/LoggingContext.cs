@@ -1,4 +1,5 @@
-﻿using Serilog.Core;
+﻿using System;
+using Serilog.Core;
 using Serilog.Events;
 
 namespace qbch_lib.Diagnostics;
@@ -33,14 +34,23 @@ public sealed class LoggingContext : ILogEventEnricher
     public string? RequestChannel { get; set; }
 
     /// <summary>
-    /// Добавляет свойства контекста в событие, если они заданы и сообщение не передало своё значение.
+    /// Добавляет свойства контекста, сохраняя явно переданные значения.
+    /// Явно переданный TransactionId типа Guid приводит к строке для стандартного ECS-поля transaction.id.
     /// </summary>
     /// <param name="logEvent">Обогащаемое событие логирования.</param>
     /// <param name="propertyFactory">Фабрика структурированных свойств Serilog.</param>
     public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
     {
-        if (TransactionId is not null)
+        // ECS сопоставляет TransactionId со стандартным полем transaction.id только для строк.
+        if (logEvent.Properties.TryGetValue(LogPropertyNames.TransactionId, out var transactionIdProperty)
+            && transactionIdProperty is ScalarValue { Value: Guid explicitTransactionId })
+        {
+            logEvent.AddOrUpdateProperty(propertyFactory.CreateProperty(LogPropertyNames.TransactionId, explicitTransactionId.ToString("D")));
+        }
+        else if (TransactionId is not null)
+        {
             logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.TransactionId, TransactionId));
+        }
 
         if (!string.IsNullOrWhiteSpace(Counterparty))
             logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.Counterparty, Counterparty));
