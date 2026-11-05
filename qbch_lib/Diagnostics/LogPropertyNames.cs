@@ -14,4 +14,9 @@ public static class LogPropertyNames
     /// Контрагент, от имени которого выполняется входящий запрос.
     /// </summary>
     public const string Counterparty = "Контрагент";
+
+    /// <summary>
+    /// Отпечаток клиентского сертификата входящего запроса.
+    /// </summary>
+    public const string Thumbprint = "Отпечаток";
 }

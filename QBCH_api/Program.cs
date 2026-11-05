@@ -191,6 +191,7 @@ Func<HttpContext, LoggingContext, Task> initializeLoggingContext = async (httpCo
 {
     var certificate = await httpContext.Connection.GetClientCertificateAsync(httpContext.RequestAborted);
     logContext.Counterparty = certificate?.GetNameInfo(X509NameType.SimpleName, false);
+    logContext.Thumbprint = certificate?.Thumbprint;
 };
 app.UseCertificateForwarding();
 app.UseMiddleware<LoggingScopeMiddleware>(initializeLoggingContext);

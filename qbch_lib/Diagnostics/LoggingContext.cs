@@ -23,6 +23,11 @@ public sealed class LoggingContext : ILogEventEnricher
     public string? Counterparty { get; set; }
 
     /// <summary>
+    /// Отпечаток клиентского сертификата. Без сертификата не задан.
+    /// </summary>
+    public string? Thumbprint { get; set; }
+
+    /// <summary>
     /// Добавляет свойства контекста в событие, если они заданы и сообщение не передало своё значение.
     /// </summary>
     /// <param name="logEvent">Обогащаемое событие логирования.</param>
@@ -34,5 +39,8 @@ public sealed class LoggingContext : ILogEventEnricher
 
         if (!string.IsNullOrWhiteSpace(Counterparty))
             logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.Counterparty, Counterparty));
+
+        if (!string.IsNullOrWhiteSpace(Thumbprint))
+            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.Thumbprint, Thumbprint));
     }
 }
