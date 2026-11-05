@@ -19,4 +19,9 @@ public static class LogPropertyNames
     /// Отпечаток клиентского сертификата входящего запроса.
     /// </summary>
     public const string Thumbprint = "Отпечаток";
+
+    /// <summary>
+    /// Способ поступления запроса: API или личный кабинет.
+    /// </summary>
+    public const string RequestChannel = "СпособЗапроса";
 }

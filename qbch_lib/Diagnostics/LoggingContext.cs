@@ -28,6 +28,11 @@ public sealed class LoggingContext : ILogEventEnricher
     public string? Thumbprint { get; set; }
 
     /// <summary>
+    /// Способ поступления запроса, определённый по ноде приложения.
+    /// </summary>
+    public string? RequestChannel { get; set; }
+
+    /// <summary>
     /// Добавляет свойства контекста в событие, если они заданы и сообщение не передало своё значение.
     /// </summary>
     /// <param name="logEvent">Обогащаемое событие логирования.</param>
@@ -42,5 +47,8 @@ public sealed class LoggingContext : ILogEventEnricher
 
         if (!string.IsNullOrWhiteSpace(Thumbprint))
             logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.Thumbprint, Thumbprint));
+
+        if (!string.IsNullOrWhiteSpace(RequestChannel))
+            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty(LogPropertyNames.RequestChannel, RequestChannel));
     }
 }

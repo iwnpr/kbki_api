@@ -187,8 +187,15 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+var requestChannel = Environment.MachineName.ToUpperInvariant() switch
+{
+    "SD-QBCH17" or "SD-QBCH16" or "MD-QBCH26" or "MD-QBCH27" => "API",
+    "MD-QBCH02T" => "ЛК",
+    _ => "Неизвестно"
+};
 Func<HttpContext, LoggingContext, Task> initializeLoggingContext = async (httpContext, logContext) =>
 {
+    logContext.RequestChannel = requestChannel;
     var certificate = await httpContext.Connection.GetClientCertificateAsync(httpContext.RequestAborted);
     logContext.Counterparty = certificate?.GetNameInfo(X509NameType.SimpleName, false);
     logContext.Thumbprint = certificate?.Thumbprint;
